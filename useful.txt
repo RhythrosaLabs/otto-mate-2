@@ -1,0 +1,31 @@
+https://docs.steel.dev/overview
+https://github.com/steel-dev/steel-browser
+
+https://github.com/browserbase/sdk-python
+https://github.com/browserbase/stagehand
+https://github.com/browserbase/
+
+luma dream machine
+replicate playground
+instantly.ai (outreach i think)
+websim
+bolt
+lovable
+bolt.ai
+mac os use
+crewai
+openclaw
+otto
+capcut
+tavily (browser search)
+printify
+blog writer
+labelflow
+
+
+SKILLS:
+https://github.com/oabdelmaksoud/Openclaw-skills-Compilations
+https://github.com/anthropics/skills
+https://github.com/sickn33/antigravity-awesome-skills
+https://github.com/VoltAgent/awesome-agent-skills
+
