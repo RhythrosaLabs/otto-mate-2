@@ -39,3 +39,6 @@ tsconfig.tsbuildinfo
 
 # task file outputs (large/generated)
 task-files/
+
+# misc project notes
+useful.txt
