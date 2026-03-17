@@ -68,16 +68,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "03-tasks",
-    title: "Tasks — Track Everything",
-    narration: "The Tasks page shows all your tasks with status filters, search, and sorting. See running, completed, and failed tasks at a glance. Click any task to see the full execution trace.",
-    url: "/computer/tasks",
-    actions: async (page) => {
-      await page.waitForTimeout(2500);
-    },
-  },
-  {
-    name: "04-connectors",
+    name: "03-connectors",
     title: "Connectors — 100+ Integrations",
     narration: "Connect to Gmail, Slack, GitHub, Jira, Stripe, Notion, WhatsApp, and 100+ more services. OAuth sign-in or paste an API key. 35+ connectors have completely free tiers.",
     url: "/computer/connectors",
@@ -91,7 +82,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "05-skills",
+    name: "04-skills",
     title: "Skills Marketplace — 200+ Pre-built",
     narration: "Browse 200+ pre-built skills across writing, code, research, data, marketing, business, creative, finance, legal, and more. Install one, or create your own custom skill with specific instructions.",
     url: "/computer/skills",
@@ -100,7 +91,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "06-playground",
+    name: "05-playground",
     title: "Playground — Run Any ML Model",
     narration: "The Playground lets you run thousands of models from Replicate and HuggingFace. Generate images with FLUX, create music with MusicGen, upscale with Real-ESRGAN, remove backgrounds, and more. Compare models side-by-side in multi-column view.",
     url: "/computer/playground",
@@ -109,7 +100,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "07-dreamscape",
+    name: "06-dreamscape",
     title: "Dreamscape — AI Creative Studio",
     narration: "Dreamscape is a 17-mode AI creative studio powered by Luma Dream Machine. Create videos, images, audio, and more. Use 20 camera presets, character identity persistence, style references, and the AI Director chat to build multi-shot sequences from natural language.",
     url: "/computer/dreamscape",
@@ -118,7 +109,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "08-pipelines",
+    name: "07-pipelines",
     title: "Pipelines — Visual DAG Builder",
     narration: "Chain tasks together with the visual pipeline builder. Add nodes, draw dependency arrows, and run the whole pipeline. Nodes execute in dependency order with real-time status tracking.",
     url: "/computer/pipelines",
@@ -127,34 +118,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "09-files",
-    title: "Files — Finder-Style Browser",
-    narration: "Every file the agent creates is organized here. Switch between icon, list, and gallery views. Support for 50+ file types — images, video, audio, 3D models, PDFs, code, data files, and more. Create folders, sort, search, and preview inline.",
-    url: "/computer/files",
-    actions: async (page) => {
-      await page.waitForTimeout(2500);
-    },
-  },
-  {
-    name: "10-analytics",
-    title: "Analytics — Performance Dashboard",
-    narration: "Track agent performance with KPIs: total tasks, success rate, average duration, top tools used, model cost breakdown, error patterns, and daily task volume trends.",
-    url: "/computer/analytics",
-    actions: async (page) => {
-      await page.waitForTimeout(2500);
-    },
-  },
-  {
-    name: "11-memory",
-    title: "Memory — Persistent Agent Context",
-    narration: "The agent stores facts, preferences, and context in Memory. These carry over across tasks. Search, add, or delete entries manually.",
-    url: "/computer/memory",
-    actions: async (page) => {
-      await page.waitForTimeout(2000);
-    },
-  },
-  {
-    name: "12-scheduled",
+    name: "08-scheduled",
     title: "Scheduled Tasks — Cron Automation",
     narration: "Schedule any task to run automatically with one-time, interval, daily, weekly, or full cron expressions. Enable or disable individual schedules.",
     url: "/computer/scheduled",
@@ -163,7 +127,7 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "13-templates",
+    name: "09-templates",
     title: "Templates — One-Click Task Presets",
     narration: "Create reusable task templates by category. Hit Run and the agent executes the template prompt instantly — or customize before launching.",
     url: "/computer/templates",
@@ -172,10 +136,10 @@ const TUTORIAL_STEPS = [
     },
   },
   {
-    name: "14-settings",
-    title: "Settings — Configuration & Health",
-    narration: "Configure your default model, set token and cost budgets, choose a theme, enable verbose mode, and check system health — see which AI providers are connected and database status.",
-    url: "/computer/settings",
+    name: "10-gallery",
+    title: "Gallery — Community Examples",
+    narration: "Browse community example tasks by category. Click any example to see the full prompt, then run it with one click or customize before launching.",
+    url: "/computer/gallery",
     actions: async (page) => {
       await page.waitForTimeout(2000);
     },
@@ -236,8 +200,10 @@ const TUTORIAL_STEPS = [
     const latest = files.sort().pop();
     const src = path.join(VIDEO_DIR, latest);
     const dest = path.join(VIDEO_DIR, "tutorial-walkthrough.webm");
-    if (fs.existsSync(dest)) fs.unlinkSync(dest);
-    fs.renameSync(src, dest);
+    if (src !== dest) {
+      if (fs.existsSync(dest)) fs.unlinkSync(dest);
+      fs.renameSync(src, dest);
+    }
     const size = (fs.statSync(dest).size / 1024 / 1024).toFixed(1);
     console.log(`\n✅ Video saved: docs/videos/tutorial-walkthrough.webm (${size} MB)`);
   } else {

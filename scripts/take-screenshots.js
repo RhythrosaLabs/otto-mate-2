@@ -10,23 +10,16 @@ const path = require("path");
 const BASE = "http://localhost:3000";
 const OUT = path.join(__dirname, "..", "docs", "screenshots");
 
+// Only safe pages — no personal data (memory, files, audit, sessions, etc.)
 const PAGES = [
   { name: "home",        path: "/computer",              wait: 2000 },
-  { name: "tasks",       path: "/computer/tasks",        wait: 2000 },
-  { name: "files",       path: "/computer/files",        wait: 2000 },
   { name: "connectors",  path: "/computer/connectors",   wait: 2000 },
   { name: "skills",      path: "/computer/skills",       wait: 2000 },
   { name: "playground",  path: "/computer/playground",   wait: 2000 },
   { name: "dreamscape",  path: "/computer/dreamscape",   wait: 2000 },
   { name: "pipelines",   path: "/computer/pipelines",    wait: 2000 },
-  { name: "analytics",   path: "/computer/analytics",    wait: 2000 },
-  { name: "settings",    path: "/computer/settings",     wait: 2000 },
-  { name: "memory",      path: "/computer/memory",       wait: 2000 },
   { name: "templates",   path: "/computer/templates",    wait: 2000 },
   { name: "scheduled",   path: "/computer/scheduled",    wait: 2000 },
-  { name: "sessions",    path: "/computer/sessions",     wait: 2000 },
-  { name: "channels",    path: "/computer/channels",     wait: 2000 },
-  { name: "audit",       path: "/computer/audit",        wait: 2000 },
   { name: "gallery",     path: "/computer/gallery",      wait: 2000 },
 ];
 
