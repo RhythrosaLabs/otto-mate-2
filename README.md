@@ -4,6 +4,9 @@
     <strong>Your self-hosted AI agent workbench.</strong><br/>
     Give it a goal. It plans, codes, browses, connects, and delivers — autonomously.
   </p>
+  <p align="center">
+    Created by <a href="https://github.com/RhythrosaLabs"><strong>Danny Saturn</strong></a> · <a href="https://danielsheils.myportfolio.com">Portfolio</a>
+  </p>
 </p>
 
 <p align="center">
@@ -557,6 +560,15 @@ src/
 | Files not showing | Files are stored in `./task-files/<taskId>/` — ensure the directory is writable |
 | Connector API calls failing | Re-check the token (no extra spaces). OAuth tokens may need re-authorization |
 | Database errors | Delete `perplexity-computer.db` to reset (loses history). Schema is recreated on startup |
+
+---
+
+## Author
+
+**Danny Saturn** — software developer, multimedia designer, experimental artist, multi-genre musician.
+
+- GitHub: [@RhythrosaLabs](https://github.com/RhythrosaLabs)
+- Portfolio: [danielsheils.myportfolio.com](https://danielsheils.myportfolio.com)
 
 ---
 
