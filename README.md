@@ -575,6 +575,8 @@ src/
 │   │   ├── context/                # Context management
 │   │   ├── usage/                  # Usage tracking
 │   │   ├── hooks/                  # Webhook handlers
+│   │   ├── channels/               # Channel config (Telegram, Discord, etc.)
+│   │   ├── settings/               # Global settings CRUD
 │   │   ├── social-auth/            # Social media OAuth
 │   │   ├── whatsapp/               # WhatsApp Cloud API
 │   │   └── voice/                  # Whisper transcription
@@ -597,15 +599,16 @@ src/
 │   ├── background-ops.ts           # Background task operations
 │   ├── steel-client.ts             # Steel browser client
 │   ├── whatsapp.ts                 # WhatsApp Cloud API client
+│   ├── running-tasks.ts            # Global AbortController map for live tasks
 │   ├── skill-converters.ts         # Skill format converters
 │   ├── themes.ts                   # UI theme definitions
 │   └── utils.ts                    # Shared utilities
 └── components/
     ├── sidebar.tsx                  # Navigation sidebar
-│   ├── command-palette.tsx          # ⌘K command palette
-│   ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
-│   ├── background-status.tsx        # Background task status indicator
-│   └── persistent-layout.tsx        # Persistent layout wrapper
+    ├── command-palette.tsx          # ⌘K command palette
+    ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
+    ├── background-status.tsx        # Background task status indicator
+    └── persistent-layout.tsx        # Persistent layout wrapper
 ```
 
 ### Database (SQLite via better-sqlite3)
@@ -614,18 +617,22 @@ src/
 |---|---|
 | `tasks` | Task records with status, model, messages, priority |
 | `agent_steps` | Tool calls and results per task |
+| `messages` | Chat messages per task |
 | `task_files` | Files produced by tasks |
+| `file_folders` | Folder hierarchy for the file manager |
 | `sub_tasks` | Spawned sub-agent tasks |
-| `gallery_items` | Generated media |
-| `memory_entries` | Agent long-term memory |
 | `skills` | Saved skill definitions |
+| `gallery_items` | Generated media |
 | `connector_configs` | Service credentials (API keys, OAuth tokens) |
-| `pipelines` / `pipeline_nodes` | DAG pipeline definitions |
+| `memory` | Agent long-term memory (key-value + tags) |
+| `token_usage` | Per-call token and cost tracking |
 | `scheduled_tasks` | Cron/interval schedules |
-| `conversation_sessions` | Session groupings |
 | `task_templates` | Reusable task presets |
-| `audit_log` | Every agent action logged |
+| `agent_learnings` | Patterns the agent learns over time |
+| `agent_analytics` | Every agent action logged (audit trail) |
 | `settings` | Global configuration |
+| `sessions` | Conversation session groupings |
+| `pipelines` | DAG pipeline definitions (nodes stored as JSON) |
 
 ### Tech Stack
 
