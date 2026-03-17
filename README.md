@@ -83,7 +83,13 @@ The core loop: you describe a goal → the agent creates a plan → executes ste
 The agent picks the best model automatically or you choose manually. If a provider is down or rate-limited, it fails over through the chain: **Anthropic → OpenAI → Google → OpenRouter (DeepSeek) → Perplexity** with exponential backoff.
 
 ### Dreamscape Studio
-A full AI creative studio powered by **Luma Dream Machine** and **Replicate**. Modes include text-to-video, image-to-video, text-to-image, extend, interpolate, modify, character reference, style reference, reframe, audio generation, SFX, voiceover, and lip-sync. Comes with an **AI Director** chat that translates natural language into multi-step generation command chains.
+A 17-mode AI creative studio built around **Luma Dream Machine** (Ray 3, Photon 1) and **Replicate**. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
+
+**Generation modes:** text-to-video, image-to-video, extend, reverse-extend, interpolate, text-to-image, image reference, character reference (persistent identity across shots), style reference, modify video, modify video with keyframes, modify image, reframe (change aspect ratio of existing media), music generation (MusicGen), sound effects (Bark), voiceover, and lip-sync.
+
+**Production controls:** 20 camera motion presets (pan, orbit, crane, dolly, tracking, handheld, dutch tilt, whip pan, arc), 9 modify intensity levels (adhere → flex → reimagine), resolutions up to 4K, multiple aspect ratios, 5s/9s durations, HDR toggle, loop toggle, and draft/hi-fi phase workflow.
+
+**AI Director:** A built-in chat agent (brainstorm, create, or brief modes) that interprets natural language into multi-step command chains with dependency ordering, continuity sheets (style anchors, character references, setting references), and concept pill word-swapping for rapid prompt iteration.
 
 ### Pipelines
 A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency arrows, and run the entire pipeline — nodes execute in dependency order with status tracking.
@@ -116,8 +122,8 @@ A persistent key-value store that the agent reads and writes during task executi
 | **Connectors** | Integration marketplace — connect 100+ services via OAuth or API key |
 | **Skills** | Create, edit, and install reusable agent behaviors; 200+ in the marketplace |
 | **Gallery** | Browse community example tasks, filter by category, one-click run |
-| **Playground** | Multi-model AI playground — run Replicate & HuggingFace models, side-by-side comparison |
-| **Dreamscape** | AI creative studio — Luma Dream Machine video/image generation with AI Director chat |
+| **Playground** | Run any of thousands of ML models from Replicate & HuggingFace — image gen, video, music, upscaling, background removal, 3D, style transfer — with multi-column side-by-side comparison, quick actions (upscale, animate, restyle, remove BG, make 3D, social post), file upload for img2img/upscale workflows, and a result gallery filterable by media type |
+| **Dreamscape** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat that turns natural language into multi-step command chains |
 | **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
 | **Templates** | Reusable one-click task presets by category |
 | **Scheduled** | Cron-based task scheduler with interval, daily, weekly, and cron modes |
