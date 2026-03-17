@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import {
   Search, Play, Loader2, Sparkles, Image as ImageIcon, Video, Music, Mic2,
   Box, Wand2, Scissors, ZoomIn, AlertCircle, Type, Upload, X, RotateCcw,
@@ -1034,6 +1035,24 @@ export function PlaygroundClient() {
   const [history, setHistory] = useState<RunResult[]>([]);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
+  // ─── Background ops tracking ─────────────────────────────────────────────
+  useEffect(() => {
+    const runningCols = columns.filter(c => c.running);
+    if (runningCols.length > 0) {
+      addBackgroundOp({
+        id: "playground-gen",
+        type: "generation",
+        label: "Playground",
+        status: "running",
+        href: "/computer/playground",
+        startedAt: Date.now(),
+        detail: `${runningCols.length} model${runningCols.length > 1 ? "s" : ""} running`,
+      });
+    } else {
+      removeBackgroundOp("playground-gen");
+    }
+  }, [columns]);
+
   // Load history
   useEffect(() => {
     try {
@@ -1218,7 +1237,7 @@ export function PlaygroundClient() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-[#20b2aa]" />
-            <h1 className="text-sm font-semibold text-[#e8e8ea]">Playground</h1>
+            <h1 className="text-sm font-semibold text-[#e8e8ea]">Multimedia Playground</h1>
           </div>
           <span className="text-[10px] text-[#8b8b94] bg-[#0f0f10] px-2 py-0.5 rounded border border-[#2a2a2e]">
             Compare &amp; iterate on AI models

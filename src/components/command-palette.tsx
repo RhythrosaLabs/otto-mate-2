@@ -3,33 +3,19 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Monitor,
-  CheckSquare,
-  FolderOpen,
-  Plug,
-  Zap,
-  Image as ImageIcon,
-  Brain,
-  Clock,
-  LayoutTemplate,
-  BarChart3,
   Plus,
   Search,
-  Settings,
   Command,
   ArrowRight,
-  Shield,
-  GitBranch,
-  MessageSquare,
   Palette,
   User,
   Play,
   Sparkles,
-  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas";
 import { THEMES, applyTheme, getStoredThemeId } from "@/lib/themes";
+import { NAV_ITEMS } from "@/lib/constants";
 
 interface PaletteAction {
   id: string;
@@ -59,25 +45,17 @@ export function CommandPalette({ open, onClose }: Props) {
     const currentTheme = getStoredThemeId();
 
     return [
-      // Navigation
-      { id: "home", label: "Home", shortcut: "⌘+H", icon: <Monitor size={14} />, category: "navigation" as const, action: () => router.push("/computer") },
-      { id: "tasks", label: "Tasks", shortcut: "⌘+T", icon: <CheckSquare size={14} />, category: "navigation" as const, action: () => router.push("/computer/tasks") },
-      { id: "files", label: "Files", icon: <FolderOpen size={14} />, category: "navigation" as const, action: () => router.push("/computer/files") },
-      { id: "connectors", label: "Connectors", icon: <Plug size={14} />, category: "navigation" as const, action: () => router.push("/computer/connectors") },
-      { id: "skills", label: "Skills", icon: <Zap size={14} />, category: "navigation" as const, action: () => router.push("/computer/skills") },
-      { id: "gallery", label: "Gallery", icon: <ImageIcon size={14} />, category: "navigation" as const, action: () => router.push("/computer/gallery") },
-      { id: "memory", label: "Memory", icon: <Brain size={14} />, category: "navigation" as const, action: () => router.push("/computer/memory") },
-      { id: "templates", label: "Templates", icon: <LayoutTemplate size={14} />, category: "navigation" as const, action: () => router.push("/computer/templates") },
-      { id: "scheduled", label: "Scheduled Tasks", icon: <Clock size={14} />, category: "navigation" as const, action: () => router.push("/computer/scheduled") },
-      { id: "analytics", label: "Analytics", icon: <BarChart3 size={14} />, category: "navigation" as const, action: () => router.push("/computer/analytics") },
-      { id: "audit", label: "Audit Trail", icon: <Shield size={14} />, category: "navigation" as const, action: () => router.push("/computer/audit") },
-      { id: "pipelines", label: "Pipelines", icon: <GitBranch size={14} />, category: "navigation" as const, action: () => router.push("/computer/pipelines") },
-      { id: "sessions", label: "Sessions", icon: <MessageSquare size={14} />, category: "navigation" as const, action: () => router.push("/computer/sessions") },
-      { id: "channels", label: "Channels", icon: <Globe size={14} />, category: "navigation" as const, action: () => router.push("/computer/channels") },
-      { id: "settings", label: "Settings", shortcut: "⌘+,", icon: <Settings size={14} />, category: "navigation" as const, action: () => router.push("/computer/settings") },
+      // Navigation — derived from shared NAV_ITEMS
+      ...NAV_ITEMS.map(item => ({
+        id: item.href.replace("/computer/", "") || "home",
+        label: item.label,
+        icon: <item.icon size={14} />,
+        category: "navigation" as const,
+        action: () => router.push(item.href),
+      })),
       // Task actions
       { id: "new-task", label: "New Task", shortcut: "⌘+N", icon: <Plus size={14} />, category: "task" as const, action: () => router.push("/computer") },
-      { id: "quick-run", label: "Quick Run — type a prompt and go", shortcut: "⌘+R", icon: <Play size={14} />, category: "task" as const, action: () => setMode("quickrun") },
+      { id: "quick-run", label: "Quick Run — type a prompt and go", shortcut: "⌘+J then type", icon: <Play size={14} />, category: "task" as const, action: () => setMode("quickrun") },
       // Persona switching
       ...PERSONAS.map(p => ({
         id: `persona-${p.id}`,

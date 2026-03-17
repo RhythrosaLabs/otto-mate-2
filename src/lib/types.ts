@@ -16,131 +16,20 @@ export type ModelId =
   | "sonar-pro"                // Perplexity Sonar Pro (advanced search)
   | "sonar-reasoning-pro"      // Perplexity Sonar Reasoning Pro
   | "openrouter"               // OpenRouter: access any model
+  | "free"                     // Free mode: zero-cost via OpenRouter free models
   | "auto";                    // Auto-select best model per task
 
 export interface ModelConfig {
   id: ModelId;
   name: string;
-  provider: "anthropic" | "openai" | "google" | "perplexity";
+  provider: "anthropic" | "openai" | "google" | "perplexity" | "openrouter";
   description: string;
   best_for: string[];
   icon: string;
 }
 
-export const MODEL_CONFIGS: ModelConfig[] = [
-  {
-    id: "auto",
-    name: "Auto (Recommended)",
-    provider: "anthropic",
-    description: "Automatically selects the best model per sub-task",
-    best_for: ["everything"],
-    icon: "✨",
-  },
-  {
-    id: "claude-opus-4-6",
-    name: "Claude Opus 4.6",
-    provider: "anthropic",
-    description: "Most powerful reasoning engine. Best for complex tasks. $15/$75 per 1M tokens.",
-    best_for: ["reasoning", "coding", "analysis"],
-    icon: "🧠",
-  },
-  {
-    id: "claude-sonnet-4-6",
-    name: "Claude Sonnet 4.6",
-    provider: "anthropic",
-    description: "Fast and capable. Best balance of speed and power. $3/$15 per 1M tokens.",
-    best_for: ["writing", "general"],
-    icon: "⚡",
-  },
-  {
-    id: "claude-3.5-haiku",
-    name: "Claude 3.5 Haiku",
-    provider: "anthropic",
-    description: "Ultra-fast and very cheap. Great for simple tasks. $0.80/$4 per 1M tokens.",
-    best_for: ["speed", "lightweight", "cheap"],
-    icon: "🪶",
-  },
-  {
-    id: "gpt-4o",
-    name: "GPT-4o",
-    provider: "openai",
-    description: "Excellent for long-context tasks and broad knowledge. $2.50/$10 per 1M tokens.",
-    best_for: ["long_context", "knowledge"],
-    icon: "🤖",
-  },
-  {
-    id: "gpt-4o-mini",
-    name: "GPT-4o Mini",
-    provider: "openai",
-    description: "Fast and economical for lightweight tasks. $0.15/$0.60 per 1M tokens.",
-    best_for: ["speed", "lightweight"],
-    icon: "🚀",
-  },
-  {
-    id: "gpt-4.1",
-    name: "GPT-4.1",
-    provider: "openai",
-    description: "Latest GPT with strong reasoning and coding. $2/$8 per 1M tokens.",
-    best_for: ["reasoning", "coding"],
-    icon: "💎",
-  },
-  {
-    id: "gpt-4.1-mini",
-    name: "GPT-4.1 Mini",
-    provider: "openai",
-    description: "Fast GPT-4.1 variant. Great balance of cost and capability. $0.40/$1.60 per 1M tokens.",
-    best_for: ["general", "speed"],
-    icon: "⚡",
-  },
-  {
-    id: "gpt-4.1-nano",
-    name: "GPT-4.1 Nano",
-    provider: "openai",
-    description: "Ultra-cheap GPT for simple tasks. $0.10/$0.40 per 1M tokens.",
-    best_for: ["speed", "cheap", "simple_tasks"],
-    icon: "🔹",
-  },
-  {
-    id: "gemini-1.5-pro",
-    name: "Gemini 1.5 Pro",
-    provider: "google",
-    description: "Deep research capabilities with massive context window. $1.25/$5 per 1M tokens.",
-    best_for: ["research", "deep_analysis"],
-    icon: "🔬",
-  },
-  {
-    id: "gemini-1.5-flash",
-    name: "Gemini 1.5 Flash",
-    provider: "google",
-    description: "Ultra-fast responses for quick queries. $0.075/$0.30 per 1M tokens.",
-    best_for: ["speed", "simple_tasks"],
-    icon: "⚡",
-  },
-  {
-    id: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
-    provider: "google",
-    description: "Latest Gemini Flash — fast, capable, very affordable. $0.10/$0.40 per 1M tokens.",
-    best_for: ["speed", "general", "cheap"],
-    icon: "✨",
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter (Any Model)",
-    provider: "openai",
-    description: "Access 200+ models via OpenRouter — Llama, Mistral, DeepSeek, Qwen, and more.",
-    best_for: ["custom", "variety", "cheap"],
-    icon: "🌐",
-  },
-  {
-    id: "sonar",
-    name: "Perplexity Sonar",
-    provider: "perplexity",
-    description: "Real-time web-augmented AI search.",
-    best_for: ["current_events", "web_research"],
-    icon: "🔍",
-  },
-];
+// MODEL_CONFIGS is now in models.ts — re-export for backward compatibility
+export { MODEL_CONFIGS, FREE_OPENROUTER_MODELS, getModelConfig } from "./models";
 
 export type TaskStatus =
   | "pending"
@@ -227,6 +116,8 @@ export interface Message {
   created_at: string;
 }
 
+export type FileSource = "upload" | "chat" | "agent" | "playground" | "dreamscape" | "app-builder" | "gallery" | "api" | "unknown";
+
 export interface TaskFile {
   id: string;
   task_id: string;
@@ -236,6 +127,7 @@ export interface TaskFile {
   mime_type: string;
   preview_url?: string;
   folder_id?: string;
+  source?: FileSource;
   created_at: string;
 }
 
@@ -400,7 +292,7 @@ export interface ScheduledTask {
   updated_at: string;
 }
 
-/** @deprecated Use ScheduledTask instead */
+// ScheduledTaskConfig is now just ScheduledTask
 export type ScheduledTaskConfig = ScheduledTask;
 
 // ─── Modality-First Selection (Otto-inspired) ─────────────────────────────────

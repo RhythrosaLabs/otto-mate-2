@@ -41,10 +41,18 @@ function getReplicateToken(): string | null {
 // Luma fetch
 // ---------------------------------------------------------------------------
 
-async function lumaFetch(path: string, options: RequestInit = {}) {
+async function lumaFetch(path: string, options: RequestInit = {}, _retries = 2): Promise<Record<string, unknown>> {
   const key = getLumaApiKey();
   if (!key) throw new Error("LUMA_API_KEY is not set");
-  const res = await fetch(`${LUMA_API_BASE}${path}`, {
+  const url = `${LUMA_API_BASE}${path}`;
+  console.log(`[Luma API] ${options.method || "GET"} ${url}`);
+  if (options.body) {
+    try {
+      const parsed = JSON.parse(options.body as string);
+      console.log(`[Luma API] Payload:`, JSON.stringify(parsed, null, 2));
+    } catch { console.log(`[Luma API] Body: ${(options.body as string).slice(0, 500)}`); }
+  }
+  const res = await fetch(url, {
     ...options,
     headers: {
       Authorization: `Bearer ${key}`,
@@ -55,9 +63,20 @@ async function lumaFetch(path: string, options: RequestInit = {}) {
   });
   if (!res.ok) {
     const errText = await res.text();
+    console.error(`[Luma API] ERROR ${res.status}: ${errText}`);
+    // Retry on transient errors (429 rate limit, 500/502/503 server errors, or false "Insufficient credits" on 400)
+    const isTransient = res.status === 429 || res.status >= 500 || (res.status === 400 && errText.includes("Insufficient credits"));
+    if (isTransient && _retries > 0) {
+      const delay = res.status === 429 ? 5000 : 2000;
+      console.log(`[Luma API] Retrying in ${delay}ms (${_retries} retries left)...`);
+      await new Promise(r => setTimeout(r, delay));
+      return lumaFetch(path, options, _retries - 1);
+    }
     throw new Error(`Luma API error (${res.status}): ${errText}`);
   }
-  return res.json();
+  const data = await res.json();
+  console.log(`[Luma API] OK — id: ${data?.id}, state: ${data?.state}`);
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,8 +91,8 @@ const REPLICATE_MODELS: Record<
   // Video generation — Luma on Replicate
   "luma-ray-3-720p":     { owner: "luma",               name: "ray-3-720p",              desc: "Luma Ray 3 720p",               type: "video" },
   "luma-ray-3-540p":     { owner: "luma",               name: "ray-3-540p",              desc: "Luma Ray 3 540p",               type: "video" },
-  "luma-ray-flash-720p": { owner: "luma",               name: "ray-flash-3-720p",        desc: "Luma Ray Flash 3 720p (fast)",   type: "video" },
-  "luma-ray-flash-540p": { owner: "luma",               name: "ray-flash-3-540p",        desc: "Luma Ray Flash 3 540p (fast)",   type: "video" },
+  "luma-ray-flash-720p": { owner: "luma",               name: "ray-flash-2-720p",        desc: "Luma Ray Flash 2 720p (fast)",   type: "video" },
+  "luma-ray-flash-540p": { owner: "luma",               name: "ray-flash-2-540p",        desc: "Luma Ray Flash 2 540p (fast)",   type: "video" },
   // Video generation — other providers
   "minimax-hailuo-02":   { owner: "minimax",            name: "hailuo-02",               desc: "MiniMax Hailuo 02",             type: "video" },
   "minimax-hailuo-2.3":  { owner: "minimax",            name: "hailuo-2.3",              desc: "MiniMax Hailuo 2.3",            type: "video" },
@@ -404,6 +423,30 @@ export async function POST(req: NextRequest) {
 
     // ==== LUMA PROVIDER ==================================================
 
+    // Normalize aspect ratios — the LLM sometimes generates cinematic ratios (2.39:1, 1.85:1, etc.)
+    // that aren't valid Luma API values. Map them to the nearest valid option.
+    const VALID_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"];
+    function normalizeAspectRatio(ar: string | undefined): string | undefined {
+      if (!ar) return undefined;
+      if (VALID_ASPECT_RATIOS.includes(ar)) return ar;
+      // Parse ratio to decimal
+      const parts = ar.split(":").map(Number);
+      if (parts.length !== 2 || !parts[0] || !parts[1]) return "16:9";
+      const ratio = parts[0] / parts[1];
+      // Map to closest valid ratio
+      const ratioMap: [string, number][] = [
+        ["1:1", 1], ["4:3", 4/3], ["3:4", 3/4], ["16:9", 16/9], ["9:16", 9/16], ["21:9", 21/9], ["9:21", 9/21],
+      ];
+      let best = "16:9";
+      let bestDist = Infinity;
+      for (const [name, val] of ratioMap) {
+        const dist = Math.abs(ratio - val);
+        if (dist < bestDist) { bestDist = dist; best = name; }
+      }
+      console.log(`[Luma API] Normalized aspect ratio "${ar}" → "${best}"`);
+      return best;
+    }
+
     if (action === "generate-video") {
       const payload: Record<string, unknown> = {
         prompt: body.prompt,
@@ -411,7 +454,7 @@ export async function POST(req: NextRequest) {
       };
       if (body.resolution) payload.resolution = body.resolution;
       if (body.duration) payload.duration = body.duration;
-      if (body.aspect_ratio) payload.aspect_ratio = body.aspect_ratio;
+      if (body.aspect_ratio) payload.aspect_ratio = normalizeAspectRatio(body.aspect_ratio);
       if (body.loop !== undefined) payload.loop = body.loop;
       if (body.keyframes) payload.keyframes = body.keyframes;
       if (body.concepts) payload.concepts = body.concepts;
@@ -430,7 +473,7 @@ export async function POST(req: NextRequest) {
         prompt: body.prompt,
         model: body.model || "photon-1",
       };
-      if (body.aspect_ratio) payload.aspect_ratio = body.aspect_ratio;
+      if (body.aspect_ratio) payload.aspect_ratio = normalizeAspectRatio(body.aspect_ratio);
       if (body.image_ref) payload.image_ref = body.image_ref;
       if (body.style_ref) payload.style_ref = body.style_ref;
       if (body.character_ref) payload.character_ref = body.character_ref;
@@ -464,7 +507,7 @@ export async function POST(req: NextRequest) {
 
     if (action === "reframe") {
       const payload: Record<string, unknown> = {
-        aspect_ratio: body.aspect_ratio || "16:9",
+        aspect_ratio: normalizeAspectRatio(body.aspect_ratio) || "16:9",
         model: body.model || "ray-3",
       };
       if (body.media) payload.media = body.media;

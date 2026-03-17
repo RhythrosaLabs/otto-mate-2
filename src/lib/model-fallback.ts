@@ -9,21 +9,6 @@
  *   // Automatically tries providers in order until one succeeds
  */
 
-// ─── Transient Error Detection ────────────────────────────────────────────────
-
-const TRANSIENT_ERROR_PATTERNS = [
-  /rate.?limit/i, /429/i, /overloaded/i, /503/i, /502/i,
-  /timeout/i, /ETIMEDOUT/i, /ECONNRESET/i, /server.?error/i,
-  /500/i, /capacity/i, /too many requests/i, /resource.?exhausted/i,
-  /credit.?balance/i, /insufficient.?funds/i, /billing/i, /quota.?exceeded/i,
-  /payment.?required/i, /402/i, /plan.?limit/i,
-];
-
-function isTransientError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return TRANSIENT_ERROR_PATTERNS.some((p) => p.test(msg));
-}
-
 // ─── Backoff Delays ──────────────────────────────────────────────────────────
 
 const FALLBACK_BACKOFF_MS = [1000, 3000, 8000, 15000];
@@ -47,7 +32,7 @@ const PROVIDERS: ProviderConfig[] = [
   { name: "anthropic",   envKey: "ANTHROPIC_API_KEY",   defaultModel: "claude-sonnet-4-6",            cheapModel: "claude-3.5-haiku" },
   { name: "openai",      envKey: "OPENAI_API_KEY",      defaultModel: "gpt-4o",                       cheapModel: "gpt-4o-mini" },
   { name: "google",      envKey: "GOOGLE_AI_API_KEY",   defaultModel: "gemini-1.5-pro",               cheapModel: "gemini-2.0-flash" },
-  { name: "openrouter",  envKey: "OPENROUTER_API_KEY",  defaultModel: "deepseek/deepseek-chat-v3-0324", cheapModel: "deepseek/deepseek-chat-v3-0324" },
+  { name: "openrouter",  envKey: "OPENROUTER_API_KEY",  defaultModel: "openrouter/free", cheapModel: "openrouter/free" },
   { name: "perplexity",  envKey: "PERPLEXITY_API_KEY",  defaultModel: "sonar-pro",                    cheapModel: "sonar" },
 ];
 
@@ -145,8 +130,8 @@ async function callGoogle(opts: {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not set");
 
-  // Use REST API directly to avoid SDK dependency in this utility
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${apiKey}`;
+  // Use header for API key instead of URL query param (more secure — avoids logging)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent`;
 
   const contents = opts.messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -155,7 +140,7 @@ async function callGoogle(opts: {
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.system }] },
       contents,

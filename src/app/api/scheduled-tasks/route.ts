@@ -10,6 +10,8 @@ import {
   createTask,
 } from "@/lib/db";
 import { runAgent } from "@/lib/agent";
+import { safeErrorMessage } from "@/lib/constants";
+import { CreateScheduledTaskSchema, parseBody } from "@/lib/schemas";
 import type { ScheduledTask } from "@/lib/types";
 
 // GET /api/scheduled-tasks — list all scheduled tasks
@@ -18,35 +20,31 @@ export async function GET() {
     const tasks = listScheduledTasks();
     return NextResponse.json(tasks);
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }
 
 // POST /api/scheduled-tasks — create a new scheduled task
 export async function POST(request: NextRequest) {
+  const { data, error: validationError } = await parseBody(request, CreateScheduledTaskSchema);
+  if (validationError) return validationError;
+
   try {
-    const body = await request.json();
-    const { name, prompt, schedule_type, schedule_expr, next_run_at, model, delete_after_run } = body;
-
-    if (!name || !prompt) {
-      return NextResponse.json({ error: "name and prompt are required" }, { status: 400 });
-    }
-
     const scheduledTask = createScheduledTask({
       id: uuidv4(),
-      name,
-      prompt,
-      schedule_type: schedule_type || "once",
-      schedule_expr: schedule_expr || undefined,
-      next_run_at: next_run_at || new Date().toISOString(),
+      name: data.name,
+      prompt: data.prompt,
+      schedule_type: data.schedule_type,
+      schedule_expr: data.schedule_expr,
+      next_run_at: data.next_run_at || new Date().toISOString(),
       enabled: true,
-      model: model || "auto",
-      delete_after_run: delete_after_run || false,
+      model: data.model,
+      delete_after_run: data.delete_after_run,
     });
 
     return NextResponse.json(scheduledTask, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }
 
@@ -101,7 +99,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }
 
@@ -114,7 +112,7 @@ export async function DELETE(request: NextRequest) {
     deleteScheduledTask(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }
 

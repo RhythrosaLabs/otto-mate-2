@@ -7,8 +7,10 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "unknown";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) return "just now"; // future dates treated as now
   const diffSecs = Math.floor(diffMs / 1000);
   const diffMins = Math.floor(diffSecs / 60);
   const diffHours = Math.floor(diffMins / 60);
@@ -22,10 +24,10 @@ export function formatRelativeTime(dateString: string): string {
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
+  if (bytes <= 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
@@ -49,30 +51,25 @@ export function getMimeIcon(mimeType: string): string {
   return "📁";
 }
 
+// Consolidated status color lookup
+const STATUS_COLORS: Record<string, { text: string; bg: string }> = {
+  completed:         { text: "text-green-400",    bg: "bg-green-400/10 text-green-400" },
+  running:           { text: "text-pplx-accent",  bg: "bg-pplx-accent/10 text-pplx-accent" },
+  failed:            { text: "text-red-400",      bg: "bg-red-400/10 text-red-400" },
+  waiting_for_input: { text: "text-yellow-400",   bg: "bg-yellow-400/10 text-yellow-400" },
+  paused:            { text: "text-blue-400",     bg: "bg-blue-400/10 text-blue-400" },
+  pending:           { text: "text-pplx-muted",   bg: "bg-pplx-muted/10 text-pplx-muted" },
+  queued:            { text: "text-purple-400",   bg: "bg-purple-400/10 text-purple-400" },
+};
+
+const DEFAULT_STATUS = { text: "text-pplx-muted", bg: "bg-pplx-muted/10 text-pplx-muted" };
+
 export function getStatusColor(status: string): string {
-  switch (status) {
-    case "completed": return "text-green-400";
-    case "running": return "text-pplx-accent";
-    case "failed": return "text-red-400";
-    case "waiting_for_input": return "text-yellow-400";
-    case "paused": return "text-blue-400";
-    case "pending": return "text-pplx-muted";
-    case "queued": return "text-purple-400";
-    default: return "text-pplx-muted";
-  }
+  return (STATUS_COLORS[status] || DEFAULT_STATUS).text;
 }
 
 export function getStatusBgColor(status: string): string {
-  switch (status) {
-    case "completed": return "bg-green-400/10 text-green-400";
-    case "running": return "bg-pplx-accent/10 text-pplx-accent";
-    case "failed": return "bg-red-400/10 text-red-400";
-    case "waiting_for_input": return "bg-yellow-400/10 text-yellow-400";
-    case "paused": return "bg-blue-400/10 text-blue-400";
-    case "pending": return "bg-pplx-muted/10 text-pplx-muted";
-    case "queued": return "bg-purple-400/10 text-purple-400";
-    default: return "bg-pplx-muted/10 text-pplx-muted";
-  }
+  return (STATUS_COLORS[status] || DEFAULT_STATUS).bg;
 }
 
 export function truncate(str: string, maxLen: number): string {

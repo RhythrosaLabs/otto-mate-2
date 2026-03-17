@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
@@ -30,8 +31,12 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   // connector param: e.g. ?connector=gmail — stored as state so callback knows which connector to update
   const connector = searchParams.get("connector") || provider;
-
   const redirectUri = `${APP_URL}/api/auth/callback/${provider}`;
+
+  // Generate CSRF nonce and encode it with the connector in the state param
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const statePayload = JSON.stringify({ connector, nonce });
+  const stateEncoded = Buffer.from(statePayload).toString("base64url");
 
   let authUrl: string;
 
@@ -53,7 +58,7 @@ export async function GET(
           scope: scopes,
           access_type: "offline",
           prompt: "consent",
-          state: connector,
+          state: stateEncoded,
         }).toString();
       break;
     }
@@ -73,7 +78,7 @@ export async function GET(
           response_type: "code",
           scope: PROVIDER_SCOPES.microsoft,
           response_mode: "query",
-          state: connector,
+          state: stateEncoded,
         }).toString();
       break;
     }
@@ -91,7 +96,7 @@ export async function GET(
           client_id: clientId,
           redirect_uri: redirectUri,
           scope: PROVIDER_SCOPES.github,
-          state: connector,
+          state: stateEncoded,
         }).toString();
       break;
     }
@@ -110,7 +115,7 @@ export async function GET(
           redirect_uri: redirectUri,
           response_type: "code",
           owner: "user",
-          state: connector,
+          state: stateEncoded,
         }).toString();
       break;
     }
@@ -129,7 +134,7 @@ export async function GET(
           redirect_uri: redirectUri,
           response_type: "code",
           token_access_type: "offline",
-          state: connector,
+          state: stateEncoded,
         }).toString();
       break;
     }

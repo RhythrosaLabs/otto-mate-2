@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -74,6 +75,29 @@ export function TaskDetailClient({ task: initialTask }: Props) {
   const hasAutoRunRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<unknown>(null);
+
+  // ─── Background ops tracking ─────────────────────────────────────────────
+  useEffect(() => {
+    const opId = `task-${task.id}`;
+    if (task.status === "running" || isSubmitting) {
+      addBackgroundOp({
+        id: opId,
+        type: "task",
+        label: task.title || "Task",
+        status: "running",
+        href: `/computer/tasks/${task.id}`,
+        startedAt: Date.now(),
+        detail: isSubmitting ? "Agent working..." : `Status: ${task.status}`,
+      });
+    } else if (task.status === "completed") {
+      updateBackgroundOp(opId, { status: "completed", detail: "Done" });
+    } else if (task.status === "failed") {
+      updateBackgroundOp(opId, { status: "failed", detail: "Failed" });
+    } else {
+      removeBackgroundOp(opId);
+    }
+    return () => { removeBackgroundOp(opId); };
+  }, [task.id, task.status, task.title, isSubmitting]);
 
   // ─── Chat Commands (Otto/OpenClaw-inspired) ─────────────────────────────────
   const CHAT_COMMANDS = [

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import {
   Plus,
   Play,
@@ -104,7 +105,7 @@ interface ReplicateModelInfo {
 
 const VIDEO_MODELS = [
   { id: "ray-3", name: "Ray 3", desc: "High quality" },
-  { id: "ray-flash-3", name: "Ray Flash 3", desc: "Fast" },
+  { id: "ray-flash-2", name: "Ray Flash 2", desc: "Fast" },
 ];
 
 const IMAGE_MODELS = [
@@ -321,6 +322,24 @@ export function DreamMachineClient() {
   const board = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const selectedShot = board?.shots.find((s) => s.id === selectedShotId) ?? null;
   const completedVideoShots = board?.shots.filter((s) => s.videoUrl) ?? [];
+
+  // ─── Background ops tracking ─────────────────────────────────────────────
+  useEffect(() => {
+    const dreamingShots = board?.shots.filter(s => s.status === "queued" || s.status === "dreaming") ?? [];
+    if (dreamingShots.length > 0) {
+      addBackgroundOp({
+        id: "dream-machine-gen",
+        type: "video",
+        label: "Dream Machine",
+        status: "running",
+        href: "/computer/dream-machine",
+        startedAt: Date.now(),
+        detail: `${dreamingShots.length} shot${dreamingShots.length > 1 ? "s" : ""} generating`,
+      });
+    } else {
+      removeBackgroundOp("dream-machine-gen");
+    }
+  }, [board?.shots]);
 
   // -----------------------------------------------------------------------
   // Board ops

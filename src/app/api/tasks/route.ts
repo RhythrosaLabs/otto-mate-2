@@ -3,6 +3,8 @@ import { createTask, listTasks, listTasksBySource, getTask } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import type { ModelId, TaskPriority, TaskSource } from "@/lib/types";
 import { callLLMLightweight } from "@/lib/model-fallback";
+import { CreateTaskSchema, parseBody } from "@/lib/schemas";
+import { safeErrorMessage } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -43,15 +45,10 @@ export async function GET(req: NextRequest) {
 
 // POST /api/tasks — create a new task (does NOT run it yet; running is done via SSE route)
 export async function POST(req: NextRequest) {
-  const body = await req.json() as {
-    prompt: string; title?: string; model?: ModelId; priority?: TaskPriority;
-    depends_on?: string; tags?: string[]; metadata?: Record<string, unknown>; source?: TaskSource;
-  };
-  const { prompt, title, model, priority, depends_on, tags, metadata, source } = body;
+  const { data, error } = await parseBody(req, CreateTaskSchema);
+  if (error) return error;
 
-  if (!prompt?.trim()) {
-    return NextResponse.json({ error: "prompt is required" }, { status: 400 });
-  }
+  const { prompt, title, model, priority, tags, depends_on, metadata, source } = data;
 
   // Validate depends_on if provided
   if (depends_on) {
@@ -86,7 +83,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[POST /api/tasks] createTask failed:", err);
     return NextResponse.json(
-      { error: "Failed to create task", detail: String(err) },
+      { error: safeErrorMessage(err) },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, Fragment } from "react";
+import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import {
   Plus,
   Play,
@@ -238,7 +239,7 @@ type ViewMode = "boards" | "ideas";
 
 const VIDEO_MODELS = [
   { id: "ray-3", name: "Ray 3", desc: "High quality", tier: "premium" },
-  { id: "ray-flash-3", name: "Ray Flash 3", desc: "Fast", tier: "standard" },
+  { id: "ray-flash-2", name: "Ray Flash 2", desc: "Fast", tier: "standard" },
 ];
 
 const IMAGE_MODELS = [
@@ -257,8 +258,8 @@ const AUTO_MODEL_MAP: Record<string, { video: string; image: string; reason: str
   "style-ref":     { video: "ray-3", image: "photon-1", reason: "Style transfer benefits from higher quality" },
   "modify-video":  { video: "ray-3", image: "photon-1", reason: "Modify needs Ray3 reasoning" },
   "modify-video-keyframes": { video: "ray-3", image: "photon-1", reason: "Keyframe modify needs full Ray3" },
-  "text-to-video": { video: "ray-flash-3", image: "photon-flash-1", reason: "Draft first with flash, then upgrade" },
-  "text-to-image": { video: "ray-flash-3", image: "photon-flash-1", reason: "Fast iteration for concept art" },
+  "text-to-video": { video: "ray-flash-2", image: "photon-flash-1", reason: "Draft first with flash, then upgrade" },
+  "text-to-image": { video: "ray-flash-2", image: "photon-flash-1", reason: "Fast iteration for concept art" },
   "extend":        { video: "ray-3", image: "photon-1", reason: "Continuity needs full model" },
   "interpolate":   { video: "ray-3", image: "photon-1", reason: "Smooth transitions need full model" },
 };
@@ -606,6 +607,24 @@ export function DreamscapeClient() {
   const board = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const selectedShot = board?.shots.find((s) => s.id === selectedShotId) ?? null;
   const completedVideoShots = board?.shots.filter((s) => s.videoUrl) ?? [];
+
+  // ─── Background ops tracking ─────────────────────────────────────────────
+  useEffect(() => {
+    const dreamingShots = board?.shots.filter(s => s.status === "queued" || s.status === "dreaming") ?? [];
+    if (dreamingShots.length > 0) {
+      addBackgroundOp({
+        id: "dreamscape-gen",
+        type: "video",
+        label: "Video Producer",
+        status: "running",
+        href: "/computer/dreamscape",
+        startedAt: Date.now(),
+        detail: `${dreamingShots.length} shot${dreamingShots.length > 1 ? "s" : ""} generating`,
+      });
+    } else {
+      removeBackgroundOp("dreamscape-gen");
+    }
+  }, [board?.shots]);
   const allIdeas = boards.flatMap((b) => b.shots.filter((s) => s.status === "completed"));
   const isVideoMode = ["text-to-video", "image-to-video", "extend", "reverse-extend", "interpolate", "modify-video", "modify-video-keyframes", "reframe"].includes(mode);
   const isAudioMode = ["generate-audio", "generate-sfx", "voiceover", "lip-sync"].includes(mode);
@@ -820,6 +839,35 @@ export function DreamscapeClient() {
   };
 
   // =======================================================================
+  // Save completed generation to Files system
+  // =======================================================================
+  const saveGenerationToFiles = useCallback(
+    async (shotId: string, urls: { videoUrl?: string; imageUrl?: string; audioUrl?: string }) => {
+      // Find the shot to get the prompt
+      let shotPrompt = "";
+      for (const b of boards) {
+        const s = b.shots.find((sh) => sh.id === shotId);
+        if (s) { shotPrompt = s.prompt; break; }
+      }
+      const mediaUrl = urls.videoUrl || urls.imageUrl || urls.audioUrl;
+      if (!mediaUrl) return;
+      try {
+        await fetch("/api/files/save-generation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: mediaUrl,
+            source: "dreamscape",
+            prompt: shotPrompt || undefined,
+            metadata: { shotId, ...urls },
+          }),
+        });
+      } catch { /* non-blocking */ }
+    },
+    [boards],
+  );
+
+  // =======================================================================
   // Polling
   // =======================================================================
   const pollGeneration = useCallback(
@@ -846,12 +894,17 @@ export function DreamscapeClient() {
           if (data.state === "completed" || data.status === "succeeded") {
             clearInterval(interval);
             pollingRef.current.delete(shotId);
+            const videoUrl = data.assets?.video ?? data.output?.[0] ?? undefined;
+            const imageUrl = data.assets?.image ?? data.output?.[0] ?? undefined;
+            const audioUrl = data.assets?.audio ?? undefined;
             updateShot(shotId, {
               status: "completed",
-              videoUrl: data.assets?.video ?? data.output?.[0] ?? undefined,
-              imageUrl: data.assets?.image ?? data.output?.[0] ?? undefined,
-              audioUrl: data.assets?.audio ?? undefined,
+              videoUrl,
+              imageUrl,
+              audioUrl,
             });
+            // Save completed generation to Files
+            saveGenerationToFiles(shotId, { videoUrl, imageUrl, audioUrl });
           } else if (data.state === "failed" || data.status === "failed" || data.status === "canceled") {
             clearInterval(interval);
             pollingRef.current.delete(shotId);
@@ -864,7 +917,7 @@ export function DreamscapeClient() {
 
       pollingRef.current.set(shotId, interval);
     },
-    [updateShot],
+    [updateShot, saveGenerationToFiles],
   );
 
   // Resume polling for in-flight shots once the real boards are hydrated from localStorage
@@ -1196,11 +1249,14 @@ export function DreamscapeClient() {
       let shotId: string | null = null;
 
       try {
-        // If this step depends on a failed step (no result), skip it
+        // If this step depends on a previous step that failed and we need its output, 
+        // try running without the dependency (skip keyframe wiring) instead of failing entirely
+        let skipDependencyWiring = false;
         if (step.depends_on && step.use_output_as) {
           const depStep = stepMap.get(step.depends_on);
           if (!depStep?.result) {
-            throw new Error(`Dependency "${step.depends_on}" has no result — it may have failed`);
+            console.warn(`[Dreamscape Chain] Dependency "${step.depends_on}" has no result — running "${step.name}" without dependency output`);
+            skipDependencyWiring = true;
           }
         }
 
@@ -1240,7 +1296,7 @@ export function DreamscapeClient() {
         };
 
         // Handle dependencies — wire up output from previous step
-        if (step.depends_on && step.use_output_as) {
+        if (step.depends_on && step.use_output_as && !skipDependencyWiring) {
           const depStep = stepMap.get(step.depends_on);
           if (depStep?.result) {
             const depUrl = depStep.result.imageUrl || depStep.result.videoUrl;
@@ -1271,9 +1327,18 @@ export function DreamscapeClient() {
         }
 
         const res = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        const data = await res.json();
+        let data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || `API returned ${res.status}`);
+        // Retry once on transient/credit errors (the server already retries internally, but do one more client-side)
+        if (!res.ok && (data.error?.includes("Insufficient credits") || data.error?.includes("rate limit") || res.status >= 500)) {
+          console.warn(`[Dreamscape Chain] Transient error for "${step.name}", retrying in 3s...`);
+          await new Promise(r => setTimeout(r, 3000));
+          const retryRes = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          data = await retryRes.json();
+          if (!retryRes.ok) throw new Error(data.error || `API returned ${retryRes.status}`);
+        } else if (!res.ok) {
+          throw new Error(data.error || `API returned ${res.status}`);
+        }
 
         updateShot(shot.id, { generationId: data.id, status: "queued" });
 
@@ -1302,6 +1367,8 @@ export function DreamscapeClient() {
                   const audioUrl = pData.assets?.audio;
                   updateShot(shot.id, { status: "completed", videoUrl, imageUrl, audioUrl });
                   step.result = { videoUrl, imageUrl, audioUrl, generationId: data.id };
+                  // Save to Files
+                  saveGenerationToFiles(shot.id, { videoUrl, imageUrl, audioUrl });
                   resolve();
                 } else if (pData.state === "failed" || pData.status === "failed" || pData.status === "canceled") {
                   clearInterval(pollInterval);
@@ -1320,6 +1387,8 @@ export function DreamscapeClient() {
           const audioUrl = data.assets?.audio;
           step.result = { videoUrl, imageUrl, audioUrl, generationId: data.id };
           updateShot(shot.id, { status: "completed", videoUrl, imageUrl, audioUrl });
+          // Save to Files
+          saveGenerationToFiles(shot.id, { videoUrl, imageUrl, audioUrl });
         }
 
         setActiveChain((prev) =>
@@ -1498,7 +1567,10 @@ export function DreamscapeClient() {
       if (!res.ok) throw new Error(data.error);
       updateShot(hifiShot.id, { generationId: data.id, status: "queued" });
       if (data.state !== "completed") pollGeneration(data.id, hifiShot.id);
-      else updateShot(hifiShot.id, { status: "completed", videoUrl: data.assets?.video, imageUrl: data.assets?.image });
+      else {
+        updateShot(hifiShot.id, { status: "completed", videoUrl: data.assets?.video, imageUrl: data.assets?.image });
+        saveGenerationToFiles(hifiShot.id, { videoUrl: data.assets?.video, imageUrl: data.assets?.image });
+      }
     } catch (err) {
       updateShot(hifiShot.id, { status: "failed", error: String(err instanceof Error ? err.message : err) });
     }
@@ -1661,7 +1733,7 @@ export function DreamscapeClient() {
             <Sparkles size={14} className="text-white" />
           </div>
           <span className="text-sm font-bold tracking-tight bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
-            Dreamscape
+            Video Producer
           </span>
         </div>
 
@@ -2344,7 +2416,7 @@ export function DreamscapeClient() {
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
                       <Sparkles size={28} className="text-violet-400" />
                     </div>
-                    <p className="text-sm font-medium">Dreamscape Studio</p>
+                    <p className="text-sm font-medium">Video Producer Studio</p>
                     <p className="text-xs text-pplx-muted/60 max-w-xs text-center">
                       Write a prompt, configure settings, and click Generate to bring your vision to life
                     </p>

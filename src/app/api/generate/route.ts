@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { addTaskFile } from "@/lib/db";
+import { safeErrorMessage } from "@/lib/constants";
+import { GenerateSchema, parseBody } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -65,11 +67,8 @@ function shouldFallback(error: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as GenerateRequest;
-
-    if (!body.prompt) {
-      return NextResponse.json({ error: "prompt is required" }, { status: 400 });
-    }
+    const { data: body, error: validationError } = await parseBody(req, GenerateSchema);
+    if (validationError) return validationError;
 
     const { ensureFilesDir } = await import("@/lib/db");
     const fsModule = await import("fs");
@@ -126,6 +125,7 @@ export async function POST(req: NextRequest) {
                 path: f.filePath || `${filesDir}/${f.filename}`,
                 size: f.size,
                 mime_type: f.mimeType,
+                source: "playground",
                 created_at: new Date().toISOString(),
               });
             } catch { /* ignore duplicate */ }
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     return NextResponse.json(
-      { error: String(err instanceof Error ? err.message : err) },
+      { error: safeErrorMessage(err) },
       { status: 500 }
     );
   }

@@ -271,6 +271,7 @@ export function getTheme(id: string): Theme {
 }
 
 export function applyTheme(themeId: string): void {
+  if (typeof window === "undefined") return;
   const theme = getTheme(themeId);
   const root = document.documentElement;
   root.style.setProperty("--bg", theme.colors.bg);
@@ -280,6 +281,8 @@ export function applyTheme(themeId: string): void {
   root.style.setProperty("--text", theme.colors.text);
   root.style.setProperty("--muted", theme.colors.muted);
   root.style.setProperty("--accent", theme.colors.accent);
+  // Always reset, then conditionally set
+  root.style.removeProperty("--accent-hover");
   if (theme.colors.accentHover) {
     root.style.setProperty("--accent-hover", theme.colors.accentHover);
   }

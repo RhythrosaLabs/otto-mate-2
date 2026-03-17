@@ -4,120 +4,17 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Monitor, 
-  CheckSquare, 
-  FolderOpen, 
-  Plug, 
-  Zap, 
-  Image as ImageIcon,
   Plus,
   ChevronDown,
-  Brain,
   Menu,
   X,
-  Clock,
-  LayoutTemplate,
-  BarChart3,
-  Settings,
-  Sparkles,
-  Globe,
-  Shield,
-  GitBranch,
-  MessageSquare,
   User,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS, type ModelId } from "@/lib/types";
 import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas";
-
-const navItems = [
-  {
-    href: "/computer",
-    label: "Ottomate",
-    icon: Monitor,
-    exact: true,
-  },
-  {
-    href: "/computer/tasks",
-    label: "Tasks",
-    icon: CheckSquare,
-  },
-  {
-    href: "/computer/files",
-    label: "Files",
-    icon: FolderOpen,
-  },
-  {
-    href: "/computer/connectors",
-    label: "Connectors",
-    icon: Plug,
-  },
-  {
-    href: "/computer/skills",
-    label: "Skills",
-    icon: Zap,
-  },
-  {
-    href: "/computer/gallery",
-    label: "Gallery",
-    icon: ImageIcon,
-  },
-  {
-    href: "/computer/playground",
-    label: "Playground",
-    icon: Zap,
-  },
-  {
-    href: "/computer/dreamscape",
-    label: "Dreamscape",
-    icon: Sparkles,
-  },
-  {
-    href: "/computer/channels",
-    label: "Channels",
-    icon: Globe,
-  },
-  {
-    href: "/computer/memory",
-    label: "Memory",
-    icon: Brain,
-  },
-  {
-    href: "/computer/templates",
-    label: "Templates",
-    icon: LayoutTemplate,
-  },
-  {
-    href: "/computer/scheduled",
-    label: "Scheduled",
-    icon: Clock,
-  },
-  {
-    href: "/computer/analytics",
-    label: "Analytics",
-    icon: BarChart3,
-  },
-  {
-    href: "/computer/audit",
-    label: "Audit Trail",
-    icon: Shield,
-  },
-  {
-    href: "/computer/pipelines",
-    label: "Pipelines",
-    icon: GitBranch,
-  },
-  {
-    href: "/computer/sessions",
-    label: "Sessions",
-    icon: MessageSquare,
-  },
-  {
-    href: "/computer/settings",
-    label: "Settings",
-    icon: Settings,
-  },
-];
+import { NAV_ITEMS } from "@/lib/constants";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -206,7 +103,7 @@ export function Sidebar() {
 
       {/* Nav links */}
       <nav className="px-3">
-        {navItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = item.exact
             ? pathname === item.href || pathname === "/computer/new"

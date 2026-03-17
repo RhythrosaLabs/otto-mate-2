@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
   // ── File upload ──
   const formData = await req.formData();
   const taskId = (formData.get("taskId") as string) || `upload-${Date.now()}-${uuidv4().slice(0, 8)}`;
+  const source = (formData.get("source") as string) || "upload";
 
   // Accept both "file" (singular) and "files" (plural) keys
   let files = formData.getAll("files") as File[];
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
       path: filePath,
       size: buffer.length,
       mime_type: file.type || "application/octet-stream",
+      source: source as import("@/lib/types").FileSource,
       created_at: new Date().toISOString(),
     };
     addTaskFile(fileRecord);

@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, keys_saved: Object.keys(validKeys) });
   } catch (err) {
     return NextResponse.json(
-      { error: `Failed to save env keys: ${err instanceof Error ? err.message : String(err)}` },
+      { error: "Failed to save env keys. Check server logs for details." },
       { status: 500 }
     );
   }

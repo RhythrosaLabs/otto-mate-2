@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { captureAuthState, getAuthStateSummary } from "@/lib/social-media-browser";
+import { safeErrorMessage } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: safeErrorMessage(err) },
       { status: 500 }
     );
   }
@@ -102,7 +103,7 @@ export async function DELETE(req: NextRequest) {
     });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: safeErrorMessage(err) },
       { status: 500 }
     );
   }

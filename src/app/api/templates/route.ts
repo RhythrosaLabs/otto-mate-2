@@ -16,6 +16,8 @@ import {
   incrementTemplateUseCount,
   createTask,
 } from "@/lib/db";
+import { safeErrorMessage } from "@/lib/constants";
+import { TemplatePostSchema, parseBody } from "@/lib/schemas";
 import type { ModelId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,31 +28,20 @@ export async function GET() {
     const templates = listTemplates();
     return NextResponse.json(templates);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }
 
 // POST /api/templates — Create custom template OR run an existing one
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as {
-      action?: "create" | "run" | "delete";
-      // For "create":
-      name?: string;
-      description?: string;
-      prompt?: string;
-      category?: string;
-      icon?: string;
-      model?: string;
-      tags?: string[];
-      // For "run":
-      template_id?: string;
-      user_input?: string; // appended to template prompt
-    };
+    const { data: body, error: validationError } = await parseBody(request, TemplatePostSchema);
+    if (validationError) return validationError;
 
     const action = body.action || "create";
 
     if (action === "delete") {
+      // Prefer using the DELETE HTTP method instead
       if (!body.template_id) {
         return NextResponse.json({ error: "template_id is required for action=delete" }, { status: 400 });
       }
@@ -121,6 +112,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(template, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
+  }
+}
+
+// DELETE /api/templates?id=xxx — delete a template by id
+export async function DELETE(request: NextRequest) {
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id query parameter is required" }, { status: 400 });
+  }
+  try {
+    deleteTemplate(id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }

@@ -302,7 +302,7 @@ export function SettingsClient() {
         </h2>
         <div className="grid sm:grid-cols-2 gap-2">
           {[
-            { keys: "⌘ + K", desc: "Command palette" },
+            { keys: "⌘ + J", desc: "Command palette" },
             { keys: "⌘ + N", desc: "New task" },
             { keys: "⌘ + ,", desc: "Settings" },
             { keys: "/", desc: "Slash commands (in input)" },

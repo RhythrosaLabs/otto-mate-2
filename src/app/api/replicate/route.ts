@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
           path: f.filePath || `${filesDir}/${f.filename}`,
           size: f.size,
           mime_type: f.mimeType,
+          source: "playground",
           created_at: new Date().toISOString(),
         });
       } catch { /* ignore duplicate */ }

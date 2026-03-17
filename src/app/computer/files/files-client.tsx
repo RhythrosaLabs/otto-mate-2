@@ -8,8 +8,8 @@ import {
   Download, ExternalLink, Eye, ChevronDown, ChevronUp, HardDrive,
   Music, Video, Box, FileJson, FileCode, FileSpreadsheet, Loader2,
   FolderPlus, Pencil, Trash2, X, Check, FolderClosed, CornerDownRight,
-  Monitor, MessageSquare, Sparkles, Brain, Cpu, Camera, Palette,
-  Wand2, Link2,
+  Monitor, MessageSquare, Sparkles, Cpu, Camera, Palette,
+  Wand2, Link2, Upload, Film, AppWindow, Zap, Database,
 } from "lucide-react";
 import { formatBytes, formatRelativeTime } from "@/lib/utils";
 import type { TaskFile, FileFolder } from "@/lib/types";
@@ -24,8 +24,9 @@ interface FilesWithTask extends TaskFile {
 type ViewMode  = "icons" | "list" | "gallery";
 type SortKey   = "name" | "date" | "size" | "kind";
 type SortDir   = "asc" | "desc";
-type SidebarFilter = "all" | "images" | "video" | "audio" | "documents" | "webpages" | "code" | "data" | "models" | "archives" | "fonts" | "folder" | "browser" | "generated";
-type FileSource = "chat" | "browser" | "skill" | "generate" | "code" | "social" | "unknown";
+type SidebarFilter = "all" | "images" | "video" | "audio" | "documents" | "webpages" | "code" | "data" | "models" | "archives" | "fonts" | "folder" | "browser" | "generated"
+  | "src-playground" | "src-dreamscape" | "src-app-builder" | "src-agent" | "src-upload" | "src-chat" | "src-gallery" | "src-api" | "src-unknown";
+type FileSource = "chat" | "browser" | "skill" | "generate" | "code" | "social" | "upload" | "playground" | "dreamscape" | "app-builder" | "agent" | "unknown";
 
 // ─── mime helpers ─────────────────────────────────────────────────────────────
 
@@ -49,7 +50,9 @@ const canPreview = (m: string, n: string) =>
   isImage(m) || isVideo(m, n) || isAudio(m, n) || is3D(m, n) ||
   isPDF(m) || isHTML(m) || isText(m, n);
 
-function getFileSource(name: string, taskTitle?: string): FileSource {
+function getFileSource(name: string, taskTitle?: string, dbSource?: string): FileSource {
+  // Prefer DB-stored source
+  if (dbSource && dbSource !== "unknown") return dbSource as FileSource;
   if (isBrowserScreenshot(name)) return "browser";
   if (/^(generated|dall-?e)/i.test(name)) return "generate";
   if (/^replicate/i.test(name) || /^dream/i.test(name)) return "generate";
@@ -60,13 +63,18 @@ function getFileSource(name: string, taskTitle?: string): FileSource {
 }
 
 const SOURCE_META: Record<FileSource, { label: string; color: string; icon: typeof Monitor }> = {
-  browser:  { label: "Browser",  color: "#60a5fa", icon: Monitor },
-  chat:     { label: "Chat",     color: "#34d399", icon: MessageSquare },
-  skill:    { label: "Skill",    color: "#a78bfa", icon: Sparkles },
-  generate: { label: "Generated", color: "#f472b6", icon: Palette },
-  code:     { label: "Code",     color: "#fbbf24", icon: Cpu },
-  social:   { label: "Social",   color: "#fb923c", icon: Link2 },
-  unknown:  { label: "Task",     color: "#6b7280", icon: File },
+  browser:      { label: "Browser",       color: "#60a5fa", icon: Monitor },
+  chat:         { label: "Chat",          color: "#34d399", icon: MessageSquare },
+  skill:        { label: "Skill",         color: "#a78bfa", icon: Sparkles },
+  generate:     { label: "Generated",     color: "#f472b6", icon: Palette },
+  code:         { label: "Code",          color: "#fbbf24", icon: Cpu },
+  social:       { label: "Social",        color: "#fb923c", icon: Link2 },
+  upload:       { label: "Upload",        color: "#6b7280", icon: Upload },
+  playground:   { label: "Playground",    color: "#c084fc", icon: Palette },
+  dreamscape:   { label: "Video Studio",  color: "#a78bfa", icon: Film },
+  "app-builder": { label: "App Builder", color: "#34d399", icon: AppWindow },
+  agent:        { label: "Agent",         color: "#60a5fa", icon: Zap },
+  unknown:      { label: "Task",          color: "#6b7280", icon: File },
 };
 
 function getFileCategory(m: string, n: string): SidebarFilter {
@@ -320,7 +328,11 @@ function FolderThumbnail({ folder, sizeClass = "w-14 h-14", iconSize = 26 }: { f
 
 // ─── main component ────────────────────────────────────────────────────────────
 
-export function FilesClient({ files, initialFolders }: { files: FilesWithTask[]; initialFolders: FileFolder[] }) {
+export function FilesClient({ files, initialFolders, stats }: {
+  files: FilesWithTask[];
+  initialFolders: FileFolder[];
+  stats?: { total: number; bySource: Record<string, number>; byType: Record<string, number>; totalSize: number };
+}) {
   const router = useRouter();
   const [search,           setSearch]           = useState("");
   const [previewFile,      setPreviewFile]      = useState<FilesWithTask | null>(null);
@@ -446,8 +458,16 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
       all: files.length, images: 0, video: 0, audio: 0,
       documents: 0, webpages: 0, code: 0, data: 0, models: 0,
       archives: 0, fonts: 0, folder: 0, browser: 0, generated: 0,
+      "src-playground": 0, "src-dreamscape": 0, "src-app-builder": 0,
+      "src-agent": 0, "src-upload": 0, "src-chat": 0, "src-gallery": 0,
+      "src-api": 0, "src-unknown": 0,
     };
-    files.forEach(f => { c[getFileCategory(f.mime_type, f.name)]++; });
+    files.forEach(f => {
+      c[getFileCategory(f.mime_type, f.name)]++;
+      const src = f.source || "unknown";
+      const srcKey = `src-${src}` as SidebarFilter;
+      if (srcKey in c) c[srcKey]++;
+    });
     c.folder = folders.length;
     return c;
   }, [files, folders]);
@@ -465,7 +485,8 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
       if (!search) list = list.filter(f => !f.folder_id);
     }
 
-    if (sidebarFilter !== "all" && sidebarFilter !== "folder" && sidebarFilter !== "browser" && sidebarFilter !== "generated") {
+    if (sidebarFilter !== "all" && sidebarFilter !== "folder" && sidebarFilter !== "browser" && sidebarFilter !== "generated"
+      && !sidebarFilter.startsWith("src-")) {
       list = list.filter(f => getFileCategory(f.mime_type, f.name) === sidebarFilter);
     }
 
@@ -473,7 +494,12 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
       list = list.filter(f => isBrowserScreenshot(f.name));
     }
     if (sidebarFilter === "generated") {
-      list = list.filter(f => isGenerated(f.name));
+      list = list.filter(f => isGenerated(f.name) || f.source === "playground" || f.source === "dreamscape");
+    }
+    // Source-based filters
+    if (sidebarFilter.startsWith("src-")) {
+      const srcValue = sidebarFilter.replace("src-", "");
+      list = list.filter(f => (f.source || "unknown") === srcValue);
     }
 
     if (search) {
@@ -541,14 +567,16 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
     { key: "fonts",     label: "Fonts",            icon: <FileText       size={13} className="text-[#fbbf24]" /> },
   ];
 
-  const integrationLinks: Array<{ href: string; label: string; icon: ReactNode; description: string }> = [
-    { href: "/computer",          label: "Chat",      icon: <MessageSquare size={12} className="text-[#34d399]" />, description: "Task conversations" },
-    { href: "/computer/tasks",    label: "Tasks",     icon: <Cpu          size={12} className="text-[#60a5fa]" />, description: "Agent task outputs" },
-    { href: "/computer/sessions", label: "Sessions",  icon: <Monitor      size={12} className="text-[#a78bfa]" />, description: "Browser sessions" },
-    { href: "/computer/skills",   label: "Skills",    icon: <Sparkles     size={12} className="text-[#f472b6]" />, description: "Skill-generated files" },
-    { href: "/computer/memory",   label: "Memory",    icon: <Brain        size={12} className="text-[#fbbf24]" />, description: "Stored memories" },
-    { href: "/computer/gallery",  label: "Gallery",   icon: <Palette      size={12} className="text-[#f27a54]" />, description: "Image gallery" },
-    { href: "/computer/generate", label: "Generate",  icon: <Wand2        size={12} className="text-[#c084fc]" />, description: "AI generations" },
+  const sourceFilterItems: Array<{ key: SidebarFilter; label: string; icon: ReactNode }> = [
+    { key: "src-playground",   label: "Playground",    icon: <Palette       size={13} className="text-[#c084fc]" /> },
+    { key: "src-dreamscape",   label: "Video Studio",  icon: <Film          size={13} className="text-[#a78bfa]" /> },
+    { key: "src-app-builder",  label: "App Builder",   icon: <AppWindow     size={13} className="text-[#34d399]" /> },
+    { key: "src-agent",        label: "Ottomate Agent",icon: <Zap           size={13} className="text-[#60a5fa]" /> },
+    { key: "src-chat",         label: "Chat",          icon: <MessageSquare size={13} className="text-[#34d399]" /> },
+    { key: "src-gallery",      label: "Gallery",       icon: <Palette       size={13} className="text-[#f27a54]" /> },
+    { key: "src-api",          label: "API",           icon: <Database      size={13} className="text-[#fbbf24]" /> },
+    { key: "src-upload",       label: "Uploads",       icon: <Upload        size={13} className="text-[#6b7280]" /> },
+    { key: "src-unknown",      label: "Other",         icon: <FileText      size={13} className="text-[#6b7280]" /> },
   ];
 
   const handleContextMenu = useCallback((e: React.MouseEvent, fileId?: string, folderId?: string) => {
@@ -746,31 +774,46 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
             )}
 
             {/* ── Integration Links ── */}
-            <p className="px-3 mt-4 mb-1.5 finder-sidebar-section-label">Sources</p>
-            {integrationLinks.map(link => (
-              <button key={link.href}
-                onClick={() => router.push(link.href)}
-                className="w-[calc(100%-10px)] mx-[5px] flex items-center gap-2 px-2.5 py-[5px] rounded-lg transition-all group text-left text-white/40 hover:bg-white/[0.04] hover:text-white/65">
-                {link.icon}
-                <span className="text-[11px] font-medium flex-1 truncate">{link.label}</span>
-                <ExternalLink size={9} className="text-white/15 group-hover:text-white/30 flex-shrink-0" />
+            <p className="px-3 mt-4 mb-1.5 finder-sidebar-section-label">Generation Sources</p>
+            {sourceFilterItems.filter(item => counts[item.key] > 0).map(item => (
+              <button key={item.key}
+                onClick={() => { setSidebarFilter(item.key); setCurrentFolderId(null); }}
+                className={cn("w-[calc(100%-10px)] mx-[5px] flex items-center gap-2 px-2.5 py-[5px] rounded-lg transition-all group text-left",
+                  sidebarFilter === item.key
+                    ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]"
+                    : "text-white/50 hover:bg-white/[0.04] hover:text-white/75")}>
+                {item.icon}
+                <span className="text-[11px] font-medium flex-1 truncate">{item.label}</span>
+                <span className="text-[10px] text-white/20 group-hover:text-white/35 flex-shrink-0 tabular-nums">{counts[item.key]}</span>
               </button>
             ))}
+
+
 
             <div className="mx-3 mt-4 mb-2 border-t border-white/[0.05]" />
             <p className="px-3 mb-1.5 finder-sidebar-section-label">Storage</p>
             <div className="px-3">
               <div className="flex items-center gap-2 text-white/30 mb-1.5">
                 <HardDrive size={11} />
-                <span className="text-[11px]">Task Files</span>
+                <span className="text-[11px]">{stats?.total || files.length} files</span>
               </div>
               <div className="h-[3px] bg-white/[0.06] rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{
-                  width: `${Math.min(100, (files.reduce((a, f) => a + f.size, 0) / (500 * 1024 * 1024)) * 100)}%`,
+                  width: `${Math.min(100, ((stats?.totalSize || files.reduce((a, f) => a + f.size, 0)) / (500 * 1024 * 1024)) * 100)}%`,
                   background: "linear-gradient(90deg, #5e9cf0, #818cf8)",
                 }} />
               </div>
-              <p className="text-[10px] text-white/20 mt-1">{formatBytes(files.reduce((a, f) => a + f.size, 0))} used</p>
+              <p className="text-[10px] text-white/20 mt-1">{formatBytes(stats?.totalSize || files.reduce((a, f) => a + f.size, 0))} used</p>
+              {stats?.bySource && Object.keys(stats.bySource).length > 1 && (
+                <div className="mt-2 space-y-0.5">
+                  {Object.entries(stats.bySource).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([src, count]) => (
+                    <div key={src} className="flex items-center justify-between">
+                      <span className="text-[9px] text-white/20 capitalize">{src === "unknown" ? "other" : src}</span>
+                      <span className="text-[9px] text-white/15 tabular-nums">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -829,7 +872,7 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
                 {currentSubFolders.map(renderFolderList)}
 
                 {filtered.map(file => {
-                  const source = getFileSource(file.name, file.task_title);
+                  const source = getFileSource(file.name, file.task_title, file.source);
                   const srcMeta = SOURCE_META[source];
                   return (
                   <div key={file.id}
@@ -880,18 +923,27 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
                       </div>
                     )}
                     {currentSubFolders.map(renderFolderGallery)}
-                    {filtered.map(file => (
+                    {filtered.map(file => {
+                      const gSrc = getFileSource(file.name, file.task_title, file.source);
+                      const gMeta = SOURCE_META[gSrc];
+                      return (
                       <button key={file.id}
                         onClick={() => { setSelectedFile(selectedFile?.id === file.id ? null : file); setSelectedFolderId(null); }}
                         onDoubleClick={() => canPreview(file.mime_type, file.name) && setPreviewFile(file)}
                         onContextMenu={(e) => handleContextMenu(e, file.id)}
-                        className={cn("flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all text-center",
+                        className={cn("flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all text-center relative",
                           selectedFile?.id === file.id ? "bg-white/[0.08] ring-1 ring-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" : "hover:bg-white/[0.04]")}>
                         <FileThumbnail file={file} sizeClass="w-16 h-16" iconSize={26} />
                         <span className="text-[10px] text-white/60 leading-tight line-clamp-2 w-full px-0.5">{file.name}</span>
                         <span className="text-[9px] text-white/20 tabular-nums">{formatBytes(file.size)}</span>
+                        {gSrc !== "unknown" && (
+                          <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ background: `${gMeta.color}20` }} title={gMeta.label}>
+                            <gMeta.icon size={7} style={{ color: gMeta.color }} />
+                          </span>
+                        )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -909,7 +961,7 @@ export function FilesClient({ files, initialFolders }: { files: FilesWithTask[];
                             { label: "Size", value: formatBytes(selectedFile.size) },
                             { label: "Kind", value: (selectedFile.mime_type.split("/")[1] ?? selectedFile.mime_type).replace(/x-/, "") },
                             { label: "Created", value: formatRelativeTime(selectedFile.created_at) },
-                            { label: "Source", value: SOURCE_META[getFileSource(selectedFile.name, selectedFile.task_title)].label },
+                            { label: "Source", value: SOURCE_META[getFileSource(selectedFile.name, selectedFile.task_title, selectedFile.source)].label },
                             ...(selectedFile.task_title ? [{ label: "Task", value: selectedFile.task_title }] : []),
                           ].map(row => (
                             <div key={row.label} className="flex gap-2 py-0.5">

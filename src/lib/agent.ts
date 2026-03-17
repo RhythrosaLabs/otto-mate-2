@@ -89,9 +89,9 @@ function getFailoverChain(primary: { provider: string; modelName: string }): Fai
   if (primary.provider !== "google" && process.env.GOOGLE_AI_API_KEY) {
     fallbacks.push({ provider: "google", modelName: "gemini-1.5-pro" });
   }
-  // OpenRouter as last-resort free fallback (DeepSeek via OpenRouter)
+  // OpenRouter as last-resort free fallback
   if (primary.provider !== "openrouter" && process.env.OPENROUTER_API_KEY) {
-    fallbacks.push({ provider: "openrouter", modelName: "deepseek/deepseek-chat-v3-0324" });
+    fallbacks.push({ provider: "openrouter", modelName: "openrouter/free" });
   }
   if (primary.provider !== "perplexity" && process.env.PERPLEXITY_API_KEY) {
     fallbacks.push({ provider: "perplexity", modelName: "sonar-pro" });
@@ -710,7 +710,7 @@ WHEN TO USE:
   - User asks for multiple video clips in a cohesive production
 
 Models:
-  - Video: ray-3 (high quality), ray-flash-3 (fast/cheap)
+  - Video: ray-3 (high quality), ray-flash-2 (fast/cheap)
   - Image: photon-1 (high quality), photon-flash-1 (fast)
 
 IMPORTANT: Plan descriptive, cinematic prompts for each shot before calling this tool. Include camera angle, lighting, subject action, mood, and setting in each prompt.`,
@@ -733,7 +733,7 @@ IMPORTANT: Plan descriptive, cinematic prompts for each shot before calling this
               },
               model: {
                 type: "string",
-                enum: ["ray-3", "ray-flash-3", "photon-1", "photon-flash-1"],
+                enum: ["ray-3", "ray-flash-2", "ray-hdr-3", "ray-3-14", "ray-hdr-3-14", "photon-1", "photon-flash-1"],
                 description: "Model to use (default: ray-3 for video, photon-1 for image)",
               },
               aspect_ratio: { type: "string", enum: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"], default: "16:9" },
@@ -818,6 +818,25 @@ Use when:
     },
   },
 ];
+
+// ─── Gemini schema sanitizer ──────────────────────────────────────────────────
+
+/**
+ * Recursively strip `additionalProperties` from a JSON schema object.
+ * Gemini's function-calling API rejects schemas that include this field.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripAdditionalProperties(schema: any): any {
+  if (!schema || typeof schema !== "object") return schema;
+  if (Array.isArray(schema)) return schema.map(stripAdditionalProperties);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "additionalProperties") continue;
+    cleaned[key] = stripAdditionalProperties(value);
+  }
+  return cleaned;
+}
 
 // ─── OpenAI-format tools ──────────────────────────────────────────────────────
 
@@ -913,6 +932,10 @@ function selectModelForTask(
       if (candidate.provider === "google" && process.env.GOOGLE_AI_API_KEY) return candidate;
     }
     return { provider: "anthropic", modelName: "claude-sonnet-4-6" };
+  }
+  // Free mode: route to OpenRouter with free meta-router
+  if (requestedModel === "free") {
+    return { provider: "openrouter", modelName: "openrouter/free" };
   }
   // OpenRouter special handling
   if (requestedModel === "openrouter") {
@@ -1577,7 +1600,7 @@ async function runWithGoogle(
   const gmodel = googleAI.getGenerativeModel({ model: modelName, systemInstruction: systemPrompt });
   const googleTools = [{
     functionDeclarations: TOOLS.map((t) => ({
-      name: t.name, description: t.description, parameters: t.input_schema,
+      name: t.name, description: t.description, parameters: stripAdditionalProperties(t.input_schema),
     })),
   }];
   // Build initial history for Google chat
@@ -3022,6 +3045,7 @@ async function executeBrowseWeb(
               path: ssPath,
               mime_type: "image/png",
               size: fs.statSync(ssPath).size,
+              source: "agent",
               created_at: new Date().toISOString(),
             });
           } catch { /* ignore file tracking errors */ }
@@ -3386,6 +3410,7 @@ async function executeDreamMachine(
     id: uuidv4(), task_id: ctx.taskId, name: boardFilename,
     path: path.join(ctx.filesDir, boardFilename),
     size: Buffer.byteLength(boardJson), mime_type: "application/json",
+    source: "agent",
     created_at: new Date().toISOString(),
   });
 
@@ -3454,7 +3479,7 @@ async function executeGenerateImage(
     const filePath = path.join(ctx.filesDir, safeName);
     fs.writeFileSync(filePath, buf);
     const stat = fs.statSync(filePath);
-    addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: "image/png", created_at: new Date().toISOString() });
+    addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: "image/png", source: "agent", created_at: new Date().toISOString() });
     const revised = resp.data?.[0]?.revised_prompt;
     return `Image generated: ${safeName} (${formatBytes(stat.size)})${revised ? `\nRevised prompt: ${revised}` : ""}`;
   } catch (err) { return `Image generation failed: ${err instanceof Error ? err.message : String(err)}`; }
@@ -3489,6 +3514,7 @@ async function executeReplicateRun(
         path: file.filePath,
         size: file.size,
         mime_type: file.mimeType,
+        source: "agent",
         created_at: new Date().toISOString(),
       });
     }
@@ -3655,7 +3681,7 @@ async function executeCode(language: string, code: string, timeout: number, ctx:
       .filter((f) => { const s = fs.statSync(path.join(ctx.filesDir, f)); return s.mtimeMs > Date.now() - (timeout + 10) * 1000; });
     for (const nf of newFiles) {
       const fp = path.join(ctx.filesDir, nf); const s = fs.statSync(fp);
-      addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: nf, path: fp, size: s.size, mime_type: getMimeType(nf), created_at: new Date().toISOString() });
+      addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: nf, path: fp, size: s.size, mime_type: getMimeType(nf), source: "agent", created_at: new Date().toISOString() });
     }
     return output + (newFiles.length > 0 ? `\n\nFiles created: ${newFiles.join(", ")}` : "");
   } catch (err) { return `Execution error: ${(err instanceof Error ? err.message : String(err)).slice(0, 2000)}`; }
@@ -3671,7 +3697,7 @@ async function writeFile(filename: string, content: string, mimeType: string | u
   const safeContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
   fs.writeFileSync(filePath, safeContent, "utf-8");
   const stat = fs.statSync(filePath);
-  addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: mimeType || getMimeType(safeName), created_at: new Date().toISOString() });
+  addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: mimeType || getMimeType(safeName), source: "agent", created_at: new Date().toISOString() });
   return `File written: ${safeName} (${formatBytes(stat.size)})`;
 }
 
@@ -3911,6 +3937,8 @@ async function executeFinanceData(queryType: string, symbol: string, query: stri
 // ─── Sub-Agent ────────────────────────────────────────────────────────────────
 
 function selectSubAgentModel(agentType: string, requested: string): { provider: string; modelName: string } {
+  // If free mode is requested, all sub-agents also use free models
+  if (requested === "free") return { provider: "openrouter", modelName: "openrouter/free" };
   if (requested && requested !== "auto") return selectModelForTask(requested as ModelId, "");
   switch (agentType) {
     case "research": return process.env.GOOGLE_AI_API_KEY ? { provider: "google", modelName: "gemini-2.0-flash" } : { provider: "anthropic", modelName: "claude-sonnet-4-6" };
@@ -4141,6 +4169,7 @@ async function executeSocialMedia(input: Record<string, unknown>, ctx: ToolConte
           path: result.screenshot_path,
           mime_type: "image/png",
           size: fs.statSync(result.screenshot_path).size,
+          source: "agent",
           created_at: new Date().toISOString(),
         });
       } catch { /* ignore file tracking errors */ }

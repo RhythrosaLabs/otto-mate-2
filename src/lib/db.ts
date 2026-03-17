@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
-import type { Task, AgentStep, TaskFile, FileFolder, Skill, GalleryItem, Message, SubTask, TaskStatus, MemoryEntry, ModelId, TaskSource, PresetType } from "./types";
+import type { Task, AgentStep, TaskFile, FileFolder, Skill, GalleryItem, Message, SubTask, TaskStatus, MemoryEntry, ModelId, TaskSource, PresetType, FileSource } from "./types";
 
 const DB_PATH = process.env.DATABASE_PATH || "./perplexity-computer.db";
 const FILES_DIR = "./task-files";
@@ -248,6 +248,9 @@ function initSchema(db: Database.Database): void {
 
   // Migrate: add folder_id to task_files
   try { db.exec("ALTER TABLE task_files ADD COLUMN folder_id TEXT"); } catch { /* exists */ }
+
+  // Migrate: add source column to task_files for tracking generation origin
+  try { db.exec("ALTER TABLE task_files ADD COLUMN source TEXT DEFAULT 'unknown'"); } catch { /* exists */ }
 
   // Migrate: add unique constraint on (task_id, name) and deduplicate existing rows
   try {
@@ -640,13 +643,14 @@ export function addTaskFile(file: TaskFile): void {
   // Upsert: if a file with the same task_id + name already exists, update it
   // This prevents duplicate rows when execute_code re-scans or write_file is called twice
   db.prepare(`
-    INSERT INTO task_files (id, task_id, name, path, size, mime_type, preview_url, folder_id, created_at)
-    VALUES (@id, @task_id, @name, @path, @size, @mime_type, @preview_url, @folder_id, @created_at)
+    INSERT INTO task_files (id, task_id, name, path, size, mime_type, preview_url, folder_id, source, created_at)
+    VALUES (@id, @task_id, @name, @path, @size, @mime_type, @preview_url, @folder_id, @source, @created_at)
     ON CONFLICT(task_id, name) DO UPDATE SET
       path = excluded.path,
       size = excluded.size,
       mime_type = excluded.mime_type,
       preview_url = COALESCE(excluded.preview_url, task_files.preview_url),
+      source = COALESCE(excluded.source, task_files.source),
       created_at = excluded.created_at
   `).run({
     id: file.id,
@@ -657,8 +661,29 @@ export function addTaskFile(file: TaskFile): void {
     mime_type: file.mime_type,
     preview_url: file.preview_url ?? null,
     folder_id: file.folder_id ?? null,
+    source: file.source ?? "unknown",
     created_at: file.created_at,
   });
+
+  // Auto-add every file to memory so Ottomate can access/recall it
+  try {
+    const src = file.source || "unknown";
+    const mediaType = (file.mime_type || "application/octet-stream").split("/")[0];
+    const now = new Date().toISOString();
+    const memKey = `file:${file.task_id}/${file.name}`;
+    const memValue = `File "${file.name}" (${file.mime_type}, ${file.size} bytes) from ${src}. Path: /api/files/${file.task_id}/${file.name}`;
+    const existing = db.prepare("SELECT id FROM memory WHERE key = ?").get(memKey);
+    if (existing) {
+      db.prepare("UPDATE memory SET value=?, source_task_id=?, tags=?, updated_at=? WHERE key=?").run(
+        memValue, file.task_id, JSON.stringify(["file", src, mediaType]), now, memKey
+      );
+    } else {
+      db.prepare(`
+        INSERT INTO memory (id, key, value, source_task_id, tags, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(file.id + "-mem", memKey, memValue, file.task_id, JSON.stringify(["file", src, mediaType]), now, now);
+    }
+  } catch { /* memory is best-effort, never block file creation */ }
 }
 
 export function listAllFiles(limit = 500): (TaskFile & { task_title?: string })[] {
@@ -678,8 +703,49 @@ export function listAllFiles(limit = 500): (TaskFile & { task_title?: string })[
     mime_type: r.mime_type as string,
     preview_url: r.preview_url as string | undefined,
     folder_id: r.folder_id as string | undefined,
+    source: ((r.source as string | undefined) || "unknown") as FileSource,
     created_at: r.created_at as string,
     task_title: r.task_title as string | undefined,
+  }));
+}
+
+export function getFilesStats(): { total: number; bySource: Record<string, number>; byType: Record<string, number>; totalSize: number } {
+  const db = getDb();
+  const total = (db.prepare("SELECT COUNT(*) as c FROM task_files").get() as { c: number }).c;
+  const totalSize = (db.prepare("SELECT COALESCE(SUM(size), 0) as s FROM task_files").get() as { s: number }).s;
+  
+  const sourceRows = db.prepare("SELECT COALESCE(source, 'unknown') as src, COUNT(*) as c FROM task_files GROUP BY src").all() as Array<{ src: string; c: number }>;
+  const bySource: Record<string, number> = {};
+  for (const r of sourceRows) bySource[r.src] = r.c;
+  
+  const typeRows = db.prepare(`
+    SELECT CASE 
+      WHEN mime_type LIKE 'image/%' THEN 'images'
+      WHEN mime_type LIKE 'video/%' THEN 'video'
+      WHEN mime_type LIKE 'audio/%' THEN 'audio'
+      WHEN mime_type LIKE 'text/%' THEN 'text'
+      ELSE 'other'
+    END as type_group, COUNT(*) as c FROM task_files GROUP BY type_group
+  `).all() as Array<{ type_group: string; c: number }>;
+  const byType: Record<string, number> = {};
+  for (const r of typeRows) byType[r.type_group] = r.c;
+  
+  return { total, bySource, byType, totalSize };
+}
+
+export function getRecentMemoryForFiles(limit = 10): MemoryEntry[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM memory WHERE key LIKE 'file:%' ORDER BY updated_at DESC LIMIT ?"
+  ).all(limit) as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    id: r.id as string,
+    key: r.key as string,
+    value: r.value as string,
+    source_task_id: r.source_task_id as string | undefined,
+    tags: JSON.parse((r.tags as string) || "[]"),
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
   }));
 }
 
