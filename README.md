@@ -12,7 +12,6 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
-  <a href="#screenshots">Screenshots</a> •
   <a href="#pages">Pages</a> •
   <a href="#models">Models</a> •
   <a href="#connectors">Connectors</a> •
@@ -111,80 +110,6 @@ A persistent key-value store that the agent reads and writes during task executi
 **Analytics** shows KPIs: total tasks, success rate, average duration, top tools, model usage, cost trends, and daily volume. **Audit Trail** logs every tool call, model invocation, and task event with duration, metadata, and filters.
 
 ---
-
-## Screenshots
-
-### Home
-The main prompt interface — type a goal, use slash commands, attach files, or pick from the prompt gallery.
-
-![Home](docs/screenshots/home.png)
-
-### Connectors
-100+ integrations — connect Gmail, Slack, GitHub, Stripe, Notion, and more with OAuth or API keys.
-
-![Connectors](docs/screenshots/connectors.png)
-
-### Dreamscape Studio
-17-mode AI creative studio with storyboards, camera presets, and the AI Director chat.
-
-![Dreamscape](docs/screenshots/dreamscape.png)
-
-### Playground
-Run any ML model from Replicate & HuggingFace with side-by-side comparison.
-
-![Playground](docs/screenshots/playground.png)
-
-### Skills Marketplace
-200+ pre-built skills across 15+ categories — or create your own.
-
-![Skills](docs/screenshots/skills.png)
-
-### Files
-Finder-style file browser with icon, list, and gallery views. 50+ format support.
-
-![Files](docs/screenshots/files.png)
-
-### Analytics
-Performance dashboard with KPIs, tool popularity, model costs, and daily volume.
-
-![Analytics](docs/screenshots/analytics.png)
-
-### Gallery
-Community example tasks — browse, filter by category, one-click run.
-
-![Gallery](docs/screenshots/gallery.png)
-
-<details>
-<summary><strong>More screenshots</strong></summary>
-
-### Tasks
-![Tasks](docs/screenshots/tasks.png)
-
-### Pipelines
-![Pipelines](docs/screenshots/pipelines.png)
-
-### Templates
-![Templates](docs/screenshots/templates.png)
-
-### Scheduled Tasks
-![Scheduled](docs/screenshots/scheduled.png)
-
-### Memory
-![Memory](docs/screenshots/memory.png)
-
-### Sessions
-![Sessions](docs/screenshots/sessions.png)
-
-### Channels
-![Channels](docs/screenshots/channels.png)
-
-### Audit Trail
-![Audit](docs/screenshots/audit.png)
-
-### Settings
-![Settings](docs/screenshots/settings.png)
-
-</details>
 
 ---
 
