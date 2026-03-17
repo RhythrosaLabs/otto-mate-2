@@ -24,7 +24,7 @@
 ## What is Ottomate?
 
 Ottomate is a **self-hosted, multi-model AI agent platform** built with Next.js 15.  
-Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 100+ external services, generates images and video, and saves every artifact it produces.
+Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 190+ external services, generates images and video, and saves every artifact it produces.
 
 It ships as a single `npm install` with zero external infrastructure. A SQLite database is created on first launch.
 
@@ -34,13 +34,13 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 - **Multi-model orchestration** — Claude Opus/Sonnet, GPT-4o/4.1, Gemini 2.0, Perplexity Sonar, OpenRouter, with automatic failover
 - **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
 - **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
-- **100+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
+- **190+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
 - **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), DALL-E 3, ElevenLabs (voice)
 - **Sub-agents** — spawns specialized child agents for parallel work
 - **Persistent memory** — key-value store the agent reads/writes across tasks
 - **Scheduled tasks** — cron expressions, intervals, daily/weekly recurrence
 - **Visual pipelines** — DAG builder for chaining tasks with dependencies
-- **Skills marketplace** — 200+ pre-built skill templates across 15+ categories
+- **Skills marketplace** — 270+ pre-built skill templates across 10 categories
 - **Voice input** — dictate tasks via Whisper or browser speech recognition
 - **Slash commands** — `/image`, `/research`, `/code`, `/email`, `/video`, `/scrape`, and more
 
@@ -58,8 +58,8 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 ### Install & run
 
 ```bash
-git clone https://github.com/RhythrosaLabs/ottomate.git
-cd ottomate
+git clone https://github.com/RhythrosaLabs/otto-mate-2.git
+cd otto-mate-2
 npm install
 
 # Add your API key
@@ -96,10 +96,10 @@ A 17-mode AI creative studio built around **Luma Dream Machine** (Ray 3, Photon 
 A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency arrows, and run the entire pipeline — nodes execute in dependency order with status tracking.
 
 ### Connectors Marketplace
-100+ integrations across communication, storage, development, project management, CRM, data, AI services, finance, marketing, social media, and more. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 35+ connectors have a completely free tier.
+190+ integrations across communication, storage, development, project management, CRM, data, AI services, finance, marketing, social media, and more. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 135+ connectors have a completely free tier.
 
 ### Skills & Templates
-**Skills** are reusable instruction sets (like Custom GPTs). Browse 200+ pre-built skills in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
+**Skills** are reusable instruction sets (like Custom GPTs). Browse 270+ pre-built skills in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
 
 ### Scheduling
 Schedule any task to run automatically. Supports one-time, recurring intervals, daily, weekly, and full cron expressions. Enable/disable individual schedules and see last-run / next-run timestamps.
@@ -128,7 +128,7 @@ The main prompt interface — type a goal, use slash commands, attach files, or 
 ![Home](docs/screenshots/home.png)
 
 ### Connectors
-100+ integrations — connect Gmail, Slack, GitHub, Stripe, Notion, and more with OAuth or API keys.
+190+ integrations — connect Gmail, Slack, GitHub, Stripe, Notion, and more with OAuth or API keys.
 
 ![Connectors](docs/screenshots/connectors.png)
 
@@ -143,7 +143,7 @@ Run any ML model from Replicate & HuggingFace with side-by-side comparison.
 ![Playground](docs/screenshots/playground.png)
 
 ### Skills Marketplace
-200+ pre-built skills across 15+ categories — or create your own.
+270+ pre-built skills across 10 categories — or create your own.
 
 ![Skills](docs/screenshots/skills.png)
 
@@ -176,8 +176,8 @@ Community example tasks — browse, filter by category, one-click run.
 | **Tasks** | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
 | **Task Detail** | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
 | **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane |
-| **Connectors** | Integration marketplace — connect 100+ services via OAuth or API key |
-| **Skills** | Create, edit, and install reusable agent behaviors; 200+ in the marketplace |
+| **Connectors** | Integration marketplace — connect 190+ services via OAuth or API key |
+| **Skills** | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
 | **Gallery** | Browse community example tasks, filter by category, one-click run |
 | **Playground** | Run any of thousands of ML models from Replicate & HuggingFace — image gen, video, music, upscaling, background removal, 3D, style transfer — with multi-column side-by-side comparison, quick actions (upscale, animate, restyle, remove BG, make 3D, social post), file upload for img2img/upscale workflows, and a result gallery filterable by media type |
 | **Dreamscape** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat that turns natural language into multi-step command chains |
@@ -193,12 +193,14 @@ Community example tasks — browse, filter by category, one-click run.
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
 | **Replicate** | Dedicated Replicate model explorer with quick-run categories |
 | **WhatsApp** | WhatsApp Cloud API dashboard — connection status, message sender, webhook |
+| **App Builder** | Visual app builder for creating custom AI-powered applications |
+| **Dream Machine** | Dedicated Luma Dream Machine interface for video and image generation |
 
 ---
 
 ## Models
 
-Ottomate supports **17 models** across 5 providers:
+Ottomate supports **17 model options** across 5 providers, plus a free tier:
 
 | Model | Provider | Best for |
 |---|---|---|
@@ -207,13 +209,17 @@ Ottomate supports **17 models** across 5 providers:
 | Claude 3.5 Haiku | Anthropic | Ultra-fast, cheapest Claude |
 | GPT-4o | OpenAI | Long-context recall, broad knowledge |
 | GPT-4o Mini | OpenAI | Lightweight speed tasks |
-| GPT-4.1 | OpenAI | Strong reasoning |
-| GPT-4.1 Mini / Nano | OpenAI | Fast / ultra-cheap |
+| GPT-4.1 | OpenAI | Strong reasoning, coding |
+| GPT-4.1 Mini | OpenAI | Fast, good balance of cost and capability |
+| GPT-4.1 Nano | OpenAI | Ultra-cheap for simple tasks |
 | Gemini 1.5 Pro | Google | Deep research, long documents |
-| Gemini 1.5/2.0 Flash | Google | Fast Gemini inference |
-| Sonar / Sonar Pro | Perplexity | Search-augmented generation |
-| Sonar Reasoning Pro | Perplexity | Advanced search + reasoning |
-| OpenRouter | Any | Route to any model (DeepSeek, Llama, etc.) |
+| Gemini 1.5 Flash | Google | Ultra-fast responses |
+| Gemini 2.0 Flash | Google | Latest fast Gemini, very affordable |
+| Sonar | Perplexity | Real-time web-augmented search |
+| Sonar Pro | Perplexity | Deeper web-augmented analysis |
+| Sonar Reasoning Pro | Perplexity | Multi-step reasoning + web search |
+| OpenRouter (Any Model) | OpenRouter | Route to 200+ models (DeepSeek, Llama, Mistral, Qwen, etc.) |
+| Free (OpenRouter) | OpenRouter | Zero-cost inference via Nemotron, Qwen, Llama, Gemma & more |
 
 Set `auto` to let the agent pick the best model per task.
 
@@ -229,6 +235,7 @@ Create a `.env.local` file in the project root:
 | `OPENAI_API_KEY` | No | GPT-4o, GPT-4.1, DALL-E 3 |
 | `GOOGLE_GEMINI_API_KEY` | No | Gemini 1.5/2.0 |
 | `GROQ_API_KEY` | No | Llama / Mixtral via Groq |
+| `OPENROUTER_API_KEY` | No | Access 200+ models including free tier via OpenRouter |
 | `PERPLEXITY_API_KEY` | No | Real-time web search via Perplexity Sonar |
 | `BRAVE_SEARCH_API_KEY` | No | Web search via Brave |
 | `SERPER_API_KEY` | No | Google search via Serper |
@@ -254,7 +261,7 @@ Navigate to **Connectors** in the sidebar. Click **Connect** on any service to b
 - **API key connectors** — paste your token and click Connect
 - **Free** badge = no credit card required
 
-### Free-tier connectors (35+)
+### Free-tier connectors (135+)
 
 | Connector | Auth | Notes |
 |---|---|---|
@@ -557,25 +564,44 @@ src/
 │   │   ├── replicate/              # Replicate model runner
 │   │   ├── dreamscape/             # Luma Dream Machine
 │   │   ├── huggingface/            # HuggingFace inference
+│   │   ├── luma/                   # Luma Dream Machine API
+│   │   ├── generate/               # Generic model generation
+│   │   ├── app-builder/            # App builder API
+│   │   ├── health/                 # Health check endpoint
+│   │   ├── context/                # Context management
+│   │   ├── usage/                  # Usage tracking
+│   │   ├── hooks/                  # Webhook handlers
+│   │   ├── social-auth/            # Social media OAuth
+│   │   ├── whatsapp/               # WhatsApp Cloud API
 │   │   └── voice/                  # Whisper transcription
-│   └── computer/                   # All UI pages (22 routes)
+│   └── computer/                   # All UI pages (23 routes)
 ├── lib/
-│   ├── agent.ts                    # Core AI agent (7,500 lines)
+│   ├── agent.ts                    # Core AI agent (~7,500 lines)
 │   ├── db.ts                       # SQLite via better-sqlite3
-│   ├── types.ts                    # TypeScript types (550 lines)
-│   ├── connectors-data.ts          # 100+ connector definitions
-│   ├── skill-catalog.ts            # 200+ pre-built skills
+│   ├── types.ts                    # TypeScript types (~440 lines)
+│   ├── connectors-data.ts          # 190+ connector definitions
+│   ├── skill-catalog.ts            # 270+ pre-built skills
 │   ├── model-fallback.ts           # Multi-provider failover
 │   ├── scheduler.ts                # Cron/interval scheduler
 │   ├── replicate.ts                # Replicate API client
 │   ├── huggingface.ts              # HuggingFace client
 │   ├── social-media-browser.ts     # Social media automation
 │   ├── personas.ts                 # Agent personality presets
+│   ├── models.ts                   # Model configurations & free model list
+│   ├── schemas.ts                  # Zod validation schemas
+│   ├── constants.ts                # App-wide constants
+│   ├── background-ops.ts           # Background task operations
+│   ├── steel-client.ts             # Steel browser client
+│   ├── whatsapp.ts                 # WhatsApp Cloud API client
+│   ├── skill-converters.ts         # Skill format converters
 │   ├── themes.ts                   # UI theme definitions
 │   └── utils.ts                    # Shared utilities
 └── components/
     ├── sidebar.tsx                  # Navigation sidebar
-    └── command-palette.tsx          # ⌘K command palette
+│   ├── command-palette.tsx          # ⌘K command palette
+│   ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
+│   ├── background-status.tsx        # Background task status indicator
+│   └── persistent-layout.tsx        # Persistent layout wrapper
 ```
 
 ### Database (SQLite via better-sqlite3)
