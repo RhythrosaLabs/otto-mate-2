@@ -62,8 +62,9 @@ steel-profiles/
 *.webp
 docs/videos/tutorial-frames/
 
-# allow committed screenshots for README
+# allow committed screenshots and video for README
 !docs/screenshots/*.png
+!docs/videos/tutorial-walkthrough.webm
 
 # test/debug endpoints (not for production)
 src/app/api/test-login/

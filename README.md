@@ -112,6 +112,14 @@ A persistent key-value store that the agent reads and writes during task executi
 
 ---
 
+## Tutorial
+
+<video src="https://github.com/RhythrosaLabs/otto-mate-2/raw/main/docs/videos/tutorial-walkthrough.webm" controls width="100%">
+  Your browser does not support the video tag. <a href="docs/videos/tutorial-walkthrough.webm">Download the walkthrough video</a>.
+</video>
+
+---
+
 ## Screenshots
 
 ### Home
