@@ -82,14 +82,12 @@ const FEATURED_MODELS = [
   { fullName: "black-forest-labs/flux-schnell", label: "FLUX Schnell", provider: "replicate" as const, tag: "Fast" },
   { fullName: "black-forest-labs/flux-dev", label: "FLUX Dev", provider: "replicate" as const, tag: "Quality" },
   { fullName: "black-forest-labs/flux-1.1-pro", label: "FLUX 1.1 Pro", provider: "replicate" as const, tag: "Pro" },
-  { fullName: "stability-ai/sdxl", label: "SDXL", provider: "replicate" as const, tag: "Classic" },
+  { fullName: "black-forest-labs/flux-2-pro", label: "FLUX 2 Pro", provider: "replicate" as const, tag: "Best" },
   { fullName: "stabilityai/stable-diffusion-xl-base-1.0", label: "SDXL (HF)", provider: "huggingface" as const, tag: "Classic" },
-  { fullName: "bytedance/sdxl-lightning-4step", label: "SDXL Lightning", provider: "replicate" as const, tag: "Fast" },
-  { fullName: "lucataco/animate-diff", label: "AnimateDiff", provider: "replicate" as const, tag: "Video" },
-  { fullName: "meta/musicgen", label: "MusicGen", provider: "replicate" as const, tag: "Music" },
+  { fullName: "bytedance/seedance-1-lite", label: "Seedance Lite", provider: "replicate" as const, tag: "Video" },
   { fullName: "facebook/musicgen-small", label: "MusicGen (HF)", provider: "huggingface" as const, tag: "Music" },
-  { fullName: "cjwbw/rembg", label: "RemBG", provider: "replicate" as const, tag: "Tool" },
-  { fullName: "nightmareai/real-esrgan", label: "Real-ESRGAN", provider: "replicate" as const, tag: "Upscale" },
+  { fullName: "recraft-ai/recraft-remove-background", label: "Remove BG", provider: "replicate" as const, tag: "Tool" },
+  { fullName: "recraft-ai/recraft-crisp-upscale", label: "Crisp Upscale", provider: "replicate" as const, tag: "Upscale" },
   { fullName: "meta/meta-llama-3-70b-instruct", label: "Llama 3 70B", provider: "replicate" as const, tag: "Text" },
 ];
 

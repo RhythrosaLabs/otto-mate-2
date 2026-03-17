@@ -156,21 +156,25 @@ export async function POST(req: NextRequest) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         lastError = errorMsg;
 
-        // If this isn't the last provider, check if we should fallback
+        // If this isn't the last provider, try the next one
         if (i < providerOrder.length - 1) {
-          if (shouldFallback(errorMsg) || body.provider === "auto") {
-            fallbackUsed = true;
-            fallbackReason = `${provider} failed: ${errorMsg.slice(0, 100)}. Falling back to ${providerOrder[i + 1]}.`;
-            continue; // Try next provider
-          }
+          fallbackUsed = true;
+          fallbackReason = `${provider} failed: ${errorMsg.slice(0, 100)}. Falling back to ${providerOrder[i + 1]}.`;
+          continue; // Try next provider
         }
       }
     }
 
-    // All providers failed
+    // All providers failed — show the most useful error (first non-token error)
+    const allErrors = fallbackReason ? `${fallbackReason} ${lastError}` : lastError;
+    // Prefer showing the original (first provider) error, as the fallback error is often just "no token"
+    const primaryError = fallbackReason
+      ? fallbackReason.replace(/\. Falling back to.*/, "")
+      : lastError;
     return NextResponse.json(
       {
-        error: lastError || "All providers failed",
+        error: primaryError || lastError || "All providers failed",
+        details: allErrors,
         fallbackUsed,
         fallbackReason,
       },
@@ -197,7 +201,7 @@ function getProviderOrder(
 
   // HuggingFace is generally better for: text generation, translation, summarization, NLP
   const hfPreferred =
-    /\b(translat|summariz|text.?generat|llm|language.?model|classify|sentiment|fill.?mask|qa|question.?answer|feature.?extract)\b/i;
+    /\b(translat|summariz|text.?generat|llm|language.?model|classify|sentiment|fill.?mask|qa|question.?answer|feature.?extract|write|essay|poem|story|explain|answer|tell.?me|rewrite|paragraph|sentence|lyrics|script|blog|article|code|program|function|list\b(?!.*image))(?!.*(image|photo|picture))/i;
 
   // Replicate is generally better for: image gen, video, audio, 3D, upscale
   const repPreferred =

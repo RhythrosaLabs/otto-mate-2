@@ -103,14 +103,14 @@ const TASK_PATTERNS: TaskPattern[] = [
     patterns: /\b(upscale|upres|enhance|super.?resolution|increase.?resolution|hd|4k|8k|sharpen|deblur)\b/i,
     priority: 15,
     searchTerms: ["upscale image", "super resolution"],
-    defaultModel: "nightmareai/real-esrgan",
+    defaultModel: "recraft-ai/recraft-crisp-upscale",
   },
   {
     type: "background_removal",
     patterns: /\b(remove.?background|bg.?remov|transparent.?background|cut.?out|background.?erase|isolate.?subject)\b/i,
     priority: 15,
     searchTerms: ["remove background"],
-    defaultModel: "lucataco/remove-bg",
+    defaultModel: "recraft-ai/recraft-remove-background",
   },
   {
     type: "face_swap",
@@ -162,21 +162,21 @@ const TASK_PATTERNS: TaskPattern[] = [
     patterns: /\b(generate.?image|create.?image|draw|paint|illustrat|render|design|picture|photo|poster|banner|wallpaper|logo|icon|art|visual|graphic|concept.?art|digital.?art|ai.?art)\b/i,
     priority: 8,
     searchTerms: ["text to image", "image generation"],
-    defaultModel: "black-forest-labs/flux-1.1-pro",
+    defaultModel: "black-forest-labs/flux-schnell",
   },
   {
     type: "text_to_speech",
     patterns: /\b(text.?to.?speech|tts|speak|voice|narrat|read.?aloud|say.?this|voiceover)\b/i,
     priority: 12,
     searchTerms: ["text to speech"],
-    defaultModel: "lucataco/xtts-v2",
+    defaultModel: "jaaari/kokoro-82m",
   },
   {
     type: "music_generation",
     patterns: /\b(music|song|beat|melody|compose|soundtrack|instrumental|jingle|tune|audio.?generat)\b/i,
     priority: 11,
     searchTerms: ["music generation", "text to music"],
-    defaultModel: "meta/musicgen",
+    defaultModel: "minimax/speech-02-turbo",
   },
   {
     type: "audio_generation",
@@ -199,8 +199,8 @@ const TASK_PATTERNS: TaskPattern[] = [
   },
   {
     type: "text_generation",
-    patterns: /\b(llm|language.?model|generate.?text|llama|mistral|chat.?model)\b/i,
-    priority: 5,
+    patterns: /\b(llm|language.?model|generate.?text|llama|mistral|chat.?model|write|essay|poem|story|explain|answer|tell.?me|summarize|summarise|translate|rewrite|paragraph|sentence|lyrics|script|blog|article|code|program|function|convert.?text|list|describe(?!.*(image|photo|picture)))\b/i,
+    priority: 7,
     searchTerms: ["language model", "text generation"],
     defaultModel: "meta/meta-llama-3-70b-instruct",
   },
@@ -233,7 +233,8 @@ export function detectReplicateTaskType(prompt: string): { type: ReplicateTaskTy
   }
 
   if (!bestMatch) {
-    return { type: "general", confidence: 0.1, searchTerms: ["popular models"] };
+    // Default to image generation for the playground — most users expect image output
+    return { type: "image_generation", confidence: 0.3, searchTerms: ["text to image", "image generation"], defaultModel: "black-forest-labs/flux-schnell" };
   }
 
   return {
@@ -379,7 +380,7 @@ export async function selectBestModel(
     try {
       const models = await searchModels(term, t);
       for (const m of models) {
-        if (!allModels.find(e => e.owner === e.owner && e.name === m.name)) {
+        if (!allModels.find(e => e.owner === m.owner && e.name === m.name)) {
           allModels.push(m);
         }
       }
@@ -500,7 +501,14 @@ export async function buildModelInput(
 
   // Smart defaults for common parameters
   if (propNames.includes("num_outputs") && !input["num_outputs"]) input["num_outputs"] = 1;
-  if (propNames.includes("num_inference_steps") && !input["num_inference_steps"]) input["num_inference_steps"] = 28;
+  if (propNames.includes("num_inference_steps") && !input["num_inference_steps"]) {
+    // Clamp to model's accepted range (e.g. flux-schnell only allows 1-4)
+    const stepsSchema = props["num_inference_steps"] as Record<string, unknown>;
+    const maxSteps = typeof stepsSchema?.maximum === "number" ? stepsSchema.maximum : 50;
+    const minSteps = typeof stepsSchema?.minimum === "number" ? stepsSchema.minimum : 1;
+    const defaultSteps = typeof stepsSchema?.default === "number" ? stepsSchema.default : Math.min(28, maxSteps);
+    input["num_inference_steps"] = Math.max(minSteps, Math.min(defaultSteps, maxSteps));
+  }
   if (propNames.includes("guidance_scale") && !input["guidance_scale"]) input["guidance_scale"] = 7.5;
 
   // If the model expects aspect_ratio, pick a good default
@@ -527,12 +535,31 @@ export async function createPrediction(
   const t = token || getApiToken();
   if (!t) throw new Error("Replicate API token not configured.");
 
-  // Use the official model endpoint which auto-selects the latest version
-  const resp = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}/predictions`, {
+  // Try the official model endpoint first (auto-selects latest version)
+  let resp = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}/predictions`, {
     method: "POST",
     headers: apiHeaders(t),
     body: JSON.stringify({ input }),
   });
+
+  // Some models (e.g. community models) only support version-based predictions.
+  // Fall back to /v1/predictions with the model's latest version.
+  if (resp.status === 404) {
+    const modelResp = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
+      headers: apiHeaders(t),
+    });
+    if (modelResp.ok) {
+      const modelData = await modelResp.json() as { latest_version?: { id?: string } };
+      const version = modelData.latest_version?.id;
+      if (version) {
+        resp = await fetch(`https://api.replicate.com/v1/predictions`, {
+          method: "POST",
+          headers: apiHeaders(t),
+          body: JSON.stringify({ version, input }),
+        });
+      }
+    }
+  }
 
   if (!resp.ok) {
     const errBody = await resp.text();
@@ -721,7 +748,8 @@ export async function runReplicateTask(options: {
   if (typeof output === "string" && !output.startsWith("http")) {
     textOutput = output;
   } else if (Array.isArray(output) && output.length > 0 && typeof output[0] === "string" && !output[0].startsWith("http")) {
-    textOutput = output.join("\n");
+    // Replicate language models return an array of individual tokens — join without separator
+    textOutput = output.join("");
   }
 
   // Download any file outputs (images, videos, audio)

@@ -92,7 +92,7 @@ const HF_TASK_PATTERNS: HFTaskPattern[] = [
     patterns: /\b(text.?to.?speech|tts|speak|voice|narrat|read.?aloud|say.?this|voiceover)\b/i,
     priority: 12,
     searchFilter: "text-to-speech",
-    defaultModel: "facebook/mms-tts-eng",
+    defaultModel: "hexgrad/Kokoro-82M",
   },
   {
     type: "text-to-video",
@@ -174,10 +174,10 @@ const HF_TASK_PATTERNS: HFTaskPattern[] = [
   },
   {
     type: "text-generation",
-    patterns: /\b(llm|language.?model|generate.?text|chat.?model|gpt|llama|mistral|write|story|essay)\b/i,
-    priority: 5,
+    patterns: /\b(llm|language.?model|generate.?text|chat.?model|gpt|llama|mistral|write|story|essay|poem|explain|answer|tell.?me|summarize|summarise|translate|rewrite|paragraph|sentence|lyrics|script|blog|article|code|program|function|convert.?text|list|describe(?!.*(image|photo|picture)))\b/i,
+    priority: 7,
     searchFilter: "text-generation",
-    defaultModel: "mistralai/Mistral-7B-Instruct-v0.3",
+    defaultModel: "Qwen/Qwen2.5-7B-Instruct",
   },
 ];
 
@@ -207,7 +207,8 @@ export function detectHFTaskType(prompt: string): { type: HFTaskType; confidence
   }
 
   if (!bestMatch) {
-    return { type: "general", confidence: 0.1, searchFilter: "text-to-image" };
+    // Default to text-to-image for the playground — most users expect image output
+    return { type: "text-to-image", confidence: 0.3, searchFilter: "text-to-image", defaultModel: "stabilityai/stable-diffusion-xl-base-1.0" };
   }
 
   return {
@@ -298,8 +299,45 @@ export async function getHFModel(modelId: string, token?: string): Promise<Huggi
 }
 
 /**
+ * Look up which inference provider(s) are available for a model on the HF Hub.
+ * Returns the first live provider and its providerId, or null.
+ */
+async function getInferenceProvider(
+  modelId: string,
+  token: string
+): Promise<{ provider: string; providerId: string; task: string } | null> {
+  try {
+    const resp = await fetch(
+      `https://huggingface.co/api/models/${modelId}?expand[]=inferenceProviderMapping`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json() as Record<string, unknown>;
+    const mapping = data.inferenceProviderMapping as Record<string, { status: string; providerId: string; task: string }> | undefined;
+    if (!mapping) return null;
+
+    // Prefer free/serverless providers first
+    const preferred = ["hf-inference", "featherless-ai", "novita", "together", "fireworks-ai"];
+    for (const p of preferred) {
+      if (mapping[p] && mapping[p].status === "live") {
+        return { provider: p, providerId: mapping[p].providerId, task: mapping[p].task };
+      }
+    }
+    // Try any live provider
+    for (const [p, info] of Object.entries(mapping)) {
+      if (info.status === "live") {
+        return { provider: p, providerId: info.providerId, task: info.task };
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
  * Run inference on a Hugging Face model via the Inference API.
- * Handles different input types based on the pipeline_tag.
+ * For text-generation / conversational models, uses the provider-based
+ * chat completions endpoint (the old direct endpoint was retired for LLMs).
+ * For other models (image, audio, etc.) uses the hf-inference endpoint.
  */
 export async function runHFInference(options: {
   modelId: string;
@@ -307,12 +345,51 @@ export async function runHFInference(options: {
   parameters?: Record<string, unknown>;
   token?: string;
   waitForModel?: boolean;
+  pipelineTag?: string; // hint: "text-generation", "conversational", etc.
 }): Promise<{ data: Buffer | Record<string, unknown> | unknown[]; contentType: string }> {
   const t = options.token || getHFToken();
   if (!t) throw new Error("Hugging Face API token not configured. Set HUGGINGFACE_API_TOKEN or HF_TOKEN env var, or connect Hugging Face in Connectors.");
 
-  const apiUrl = `https://router.huggingface.co/hf-inference/models/${options.modelId}`;
+  // ── Text-generation / conversational → use provider chat completions ──
+  const isTextGen = options.pipelineTag === "text-generation"
+    || options.pipelineTag === "conversational"
+    || /^(text-generation|conversational)$/i.test(options.pipelineTag || "");
 
+  if (isTextGen) {
+    // Find a live inference provider for this model
+    const providerInfo = await getInferenceProvider(options.modelId, t);
+    if (!providerInfo) {
+      throw new Error(`Model "${options.modelId}" not found or does not have an inference endpoint.`);
+    }
+
+    const chatUrl = `https://router.huggingface.co/${providerInfo.provider}/v1/chat/completions`;
+    const userText = typeof options.inputs === "string" ? options.inputs : JSON.stringify(options.inputs);
+    const chatBody: Record<string, unknown> = {
+      model: options.modelId,
+      messages: [{ role: "user", content: userText }],
+      max_tokens: (options.parameters?.max_new_tokens as number) || 512,
+    };
+    if (options.parameters?.temperature !== undefined) chatBody.temperature = options.parameters.temperature;
+
+    const chatResp = await fetch(chatUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify(chatBody),
+    });
+
+    if (!chatResp.ok) {
+      const errText = await chatResp.text();
+      if (chatResp.status === 404) throw new Error(`Model "${options.modelId}" not found or does not have an inference endpoint.`);
+      if (chatResp.status === 429) throw new Error(`Rate limited by Hugging Face. Please wait a moment and try again.`);
+      throw new Error(`HF Inference failed (HTTP ${chatResp.status}): ${errText.slice(0, 300)}`);
+    }
+
+    const chatJson = await chatResp.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const text = chatJson.choices?.[0]?.message?.content || "";
+    return { data: [{ generated_text: text }] as unknown as unknown[], contentType: "application/json" };
+  }
+
+  // ── Non-text models → try hf-inference first, then alternative providers ──
   const body: Record<string, unknown> = {};
 
   if (typeof options.inputs === "string") {
@@ -329,7 +406,10 @@ export async function runHFInference(options: {
     body.options = { wait_for_model: true, use_cache: true };
   }
 
-  const resp = await fetch(apiUrl, {
+  // Try hf-inference first
+  let apiUrl = `https://router.huggingface.co/hf-inference/models/${options.modelId}`;
+
+  let resp = await fetch(apiUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${t}`,
@@ -337,6 +417,22 @@ export async function runHFInference(options: {
     },
     body: JSON.stringify(body),
   });
+
+  // If hf-inference returns 404, try to find an alternative provider
+  if (resp.status === 404) {
+    const providerInfo = await getInferenceProvider(options.modelId, t);
+    if (providerInfo) {
+      const altUrl = `https://router.huggingface.co/${providerInfo.provider}/models/${options.modelId}`;
+      resp = await fetch(altUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${t}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    }
+  }
 
   if (!resp.ok) {
     const errText = await resp.text();
@@ -565,6 +661,7 @@ export async function runHFTask(options: {
         parameters: params,
         token: t,
         waitForModel: true,
+        pipelineTag: taskType,
       });
       break;
     } catch (err) {
@@ -589,7 +686,7 @@ export async function runHFTask(options: {
           // Second try: use a known-good model for this task type
           const knownGoodModels: Record<string, string[]> = {
             "text-to-image": ["stabilityai/stable-diffusion-xl-base-1.0", "runwayml/stable-diffusion-v1-5", "CompVis/stable-diffusion-v1-4"],
-            "text-generation": ["mistralai/Mistral-7B-Instruct-v0.3", "google/flan-t5-large"],
+            "text-generation": ["Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"],
             "text-to-speech": ["facebook/mms-tts-eng", "espnet/kan-bayashi_ljspeech_vits"],
             "text-to-audio": ["facebook/musicgen-small"],
             "summarization": ["facebook/bart-large-cnn"],
