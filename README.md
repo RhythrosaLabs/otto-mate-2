@@ -84,31 +84,35 @@ The core loop: you describe a goal → the agent creates a plan → executes ste
 The agent picks the best model automatically or you choose manually. If a provider is down or rate-limited, it fails over through the chain: **Anthropic → OpenAI → Google → OpenRouter (DeepSeek) → Perplexity** with exponential backoff.
 
 ### Dreamscape Studio
-A 17-mode AI creative studio built around **Luma Dream Machine** (Ray 3, Photon 1) and **Replicate**. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
+A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 3, Ray Flash 2, Photon 1, Photon Flash 1) with **Replicate** model support and **MusicGen/Bark** audio generation. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
 
 **Generation modes:** text-to-video, image-to-video, extend, reverse-extend, interpolate, text-to-image, image reference, character reference (persistent identity across shots), style reference, modify video, modify video with keyframes, modify image, reframe (change aspect ratio of existing media), music generation (MusicGen), sound effects (Bark), voiceover, and lip-sync.
 
-**Production controls:** 20 camera motion presets (pan, orbit, crane, dolly, tracking, handheld, dutch tilt, whip pan, arc), 9 modify intensity levels (adhere → flex → reimagine), resolutions up to 4K, multiple aspect ratios, 5s/9s durations, HDR toggle, loop toggle, and draft/hi-fi phase workflow.
+**Production controls:** 20 camera motion presets (pan, zoom, orbit, crane, dolly, tracking, handheld, static, arc, dutch tilt, whip pan — each with directional variants), 9 modify intensity levels (adhere → flex → reimagine), 4 resolutions (540p → 4K), 7 aspect ratios (1:1, 3:4, 4:3, 9:16, 16:9, 9:21, 21:9), 5s/9s durations, HDR output (EXR), loop toggle, batch generation (up to 4 variants), and a draft/hi-fi phase workflow with auto-upgrade from Flash to full models.
+
+**Auto-model intelligence:** Recommends the optimal model per generation mode — e.g., Flash models for fast text-to-video drafts, full Ray 3 / Photon 1 for character consistency, style transfer, and modify operations.
 
 **AI Director:** A built-in chat agent (brainstorm, create, or brief modes) that interprets natural language into multi-step command chains with dependency ordering, continuity sheets (style anchors, character references, setting references), and concept pill word-swapping for rapid prompt iteration.
 
+**Additional features:** Shot tagging, likes, and bookmarks for organization. Annotation overlay system (arrows, rectangles, text) that feeds spatial context into prompts. Board export/import as JSON. Per-shot media preview with mute controls. Search and filter across all shots.
+
 ### Pipelines
-A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency arrows, and run the entire pipeline — nodes execute in dependency order with status tracking.
+A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency edges on a canvas, and run the entire pipeline — nodes execute in topological (dependency) order with per-node status tracking. Supports connecting any node to any other as a dependency.
 
 ### Connectors Marketplace
-190+ integrations across communication, storage, development, project management, CRM, data, AI services, finance, marketing, social media, and more. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 135+ connectors have a completely free tier.
+190+ integrations across 28 categories: communication, storage, development, project management, CRM, data, AI (LLMs, image, video, audio, speech, code, design, search, 3D, vector), analytics, automation, browser, cloud, ecommerce, finance, marketing, music, productivity, security, and social media. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 135+ connectors have a completely free tier.
 
 ### Skills & Templates
-**Skills** are reusable instruction sets (like Custom GPTs). Browse 270+ pre-built skills in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
+**Skills** are reusable instruction sets (like Custom GPTs). Browse 270+ pre-built skills across 10 categories (code, writing, research, data, automation, architecture, infrastructure, security, testing, custom) in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
 
 ### Scheduling
-Schedule any task to run automatically. Supports one-time, recurring intervals, daily, weekly, and full cron expressions. Enable/disable individual schedules and see last-run / next-run timestamps.
+Schedule any task to run automatically. Supports one-time (with optional delete-after-run), recurring intervals, daily, weekly, and full cron expressions. Enable/disable individual schedules and see next-run timestamps.
 
 ### Memory
-A persistent key-value store that the agent reads and writes during task execution. Stored facts, preferences, and context carry over across tasks. You can also add or delete entries manually.
+A persistent key-value store with tags that the agent reads and writes during task execution. Stored facts, preferences, and context carry over across tasks. You can search, add, tag, or delete entries manually.
 
 ### Analytics & Audit
-**Analytics** shows KPIs: total tasks, success rate, average duration, top tools, model usage, cost trends, and daily volume. **Audit Trail** logs every tool call, model invocation, and task event with duration, metadata, and filters.
+**Analytics** shows KPIs: total tasks, success rate, average duration, top tools (with per-tool success rates), model usage (with average cost per call), daily task volume (last 30 days), and recent errors. **Audit Trail** is a paginated log of every agent action — tool calls, model invocations, and task events — with duration, metadata, search, and filters (event type, tool, success status).
 
 ---
 
