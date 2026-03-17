@@ -111,7 +111,7 @@ export function ChannelsClient() {
         </div>
         <div>
           <h1 className="text-xl font-semibold text-pplx-text">Channels</h1>
-          <p className="text-xs text-pplx-muted">Connect Ottomatron to messaging platforms — receive and process tasks from anywhere</p>
+          <p className="text-xs text-pplx-muted">Connect Ottomate to messaging platforms — receive and process tasks from anywhere</p>
         </div>
       </div>
 

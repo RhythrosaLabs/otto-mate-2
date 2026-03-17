@@ -135,7 +135,7 @@ export function ReplicateClient() {
           </div>
           <p className="text-sm text-pplx-muted">
             Discover and run 1000s of AI models — image generation, video, music, upscaling, and more.
-            Ottomatron automatically finds the best model for your request.
+            Ottomate automatically finds the best model for your request.
           </p>
         </div>
 
@@ -143,7 +143,7 @@ export function ReplicateClient() {
         <div className="mb-8 p-5 rounded-xl border border-pplx-border bg-pplx-card">
           <h2 className="text-sm font-semibold text-pplx-text mb-3">Smart Run</h2>
           <p className="text-xs text-pplx-muted mb-4">
-            Describe what you want and Ottomatron will automatically find and run the best Replicate model.
+            Describe what you want and Ottomate will automatically find and run the best Replicate model.
           </p>
           <div className="flex gap-2 mb-3">
             <input

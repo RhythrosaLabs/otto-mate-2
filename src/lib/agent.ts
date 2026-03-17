@@ -1,5 +1,5 @@
 /**
- * Ottomatron Agent Engine
+ * Ottomate Agent Engine
  * Multi-model orchestration with advanced tooling
  *
  * Inspired by: Perplexity Computer, CrewAI, OpenAI Swarms,
@@ -1691,7 +1691,7 @@ async function runWithOpenRouter(
     apiKey: process.env.OPENROUTER_API_KEY || "",
     defaultHeaders: {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "Ottomatron",
+      "X-Title": "Ottomate",
     },
   });
 
@@ -3571,7 +3571,7 @@ async function executeSendEmail(
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: from || process.env.RESEND_FROM_EMAIL || "Ottomatron <onboarding@resend.dev>", to: [to], subject, html: body }),
+        body: JSON.stringify({ from: from || process.env.RESEND_FROM_EMAIL || "Ottomate <onboarding@resend.dev>", to: [to], subject, html: body }),
       });
       if (r.ok) { const d = await r.json() as { id: string }; return `Email sent to ${to}. ID: ${d.id}`; }
       const e = await r.json() as { message?: string }; return `Email failed: ${e.message || `HTTP ${r.status}`}`;
@@ -4065,7 +4065,7 @@ async function createSubAgent(
             apiKey: process.env.OPENROUTER_API_KEY || "",
             defaultHeaders: {
               "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-              "X-Title": "Ottomatron",
+              "X-Title": "Ottomate",
             },
           });
           result = await runSubAgentOpenAICompat(orClient, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
@@ -4995,7 +4995,7 @@ async function dispatchConnectorAction(
           article: {
             title: params.title as string || "Untitled",
             body_html: (params.body_html || params.content || params.body) as string || "",
-            author: (params.author as string) || "Ottomatron",
+            author: (params.author as string) || "Ottomate",
             tags: (params.tags as string) || "",
             published: params.published !== false && params.draft !== true,
             summary_html: (params.summary || params.excerpt) as string || undefined,
@@ -5124,7 +5124,7 @@ async function dispatchConnectorAction(
           if (tokenData.access_token) redditToken = tokenData.access_token;
         } catch { /* use raw key */ }
       }
-      const h = { Authorization: `Bearer ${redditToken}`, "User-Agent": "Ottomatron/1.0" };
+      const h = { Authorization: `Bearer ${redditToken}`, "User-Agent": "Ottomate/1.0" };
       if (action === "create_post") {
         const r = await fetch("https://oauth.reddit.com/api/submit", { method: "POST", headers: { ...h, "Content-Type": "application/x-www-form-urlencoded" },
           body: `kind=${params.url ? "link" : "self"}&sr=${params.subreddit}&title=${encodeURIComponent(params.title as string)}&${params.url ? `url=${encodeURIComponent(params.url as string)}` : `text=${encodeURIComponent((params.text || params.body || "") as string)}`}` });
@@ -7315,7 +7315,7 @@ function buildSystemPrompt(skills?: string): string {
     ? `\n\n## Configured Login Credentials\nThe following platforms have login credentials pre-configured in .env.local — you do NOT need to ask the user to log in manually:\n${configuredCredentials.map(p => `- **${p}**`).join("\n")}\n\nWhen using browse_web on these sites, auto-login will happen automatically if a login page is detected. When using social_media_post, credentials are used automatically. NEVER ask the user to open a browser and log in manually for these platforms — the system handles login for you.`
     : "";
 
-  return `You are Ottomatron — a general-purpose digital computer that creates and executes entire workflows autonomously. You are the next evolution beyond AI chat. Where chat interfaces answer questions, you take action. Where task agents complete tasks, you orchestrate entire workflows that can run for hours.
+  return `You are Ottomate — a general-purpose digital computer that creates and executes entire workflows autonomously. You are the next evolution beyond AI chat. Where chat interfaces answer questions, you take action. Where task agents complete tasks, you orchestrate entire workflows that can run for hours.
 
 Current date/time: ${new Date().toISOString()}${credentialsSection}
 
@@ -7436,7 +7436,7 @@ Your memory is a living, evolving knowledge base that grows smarter with every t
 }
 
 function getSubAgentSystemPrompt(agentType: string): string {
-  const base = `You are a specialized sub-agent in the Ottomatron system. Complete your assigned task thoroughly and autonomously. Current date/time: ${new Date().toISOString()}`;
+  const base = `You are a specialized sub-agent in the Ottomate system. Complete your assigned task thoroughly and autonomously. Current date/time: ${new Date().toISOString()}`;
   const map: Record<string, string> = {
     research: `${base}\n\nYou are a Deep Research Agent. Your job is to conduct thorough, multi-source research.\n\nResearch Protocol:\n1. Start with 3-5 broad web_search queries to map the landscape\n2. Identify the most promising sources from the results\n3. Use scrape_url to read full content from each key source\n4. Cross-reference facts across multiple sources\n5. Run additional searches with refined queries based on what you learned\n6. Synthesize findings into a comprehensive report with citations\n7. Every claim must reference a source URL\n\nAim for 5-10 searches and 3-8 full page reads minimum. Never rely on a single source.`,
     code: `${base}\n\nYou are a Code Specialist. Write clean, well-documented, production-quality code.\n\nCoding Protocol:\n1. Plan the architecture before writing code\n2. Use execute_code to test your code actually runs\n3. Handle edge cases and errors gracefully\n4. Include comments explaining complex logic\n5. If packages are needed, install them first (pip install or npm install via execute_code with bash)\n6. For web apps: write complete, self-contained HTML files with inline CSS/JS\n7. For data processing: use Python with pandas, numpy, matplotlib\n8. Write files with write_file for the user to download`,

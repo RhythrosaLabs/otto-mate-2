@@ -8,7 +8,7 @@
  * POST /api/social-auth — Capture auth state for a platform (requires active login)
  * DELETE /api/social-auth — Clear auth state for a platform
  *
- * Auth state is stored locally at ~/.ottomatron/browser-profiles/{platform}/
+ * Auth state is stored locally at ~/.ottomate/browser-profiles/{platform}/
  * and NEVER exposed in API responses — only metadata (cookie count, age, etc.)
  */
 
@@ -23,7 +23,7 @@ export async function GET() {
     const summary = getAuthStateSummary();
     return NextResponse.json({
       platforms: summary,
-      storage_location: "~/.ottomatron/browser-profiles/",
+      storage_location: "~/.ottomate/browser-profiles/",
       note: "Auth state is stored locally and never transmitted. Cookie values are not exposed in this API.",
     });
   } catch (err) {
@@ -82,7 +82,7 @@ export async function DELETE(req: NextRequest) {
     const path = await import("path");
     const profileDir = path.join(
       process.env.HOME || process.env.USERPROFILE || "/tmp",
-      ".ottomatron",
+      ".ottomate",
       "browser-profiles",
       platform
     );

@@ -78,7 +78,7 @@ export default function MemoryClient() {
           <div>
             <h1 className="text-2xl font-bold text-pplx-text">Memory</h1>
             <p className="text-sm text-pplx-muted mt-1">
-              Ottomatron remembers facts, results, and context across tasks
+              Ottomate remembers facts, results, and context across tasks
             </p>
           </div>
           <button
@@ -180,7 +180,7 @@ export default function MemoryClient() {
           <div className="text-center py-16">
             <p className="text-4xl mb-3">🧠</p>
             <p className="text-pplx-muted text-sm">
-              {query ? "No matching memories found." : "No memories yet. Ottomatron will remember things as it completes tasks."}
+              {query ? "No matching memories found." : "No memories yet. Ottomate will remember things as it completes tasks."}
             </p>
           </div>
         ) : (

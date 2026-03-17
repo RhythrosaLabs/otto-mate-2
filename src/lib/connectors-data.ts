@@ -52,7 +52,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "whatsapp",
     name: "WhatsApp",
-    description: "Send and receive WhatsApp messages. Voice message transcription, interactive buttons, media support. Control Ottomatron via WhatsApp text or voice.",
+    description: "Send and receive WhatsApp messages. Voice message transcription, interactive buttons, media support. Control Ottomate via WhatsApp text or voice.",
     icon_url: "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
     category: "communication",
     auth_type: "api_key",

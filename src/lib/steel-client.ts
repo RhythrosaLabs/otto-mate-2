@@ -53,7 +53,7 @@ export function isSteelEnabled(): boolean {
 
 const PROFILES_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || "/tmp",
-  ".ottomatron",
+  ".ottomate",
   "steel-profiles"
 );
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Ottomatron</h1>
+  <h1 align="center">Ottomate</h1>
   <p align="center">
     <strong>Your self-hosted AI agent workbench.</strong><br/>
     Give it a goal. It plans, codes, browses, connects, and delivers — autonomously.
@@ -21,9 +21,9 @@
 
 ---
 
-## What is Ottomatron?
+## What is Ottomate?
 
-Ottomatron is a **self-hosted, multi-model AI agent platform** built with Next.js 15.  
+Ottomate is a **self-hosted, multi-model AI agent platform** built with Next.js 15.  
 Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 100+ external services, generates images and video, and saves every artifact it produces.
 
 It ships as a single `npm install` with zero external infrastructure. A SQLite database is created on first launch.
@@ -198,7 +198,7 @@ Community example tasks — browse, filter by category, one-click run.
 
 ## Models
 
-Ottomatron supports **17 models** across 5 providers:
+Ottomate supports **17 models** across 5 providers:
 
 | Model | Provider | Best for |
 |---|---|---|

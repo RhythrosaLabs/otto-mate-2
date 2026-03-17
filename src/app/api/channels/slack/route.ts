@@ -8,7 +8,7 @@
  *   1. Create Slack App at https://api.slack.com/apps
  *   2. Enable Event Subscriptions → Request URL: <YOUR_URL>/api/channels/slack
  *   3. Subscribe to message.channels, message.im events
- *   4. Add slash command /ottomatron → URL: <YOUR_URL>/api/channels/slack
+ *   4. Add slash command /ottomate → URL: <YOUR_URL>/api/channels/slack
  *   5. Set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET in .env
  */
 
@@ -60,7 +60,7 @@ export async function GET() {
       "1. Create Slack App at https://api.slack.com/apps",
       "2. Enable Event Subscriptions → Request URL: <YOUR_URL>/api/channels/slack",
       "3. Subscribe to message.channels, message.im, app_mention events",
-      "4. Add slash command /ottomatron → URL: <YOUR_URL>/api/channels/slack",
+      "4. Add slash command /ottomate → URL: <YOUR_URL>/api/channels/slack",
       "5. Set SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET in .env",
       "6. Install app to workspace, invite bot to channels",
     ],
@@ -84,11 +84,11 @@ export async function POST(req: NextRequest) {
       const channelId = formData.get("channel_id") as string;
       const responseUrl = formData.get("response_url") as string;
 
-      if (command === "/ottomatron" || command === "/otto") {
+      if (command === "/ottomate" || command === "/otto") {
         if (!text || text.trim().length === 0) {
           return NextResponse.json({
             response_type: "ephemeral",
-            text: "Usage: `/ottomatron <your task description>`\n\nExamples:\n• `/ottomatron research the latest AI news`\n• `/ottomatron create a Python fibonacci function`",
+            text: "Usage: `/ottomate <your task description>`\n\nExamples:\n• `/ottomate research the latest AI news`\n• `/ottomate create a Python fibonacci function`",
           });
         }
 

@@ -54,7 +54,7 @@ export function OnboardingClient() {
           },
         }),
       });
-      localStorage.setItem("ottomatron_model", selectedModel);
+      localStorage.setItem("ottomate_model", selectedModel);
       router.push("/computer");
     } catch (err) {
       console.error(err);
@@ -97,7 +97,7 @@ export function OnboardingClient() {
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-pplx-accent to-indigo-500 flex items-center justify-center mb-5">
                 <Sparkles size={28} className="text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-pplx-text mb-2">Welcome to Ottomatron</h2>
+              <h2 className="text-xl font-semibold text-pplx-text mb-2">Welcome to Ottomate</h2>
               <p className="text-sm text-pplx-muted mb-6 leading-relaxed">
                 Your AI-powered computer agent that can browse, code, research, generate images,
                 and execute complex multi-step tasks autonomously.
@@ -234,7 +234,7 @@ export function OnboardingClient() {
               </div>
               <h2 className="text-xl font-semibold text-pplx-text mb-2">You&apos;re All Set!</h2>
               <p className="text-sm text-pplx-muted mb-4 leading-relaxed">
-                Ottomatron is configured and ready. Start your first task using natural language —
+                Ottomate is configured and ready. Start your first task using natural language —
                 just type what you need.
               </p>
               <div className="rounded-xl bg-pplx-bg border border-pplx-border p-4 text-left mb-2">

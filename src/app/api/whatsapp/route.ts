@@ -2,10 +2,10 @@
  * WhatsApp Webhook & Control API
  *
  * GET  /api/whatsapp — Meta webhook verification (hub.verify_token + hub.challenge)
- * POST /api/whatsapp — Incoming WhatsApp messages → creates Ottomatron tasks → sends results back
+ * POST /api/whatsapp — Incoming WhatsApp messages → creates Ottomate tasks → sends results back
  *
  * This is the core integration: every WhatsApp text or voice message becomes an
- * Ottomatron task, processed by the agent, with results sent back to WhatsApp.
+ * Ottomate task, processed by the agent, with results sent back to WhatsApp.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -122,7 +122,7 @@ async function processMessageAsync(
       return;
     }
 
-    // Create an Ottomatron task from this WhatsApp message
+    // Create an Ottomate task from this WhatsApp message
     const taskId = uuidv4();
     const senderName = msg.name || `+${msg.from}`;
     const now = new Date().toISOString();
@@ -263,7 +263,7 @@ async function sendHelpMessage(
   to: string,
   replyToId: string
 ) {
-  const helpText = `*🤖 Ottomatron — WhatsApp Control*
+  const helpText = `*🤖 Ottomate — WhatsApp Control*
 
 Send me any message — text or voice — and I'll process it as an AI task.
 
@@ -287,7 +287,7 @@ Just send a voice note — I'll transcribe it and process your request automatic
 *Tips:*
 • Be specific about what you need
 • I remember context within each task
-• Results are also saved in the Ottomatron dashboard`;
+• Results are also saved in the Ottomate dashboard`;
 
   await sendTextMessage(config, to, helpText, replyToId);
 }
@@ -297,7 +297,7 @@ async function sendStatusMessage(
   to: string,
   replyToId: string
 ) {
-  const statusText = `*Ottomatron Status*
+  const statusText = `*Ottomate Status*
 
 ✅ System: Online
 ✅ WhatsApp: Connected

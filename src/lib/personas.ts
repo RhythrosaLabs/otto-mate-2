@@ -162,10 +162,10 @@ export function getPersona(id: string): AgentPersona {
 
 export function getStoredPersonaId(): string {
   if (typeof window === "undefined") return "default";
-  return localStorage.getItem("ottomatron_persona") || "default";
+  return localStorage.getItem("ottomate_persona") || "default";
 }
 
 export function setStoredPersonaId(id: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem("ottomatron_persona", id);
+  localStorage.setItem("ottomate_persona", id);
 }

@@ -47,7 +47,7 @@ task-files/
 # browser profiles & auth state (SENSITIVE — cookies, localStorage, credentials)
 browser-profiles/
 steel-profiles/
-.ottomatron/
+.ottomate/
 **/cookies.json
 **/storage-state.json
 **/local-storage.json

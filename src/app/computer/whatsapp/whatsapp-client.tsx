@@ -105,7 +105,7 @@ export default function WhatsAppClient() {
           <div>
             <h1 className="text-2xl font-bold text-zinc-100">WhatsApp Control</h1>
             <p className="text-sm text-zinc-400">
-              Control Ottomatron via text and voice messages in WhatsApp
+              Control Ottomate via text and voice messages in WhatsApp
             </p>
           </div>
         </div>
@@ -228,7 +228,7 @@ WHATSAPP_VERIFY_TOKEN=any_secret_string_you_choose`}
               </Step>
 
               <Step n={6} title="Start Messaging!">
-                Send a text or voice message to your WhatsApp Business number. Ottomatron will create a task, process it with AI, and send the result back.
+                Send a text or voice message to your WhatsApp Business number. Ottomate will create a task, process it with AI, and send the result back.
               </Step>
             </div>
           </div>
@@ -335,7 +335,7 @@ WHATSAPP_VERIFY_TOKEN=any_secret_string_you_choose`}
           <FlowStep
             step={2}
             title="AI Processes"
-            description="Ottomatron creates a task, processes it with the full AI agent (web search, code execution, connectors, etc)."
+            description="Ottomate creates a task, processes it with the full AI agent (web search, code execution, connectors, etc)."
           />
           <FlowStep
             step={3}

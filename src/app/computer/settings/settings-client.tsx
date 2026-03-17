@@ -68,7 +68,7 @@ export function SettingsClient() {
         }),
       });
       // Also update local model preference
-      localStorage.setItem("ottomatron_model", defaultModel);
+      localStorage.setItem("ottomate_model", defaultModel);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -87,7 +87,7 @@ export function SettingsClient() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-pplx-text">Settings</h1>
-            <p className="text-xs text-pplx-muted">Configure Ottomatron preferences &amp; budgets</p>
+            <p className="text-xs text-pplx-muted">Configure Ottomate preferences &amp; budgets</p>
           </div>
         </div>
         <button

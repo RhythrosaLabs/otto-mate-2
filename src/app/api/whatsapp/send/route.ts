@@ -1,7 +1,7 @@
 /**
  * WhatsApp Send & Management API
  *
- * POST /api/whatsapp/send — Send a message from Ottomatron to a WhatsApp number
+ * POST /api/whatsapp/send — Send a message from Ottomate to a WhatsApp number
  * GET  /api/whatsapp/send — Health check and WhatsApp status
  */
 

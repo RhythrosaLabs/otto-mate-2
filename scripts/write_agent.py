@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Writes the new Ottomatron agent.ts"""
+"""Writes the new Ottomate agent.ts"""
 import os
 
 TARGET = '/Users/sheils/repos/perplexity-computer/src/lib/agent.ts'
 
 CONTENT = r'''/**
- * Ottomatron Agent Engine
+ * Ottomate Agent Engine
  * Multi-model orchestration with advanced tooling
  *
  * Inspired by: Perplexity Computer, CrewAI, OpenAI Swarms,
@@ -767,7 +767,7 @@ async function executeSendEmail(
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: from || process.env.RESEND_FROM_EMAIL || "Ottomatron <onboarding@resend.dev>", to: [to], subject, html: body }),
+        body: JSON.stringify({ from: from || process.env.RESEND_FROM_EMAIL || "Ottomate <onboarding@resend.dev>", to: [to], subject, html: body }),
       });
       if (r.ok) { const d = await r.json() as { id: string }; return `Email sent to ${to}. ID: ${d.id}`; }
       const e = await r.json() as { message?: string }; return `Email failed: ${e.message || `HTTP ${r.status}`}`;
@@ -1008,7 +1008,7 @@ async function handleCompleteTask(
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(skills?: string): string {
-  return `You are Ottomatron, a powerful autonomous AI workforce — the next evolution beyond AI chat. You are a multi-agent orchestration system powered by the world's best AI models.
+  return `You are Ottomate, a powerful autonomous AI workforce — the next evolution beyond AI chat. You are a multi-agent orchestration system powered by the world's best AI models.
 
 Current date/time: ${new Date().toISOString()}
 
@@ -1054,7 +1054,7 @@ Each sub-agent auto-routes to the best model for that task type.
 }
 
 function getSubAgentSystemPrompt(agentType: string): string {
-  const base = "You are a specialized sub-agent in the Ottomatron system. Complete your assigned task thoroughly.";
+  const base = "You are a specialized sub-agent in the Ottomate system. Complete your assigned task thoroughly.";
   const map: Record<string, string> = {
     research: `${base}\n\nYou are a Research Specialist. Search with web_search, scrape pages with scrape_url, synthesize from multiple sources, cite everything.`,
     code: `${base}\n\nYou are a Code Specialist. Write clean, documented, production-quality code. Test with execute_code. Handle edge cases.`,

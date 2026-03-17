@@ -282,7 +282,7 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     abortRef.current = new AbortController();
 
     try {
-      const model = typeof window !== "undefined" ? localStorage.getItem("ottomatron_model") || undefined : undefined;
+      const model = typeof window !== "undefined" ? localStorage.getItem("ottomate_model") || undefined : undefined;
       const res = await fetch(`/api/tasks/${task.id}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -143,7 +143,7 @@ const PLATFORM_CONFIGS: Record<SocialPlatform, PlatformConfig> = {
 
 const PROFILES_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || "/tmp",
-  ".ottomatron",
+  ".ottomate",
   "browser-profiles"
 );
 
@@ -214,7 +214,7 @@ async function loadCookies(
 // Captures and restores the COMPLETE browser auth state:
 // cookies + localStorage + sessionStorage.
 // This survives across Steel sessions and process restarts.
-// Files stored locally at ~/.ottomatron/browser-profiles/{platform}/
+// Files stored locally at ~/.ottomate/browser-profiles/{platform}/
 // NEVER committed to git or exposed via API responses.
 
 function getStorageStatePath(platform: SocialPlatform): string {

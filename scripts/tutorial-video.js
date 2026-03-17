@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Ottomatron Tutorial Video Test
+ * Ottomate Tutorial Video Test
  * 
- * Records a guided walkthrough of the Ottomatron UI using Playwright's
+ * Records a guided walkthrough of the Ottomate UI using Playwright's
  * built-in video recording. The output is saved to docs/videos/.
  *
  * Usage:
@@ -34,7 +34,7 @@ const TUTORIAL_STEPS = [
   {
     name: "01-home",
     title: "Home — The Prompt Interface",
-    narration: "This is the Ottomatron home screen. Type any goal in the prompt box, use slash commands like /image or /research, attach files, or choose from the prompt gallery below.",
+    narration: "This is the Ottomate home screen. Type any goal in the prompt box, use slash commands like /image or /research, attach files, or choose from the prompt gallery below.",
     url: "/computer",
     actions: async (page) => {
       await page.waitForTimeout(2000);
@@ -147,7 +147,7 @@ const TUTORIAL_STEPS = [
 ];
 
 (async () => {
-  console.log("🎬 Ottomatron Tutorial Video Recorder\n");
+  console.log("🎬 Ottomate Tutorial Video Recorder\n");
   console.log("Launching browser with video recording...\n");
 
   const browser = await chromium.launch({ headless: true });

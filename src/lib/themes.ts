@@ -30,7 +30,7 @@ export const THEMES: Theme[] = [
   {
     id: "default",
     name: "Default",
-    description: "The original Ottomatron dark theme",
+    description: "The original Ottomate dark theme",
     icon: "⬛",
     category: "dark",
     colors: {
@@ -259,7 +259,7 @@ export const THEMES: Theme[] = [
 
 // ─── Theme Application ───────────────────────────────────────────────────────
 
-const THEME_STORAGE_KEY = "ottomatron_theme";
+const THEME_STORAGE_KEY = "ottomate_theme";
 
 export function getStoredThemeId(): string {
   if (typeof window === "undefined") return "default";

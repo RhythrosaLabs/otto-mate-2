@@ -33,7 +33,7 @@ import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas
 const navItems = [
   {
     href: "/computer",
-    label: "Ottomatron",
+    label: "Ottomate",
     icon: Monitor,
     exact: true,
   },
@@ -162,13 +162,13 @@ export function Sidebar() {
 
   // Persist model selection
   useEffect(() => {
-    const saved = localStorage.getItem("ottomatron_model");
+    const saved = localStorage.getItem("ottomate_model");
     if (saved) setSelectedModel(saved as ModelId);
   }, []);
 
   function selectModel(model: ModelId) {
     setSelectedModel(model);
-    localStorage.setItem("ottomatron_model", model);
+    localStorage.setItem("ottomate_model", model);
     setShowModelDropdown(false);
   }
 
@@ -189,7 +189,7 @@ export function Sidebar() {
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pplx-accent to-blue-500 flex items-center justify-center">
             <Monitor size={14} className="text-white" />
           </div>
-          <span className="text-sm font-semibold text-pplx-text">Ottomatron</span>
+          <span className="text-sm font-semibold text-pplx-text">Ottomate</span>
         </Link>
       </div>
 
@@ -351,7 +351,7 @@ export function Sidebar() {
         </div>
 
         <p className="px-3 mt-2 text-[10px] text-pplx-muted/40 text-center">
-          Ottomatron v2.0 · Multi-Agent AI
+          Ottomate v2.0 · Multi-Agent AI
         </p>
       </div>
     </>

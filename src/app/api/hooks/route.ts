@@ -5,7 +5,7 @@
  * - POST /api/hooks?action=wake  → Lightweight: creates a task from external event
  * - POST /api/hooks?action=agent → Full: creates + immediately runs an agent task
  *
- * Auth: Bearer token via OTTOMATRON_WEBHOOK_SECRET env var
+ * Auth: Bearer token via OTTOMATE_WEBHOOK_SECRET env var
  * Rate limiting: 429 after 10 failed auth attempts per IP within 5 minutes
  */
 
@@ -49,10 +49,10 @@ function recordAuthFailure(ip: string): void {
 }
 
 function authenticateRequest(req: NextRequest): { ok: boolean; error?: string; status?: number } {
-  const secret = process.env.OTTOMATRON_WEBHOOK_SECRET;
+  const secret = process.env.OTTOMATE_WEBHOOK_SECRET;
   if (!secret) {
     // No secret configured = webhooks disabled
-    return { ok: false, error: "Webhooks not configured. Set OTTOMATRON_WEBHOOK_SECRET env var.", status: 503 };
+    return { ok: false, error: "Webhooks not configured. Set OTTOMATE_WEBHOOK_SECRET env var.", status: 503 };
   }
 
   const ip = getClientIp(req);
@@ -62,7 +62,7 @@ function authenticateRequest(req: NextRequest): { ok: boolean; error?: string; s
 
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const headerToken = req.headers.get("x-ottomatron-token");
+  const headerToken = req.headers.get("x-ottomate-token");
   const providedToken = token || headerToken;
 
   if (!providedToken || providedToken !== secret) {
@@ -170,14 +170,14 @@ export async function POST(request: NextRequest) {
 
 // GET /api/hooks — Health check / info endpoint
 export async function GET(request: NextRequest) {
-  const secret = process.env.OTTOMATRON_WEBHOOK_SECRET;
+  const secret = process.env.OTTOMATE_WEBHOOK_SECRET;
   return NextResponse.json({
     enabled: !!secret,
     endpoints: {
       "POST /api/hooks?action=wake": "Create a task from external event (does not auto-run)",
       "POST /api/hooks?action=agent": "Create and immediately run a task from external event",
     },
-    auth: secret ? "Bearer token required (Authorization header or x-ottomatron-token header)" : "Not configured — set OTTOMATRON_WEBHOOK_SECRET",
+    auth: secret ? "Bearer token required (Authorization header or x-ottomate-token header)" : "Not configured — set OTTOMATE_WEBHOOK_SECRET",
     rate_limit: `${MAX_AUTH_FAILURES} failed attempts per ${RATE_LIMIT_WINDOW_MS / 60000} minutes per IP`,
   });
 }

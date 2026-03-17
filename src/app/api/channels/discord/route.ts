@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           type: 4,
           data: {
-            content: `📊 **Ottomatron Status**\n\nStatus: ${health.status}\nUptime: ${health.uptime}\nVersion: ${health.version}`,
+            content: `📊 **Ottomate Status**\n\nStatus: ${health.status}\nUptime: ${health.uptime}\nVersion: ${health.version}`,
           },
         });
       }

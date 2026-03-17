@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Capture screenshots of every major Ottomatron page using Playwright.
+ * Capture screenshots of every major Ottomate page using Playwright.
  * Usage: node scripts/take-screenshots.js
  */
 

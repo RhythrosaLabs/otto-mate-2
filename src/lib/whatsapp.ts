@@ -104,7 +104,7 @@ export function getWhatsAppConfig(): WhatsAppConfig | null {
   return {
     accessToken,
     phoneNumberId,
-    verifyToken: verifyToken || "ottomatron_whatsapp_verify",
+    verifyToken: verifyToken || "ottomate_whatsapp_verify",
     businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
   };
 }
@@ -414,7 +414,7 @@ export async function transcribeVoiceMessage(
     const ext = extMap[mimeType] || "ogg";
 
     // Write to temp file (Whisper API needs a file)
-    const tmpDir = join(tmpdir(), "ottomatron-whatsapp");
+    const tmpDir = join(tmpdir(), "ottomate-whatsapp");
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
     const tmpPath = join(tmpDir, `voice_${uuidv4()}.${ext}`);
     writeFileSync(tmpPath, buffer);
@@ -502,7 +502,7 @@ export async function sendResponse(
 
   // If response is very short, send as a single message
   if (response.length <= maxLength) {
-    const footer = options?.includeFooter ? "\n\n_— Ottomatron_" : "";
+    const footer = options?.includeFooter ? "\n\n_— Ottomate_" : "";
     return sendTextMessage(config, to, response + footer, replyToMessageId);
   }
 
@@ -512,7 +512,7 @@ export async function sendResponse(
 
   for (let i = 0; i < chunks.length; i++) {
     const isLast = i === chunks.length - 1;
-    const footer = isLast && options?.includeFooter ? "\n\n_— Ottomatron_" : "";
+    const footer = isLast && options?.includeFooter ? "\n\n_— Ottomate_" : "";
     result = await sendTextMessage(
       config,
       to,

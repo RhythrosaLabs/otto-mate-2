@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     // Handle commands
     if (text === "/start") {
       await sendTelegramMessage(chatId, 
-        `👋 Welcome to *Ottomatron*, ${username}!\n\nSend me any message and I'll process it as an AI task.\n\nCommands:\n/start — This message\n/status — Current system status\n/help — Available commands`
+        `👋 Welcome to *Ottomate*, ${username}!\n\nSend me any message and I'll process it as an AI task.\n\nCommands:\n/start — This message\n/status — Current system status\n/help — Available commands`
       );
       return NextResponse.json({ ok: true });
     }
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       const healthRes = await fetch(new URL("/api/health", req.url));
       const health = await healthRes.json();
       await sendTelegramMessage(chatId,
-        `📊 *Ottomatron Status*\n\nStatus: ${health.status}\nUptime: ${health.uptime}\nVersion: ${health.version}`
+        `📊 *Ottomate Status*\n\nStatus: ${health.status}\nUptime: ${health.uptime}\nVersion: ${health.version}`
       );
       return NextResponse.json({ ok: true });
     }

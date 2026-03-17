@@ -191,7 +191,7 @@ async function callOpenRouter(opts: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-      "X-Title": "Ottomatron",
+      "X-Title": "Ottomate",
     },
     body: JSON.stringify({
       model: opts.model,

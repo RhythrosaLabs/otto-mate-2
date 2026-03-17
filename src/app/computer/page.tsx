@@ -249,7 +249,7 @@ function ComputerPageInner() {
 
     setIsSubmitting(true);
     try {
-      const model = localStorage.getItem("ottomatron_model") || "auto";
+      const model = localStorage.getItem("ottomate_model") || "auto";
       const expandedPrompt = expandSlashCommand(prompt);
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -325,10 +325,10 @@ function ComputerPageInner() {
           </div>
         </div>
         <h1 className="text-4xl font-semibold text-pplx-text mb-3">
-          Ottomatron works for you.
+          Ottomate works for you.
         </h1>
         <p className="text-pplx-muted text-lg max-w-md">
-          Describe a goal. Ottomatron reasons, researches, builds, and delivers.
+          Describe a goal. Ottomate reasons, researches, builds, and delivers.
         </p>
       </div>
 
@@ -639,7 +639,7 @@ function ComputerPageInner() {
 
       {/* Footer */}
       <p className="mt-12 text-xs text-pplx-muted/60 text-center">
-        Ottomatron · Multi-Agent AI · Powered by Claude, GPT-4o &amp; Gemini
+        Ottomate · Multi-Agent AI · Powered by Claude, GPT-4o &amp; Gemini
       </p>
     </div>
   );
