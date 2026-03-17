@@ -1,44 +1,44 @@
-# Ottomatron — AI Computer
+<p align="center">
+  <h1 align="center">Ottomatron</h1>
+  <p align="center">
+    <strong>Your self-hosted AI agent workbench.</strong><br/>
+    Give it a goal. It plans, codes, browses, connects, and delivers — autonomously.
+  </p>
+</p>
 
-An autonomous AI agent workbench built with Next.js, powered by Claude. Run tasks, manage files, connect to external services, and let the AI do the work.
-
----
-
-## Table of Contents
-
-1. [What is Ottomatron?](#what-is-ottomatron)
-2. [Quick Start](#quick-start)
-3. [Environment Variables](#environment-variables)
-4. [AI Models & Providers](#ai-models--providers)
-5. [Connectors Setup](#connectors-setup)
-   - [Free Connectors (no credit card)](#free-connectors)
-   - [Communication](#communication-connectors)
-   - [Storage](#storage-connectors)
-   - [Development](#development-connectors)
-   - [Project Management](#project-management-connectors)
-   - [CRM](#crm-connectors)
-   - [Data](#data-connectors)
-   - [Productivity](#productivity-connectors)
-   - [AI Services](#ai-service-connectors)
-   - [Finance](#finance-connectors)
-   - [Marketing](#marketing-connectors)
-6. [OAuth Setup (Google, Microsoft, GitHub, Notion, Dropbox)](#oauth-setup)
-7. [Architecture](#architecture)
-8. [Troubleshooting](#troubleshooting)
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#pages">Pages</a> •
+  <a href="#models">Models</a> •
+  <a href="#connectors">Connectors</a> •
+  <a href="#architecture">Architecture</a>
+</p>
 
 ---
 
 ## What is Ottomatron?
 
-Ottomatron is a self-hosted AI agent that can:
+Ottomatron is a **self-hosted, multi-model AI agent platform** built with Next.js 15.  
+Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 100+ external services, generates images and video, and saves every artifact it produces.
 
-- **Run tasks** — given a natural language goal, the agent plans and executes multi-step workflows
-- **Write and run code** — Python, Node.js, and shell scripts are executed in-process with output captured
-- **Manage files** — create, read, list, and view files produced by tasks
-- **Browse the web** — search and scrape content (with search API keys)
-- **Connect to services** — send emails, post Slack messages, create GitHub issues, read spreadsheets, and more
-- **Use sub-agents** — spawn specialized agents for parallel work
-- **Gallery** — browse AI-generated images and charts produced during tasks
+It ships as a single `npm install` with zero external infrastructure. A SQLite database is created on first launch.
+
+**Key capabilities:**
+
+- **Autonomous task execution** — plans, reasons, and iterates with tool use until the goal is met
+- **Multi-model orchestration** — Claude Opus/Sonnet, GPT-4o/4.1, Gemini 2.0, Perplexity Sonar, OpenRouter, with automatic failover
+- **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
+- **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
+- **100+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
+- **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), DALL-E 3, ElevenLabs (voice)
+- **Sub-agents** — spawns specialized child agents for parallel work
+- **Persistent memory** — key-value store the agent reads/writes across tasks
+- **Scheduled tasks** — cron expressions, intervals, daily/weekly recurrence
+- **Visual pipelines** — DAG builder for chaining tasks with dependencies
+- **Skills marketplace** — 200+ pre-built skill templates across 15+ categories
+- **Voice input** — dictate tasks via Whisper or browser speech recognition
+- **Slash commands** — `/image`, `/research`, `/code`, `/email`, `/video`, `/scrape`, and more
 
 ---
 
@@ -46,601 +46,426 @@ Ottomatron is a self-hosted AI agent that can:
 
 ### Prerequisites
 
-- Node.js 18+
-- An Anthropic API key (get one at [console.anthropic.com](https://console.anthropic.com))
+| Requirement | Notes |
+|---|---|
+| **Node.js 18+** | `node -v` to check |
+| **Anthropic API key** | [console.anthropic.com](https://console.anthropic.com) — this is the only required key |
 
-### Steps
+### Install & run
 
 ```bash
-# 1. Clone and install
-git clone <repo-url>
-cd perplexity-computer
+git clone https://github.com/RhythrosaLabs/ottomate.git
+cd ottomate
 npm install
 
-# 2. Create .env.local with your API key
+# Add your API key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
 
-# 3. Start the dev server
+# Start
 npm run dev
 ```
 
-Open [http://localhost:3000/computer](http://localhost:3000/computer) in your browser.
+Open **http://localhost:3000** — the onboarding wizard will walk you through first-time setup.
 
-The SQLite database (`perplexity-computer.db`) is created automatically on first launch.
+> **Optional keys** unlock more models and features. See [Environment Variables](#environment-variables) below.
+
+---
+
+## Features
+
+### Task Engine
+The core loop: you describe a goal → the agent creates a plan → executes steps (tool calls, code, API requests, sub-agents) → streams results back in real time. Tasks support follow-up chat, file attachments, voice input, and slash commands.
+
+### Multi-Model Failover
+The agent picks the best model automatically or you choose manually. If a provider is down or rate-limited, it fails over through the chain: **Anthropic → OpenAI → Google → OpenRouter (DeepSeek) → Perplexity** with exponential backoff.
+
+### Dreamscape Studio
+A full AI creative studio powered by **Luma Dream Machine** and **Replicate**. Modes include text-to-video, image-to-video, text-to-image, extend, interpolate, modify, character reference, style reference, reframe, audio generation, SFX, voiceover, and lip-sync. Comes with an **AI Director** chat that translates natural language into multi-step generation command chains.
+
+### Pipelines
+A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency arrows, and run the entire pipeline — nodes execute in dependency order with status tracking.
+
+### Connectors Marketplace
+100+ integrations across communication, storage, development, project management, CRM, data, AI services, finance, marketing, social media, and more. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 35+ connectors have a completely free tier.
+
+### Skills & Templates
+**Skills** are reusable instruction sets (like Custom GPTs). Browse 200+ pre-built skills in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
+
+### Scheduling
+Schedule any task to run automatically. Supports one-time, recurring intervals, daily, weekly, and full cron expressions. Enable/disable individual schedules and see last-run / next-run timestamps.
+
+### Memory
+A persistent key-value store that the agent reads and writes during task execution. Stored facts, preferences, and context carry over across tasks. You can also add or delete entries manually.
+
+### Analytics & Audit
+**Analytics** shows KPIs: total tasks, success rate, average duration, top tools, model usage, cost trends, and daily volume. **Audit Trail** logs every tool call, model invocation, and task event with duration, metadata, and filters.
+
+---
+
+## Pages
+
+| Page | Description |
+|---|---|
+| **Home** | Centered prompt input with slash commands, voice input, file attachments, and prompt gallery |
+| **Tasks** | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
+| **Task Detail** | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
+| **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane |
+| **Connectors** | Integration marketplace — connect 100+ services via OAuth or API key |
+| **Skills** | Create, edit, and install reusable agent behaviors; 200+ in the marketplace |
+| **Gallery** | Browse community example tasks, filter by category, one-click run |
+| **Playground** | Multi-model AI playground — run Replicate & HuggingFace models, side-by-side comparison |
+| **Dreamscape** | AI creative studio — Luma Dream Machine video/image generation with AI Director chat |
+| **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
+| **Templates** | Reusable one-click task presets by category |
+| **Scheduled** | Cron-based task scheduler with interval, daily, weekly, and cron modes |
+| **Sessions** | Group related tasks into conversation sessions with shared context |
+| **Channels** | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
+| **Memory** | View, search, add, and delete agent memory entries |
+| **Analytics** | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
+| **Audit Trail** | Paginated log of every agent action with filters and metadata |
+| **Settings** | Default model, token/cost budgets, themes, verbose mode, health check |
+| **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
+| **Replicate** | Dedicated Replicate model explorer with quick-run categories |
+| **WhatsApp** | WhatsApp Cloud API dashboard — connection status, message sender, webhook |
+
+---
+
+## Models
+
+Ottomatron supports **17 models** across 5 providers:
+
+| Model | Provider | Best for |
+|---|---|---|
+| Claude Opus 4.6 | Anthropic | Complex reasoning, multi-step orchestration |
+| Claude Sonnet 4.6 | Anthropic | Balanced speed/quality, follow-ups |
+| Claude 3.5 Haiku | Anthropic | Ultra-fast, cheapest Claude |
+| GPT-4o | OpenAI | Long-context recall, broad knowledge |
+| GPT-4o Mini | OpenAI | Lightweight speed tasks |
+| GPT-4.1 | OpenAI | Strong reasoning |
+| GPT-4.1 Mini / Nano | OpenAI | Fast / ultra-cheap |
+| Gemini 1.5 Pro | Google | Deep research, long documents |
+| Gemini 1.5/2.0 Flash | Google | Fast Gemini inference |
+| Sonar / Sonar Pro | Perplexity | Search-augmented generation |
+| Sonar Reasoning Pro | Perplexity | Advanced search + reasoning |
+| OpenRouter | Any | Route to any model (DeepSeek, Llama, etc.) |
+
+Set `auto` to let the agent pick the best model per task.
 
 ---
 
 ## Environment Variables
 
-Copy `.env.local` from the example above and fill in the values you need.
+Create a `.env.local` file in the project root:
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | **Yes** | Powers Claude (opus/sonnet). Get at [console.anthropic.com](https://console.anthropic.com) |
-| `OPENAI_API_KEY` | No | Enables GPT-4o and DALL-E 3 tasks |
-| `GOOGLE_GEMINI_API_KEY` | No | Enables Gemini 1.5 Pro tasks |
-| `GROQ_API_KEY` | No | Enables Llama/Mixtral via Groq |
-| `PERPLEXITY_API_KEY` | No | Real-time web search via Perplexity |
-| `BRAVE_SEARCH_API_KEY` | No | Real-time web search via Brave |
+| `ANTHROPIC_API_KEY` | **Yes** | Claude models — [console.anthropic.com](https://console.anthropic.com) |
+| `OPENAI_API_KEY` | No | GPT-4o, GPT-4.1, DALL-E 3 |
+| `GOOGLE_GEMINI_API_KEY` | No | Gemini 1.5/2.0 |
+| `GROQ_API_KEY` | No | Llama / Mixtral via Groq |
+| `PERPLEXITY_API_KEY` | No | Real-time web search via Perplexity Sonar |
+| `BRAVE_SEARCH_API_KEY` | No | Web search via Brave |
 | `SERPER_API_KEY` | No | Google search via Serper |
-| `TAVILY_API_KEY` | No | AI web search via Tavily |
-| `DATABASE_PATH` | No | Path to SQLite DB (default: `./perplexity-computer.db`) |
-| `APP_URL` | No | Public URL of your deployment (default: `http://localhost:3000`) |
-| `GOOGLE_CLIENT_ID/SECRET` | No | Google OAuth for Gmail/Drive/Sheets/Docs/Calendar |
-| `MICROSOFT_CLIENT_ID/SECRET` | No | Microsoft OAuth for Outlook/OneDrive/Teams |
-| `GITHUB_CLIENT_ID/SECRET` | No | GitHub OAuth |
-| `NOTION_CLIENT_ID/SECRET` | No | Notion OAuth |
-| `DROPBOX_CLIENT_ID/SECRET` | No | Dropbox OAuth |
+| `TAVILY_API_KEY` | No | AI-powered web search |
+| `REPLICATE_API_TOKEN` | No | Run 1000s of ML models on Replicate |
+| `LUMA_API_KEY` | No | Luma Dream Machine video/image generation |
+| `ELEVENLABS_API_KEY` | No | Text-to-speech via ElevenLabs |
+| `DATABASE_PATH` | No | SQLite DB path (default: `./perplexity-computer.db`) |
+| `APP_URL` | No | Public URL (default: `http://localhost:3000`) |
+| `GOOGLE_CLIENT_ID` / `SECRET` | No | OAuth for Gmail, Drive, Sheets, Docs, Calendar |
+| `MICROSOFT_CLIENT_ID` / `SECRET` | No | OAuth for Outlook, OneDrive, Teams |
+| `GITHUB_CLIENT_ID` / `SECRET` | No | GitHub OAuth |
+| `NOTION_CLIENT_ID` / `SECRET` | No | Notion OAuth |
+| `DROPBOX_CLIENT_ID` / `SECRET` | No | Dropbox OAuth |
 
 ---
 
-## AI Models & Providers
+## Connectors
 
-The agent automatically selects the best model for each task:
+Navigate to **Connectors** in the sidebar. Click **Connect** on any service to begin setup.
 
-| Model | Provider | Use case |
-|---|---|---|
-| `claude-opus-4-6` | Anthropic | Complex multi-step reasoning, sub-agents |
-| `claude-sonnet-4-6` | Anthropic | Fast tasks, follow-up messages |
-| `gpt-4o` | OpenAI | Coding tasks when OpenAI key is set |
-| `gemini-1.5-pro` | Google | Long-context document analysis |
-| `llama-3.1-70b` | Groq | Fast inference for simple tasks |
+- **OAuth connectors** — click "Sign in with [Provider]" and authorize in the popup
+- **API key connectors** — paste your token and click Connect
+- **Free** badge = no credit card required
 
----
-
-## Connectors Setup
-
-Navigate to **Connectors** in the sidebar. Click **Connect** on any connector to open the setup modal.
-
-- **OAuth connectors** show a "Sign in with [Provider]" button — click it and authorize in the popup
-- **API key connectors** show a password field — paste your token and click Connect
-- **Free** badge means no credit card is needed at all for basic use
-
----
-
-### Free Connectors
-
-These connectors have a free tier with no credit card required:
+### Free-tier connectors (35+)
 
 | Connector | Auth | Notes |
 |---|---|---|
-| Gmail + Google Calendar | OAuth | Free with Google account |
-| Outlook + Microsoft Calendar | OAuth | Free with Microsoft account |
+| Gmail / Google Calendar / Drive / Sheets / Docs | OAuth | Free with Google account |
+| Outlook / OneDrive / Microsoft Calendar | OAuth | Free with Microsoft account |
 | Slack | API key | Free workspace available |
-| Discord | API key | Free bot creation |
+| Discord | API key | Free bot token |
 | Telegram | API key | Free via BotFather |
-| Google Drive | OAuth | 15 GB free |
-| OneDrive | OAuth | 5 GB free |
 | Dropbox | OAuth | 2 GB free |
 | Box | API key | 10 GB free |
 | GitHub | OAuth | Free public + private repos |
-| Vercel | API key | Free Hobby plan |
 | GitLab | API key | Free on GitLab.com |
+| Vercel | API key | Free Hobby plan |
 | Sentry | API key | Free Developer plan |
 | Linear | API key | Free personal plan |
-| Jira | API key | Free up to 10 users |
+| Jira / Confluence | API key | Free up to 10 users |
 | Asana | API key | Free up to 10 teammates |
 | ClickUp | API key | Free Forever plan |
 | Monday.com | API key | Free 2 seats |
-| Confluence | API key | Free up to 10 users |
 | HubSpot | API key | Free CRM |
+| Notion | OAuth | Free personal plan |
 | Airtable | API key | Free unlimited bases |
-| Google Sheets | OAuth | Free with Google account |
 | Supabase | API key | Free 500 MB |
 | PostgreSQL | Conn. string | Self-hosted or cloud free tier |
-| Notion | OAuth | Free personal plan |
-| Google Docs | OAuth | Free with Google account |
 | Figma | API key | Free Starter plan |
 | Calendly | API key | Free Basic plan |
-| WordPress.com | API key | Free tier available |
-| Webflow | API key | Free plan available |
-| Wix | API key | Free plan available |
-| Hugging Face | API key | Free tier (rate limited) |
-| ElevenLabs | API key | Free 10,000 chars/month |
+| WordPress / Webflow / Wix | API key | Free tiers available |
+| Hugging Face | API key | Free (rate limited) |
+| ElevenLabs | API key | 10k chars/month free |
 | Stripe | API key | Free test mode |
-| Mailchimp | API key | Free up to 500 contacts |
-| Klaviyo | API key | Free up to 500 contacts |
+| Mailchimp / Klaviyo | API key | Free up to 500 contacts |
 
----
-
-### Communication Connectors
+<details>
+<summary><strong>Communication connector setup</strong></summary>
 
 #### Gmail + Google Calendar
 **Auth:** OAuth (Google) | **Free:** Yes
 
-1. The easiest way: click **Sign in with Google** in the connector modal — this uses your own Google OAuth app credentials
-2. To set up your own OAuth app (needed for production):
-   - Go to [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
-   - Create an **OAuth 2.0 Client ID** (Web application type)
-   - Add `http://localhost:3000/api/auth/callback/google` as an Authorized Redirect URI
-   - Enable these APIs: Gmail API, Google Calendar API, Google Drive API, Google Sheets API, Google Docs API
-   - Copy **Client ID** and **Client Secret** into `.env.local` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
-3. Signing in with Google automatically connects Gmail, Google Drive, Google Sheets, and Google Docs simultaneously
+1. Click **Sign in with Google** in the connector modal
+2. For your own OAuth app: go to [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID, add `http://localhost:3000/api/auth/callback/google` as redirect URI
+3. Enable APIs: Gmail, Calendar, Drive, Sheets, Docs
+4. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env.local`
 
 #### Outlook + Microsoft Calendar
-**Auth:** OAuth (Microsoft) | **Free:** Yes (personal Microsoft account)
+**Auth:** OAuth (Microsoft) | **Free:** Yes
 
 1. Click **Sign in with Microsoft** in the connector modal
-2. To set up your own OAuth app:
-   - Go to [Azure Portal → App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
-   - Click **New registration**, choose **Accounts in any organizational directory and personal Microsoft accounts**
-   - Under **Authentication**, add a Web redirect URI: `http://localhost:3000/api/auth/callback/microsoft`
-   - Under **Certificates & secrets**, create a new client secret
-   - Copy the **Application (client) ID** and secret value into `.env.local`
-3. Signing in with Microsoft connects Outlook, OneDrive, and optionally Teams/SharePoint
+2. For your own OAuth app: [Azure Portal → App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade), add redirect URI `http://localhost:3000/api/auth/callback/microsoft`
+3. Add `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` to `.env.local`
 
 #### Slack
-**Auth:** API key (Bot Token) | **Free:** Yes
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
-2. Under **OAuth & Permissions**, add these Bot Token Scopes: `chat:write`, `channels:read`, `channels:history`
-3. Click **Install to Workspace** → copy the **Bot User OAuth Token** (starts with `xoxb-`)
-4. Paste the token into the Slack connector modal
+1. [api.slack.com/apps](https://api.slack.com/apps) → Create New App → add Bot Token Scopes: `chat:write`, `channels:read`, `channels:history`
+2. Install to Workspace → copy Bot User OAuth Token (`xoxb-...`)
 
 #### Discord
-**Auth:** API key (Bot Token) | **Free:** Yes
-
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) → **New Application**
-2. Navigate to **Bot** → click **Add Bot** → under **Token**, click **Reset Token** and copy it
-3. Under **OAuth2 → URL Generator**, select `bot` scope + `Send Messages` permission
-4. Use the generated URL to invite the bot to your server
-5. Paste the token (not the client secret) into the Discord connector modal
+1. [discord.com/developers/applications](https://discord.com/developers/applications) → New Application → Bot → Reset Token
+2. OAuth2 URL Generator: `bot` scope + `Send Messages` permission → invite bot
 
 #### Telegram
-**Auth:** API key (Bot Token) | **Free:** Yes
-
-1. Open Telegram and message [@BotFather](https://t.me/BotFather)
-2. Send `/newbot`, follow the prompts to name your bot
-3. BotFather gives you a token like `123456789:ABCdef...` — paste this into the Telegram connector modal
-4. To send messages, the agent needs the `chat_id` — you can get it by messaging your bot and calling `https://api.telegram.org/bot<token>/getUpdates`
-
-#### Microsoft Teams
-**Auth:** OAuth (Microsoft) | **Free:** Requires Microsoft 365
-
-Uses the same Microsoft OAuth app as Outlook. Set up Microsoft OAuth credentials (see above), then click **Sign in with Microsoft** on the Teams connector.
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token
 
 #### Zoom
-**Auth:** API key | **Free:** No (requires paid account)
-
-1. Go to the [Zoom Marketplace](https://marketplace.zoom.us/) → **Develop** → **Build App**
-2. Choose **Server-to-Server OAuth** type
-3. Under scopes, add `meeting:write:admin` and `meeting:read:admin`
-4. Generate and copy your OAuth token
+[Zoom Marketplace](https://marketplace.zoom.us/) → Server-to-Server OAuth → generate token
 
 #### Twilio
-**Auth:** API key | **Free:** No ($15 free trial)
+[twilio.com](https://www.twilio.com/) → Console → copy Account SID + Auth Token
 
-1. Sign up at [twilio.com](https://www.twilio.com/)
-2. From the [Console Dashboard](https://console.twilio.com/), copy your **Account SID** and **Auth Token**
-3. Paste the Auth Token into the connector modal (the agent uses Account SID from your config)
+</details>
 
----
+<details>
+<summary><strong>Storage connector setup</strong></summary>
 
-### Storage Connectors
-
-#### Google Drive
-**Auth:** OAuth (Google) | **Free:** 15 GB
-
-Same OAuth setup as Gmail — signing in with Google automatically connects Drive.
+#### Google Drive / Sheets / Docs
+Connected automatically when you sign in with Google OAuth.
 
 #### OneDrive
-**Auth:** OAuth (Microsoft) | **Free:** 5 GB
-
-Same OAuth setup as Outlook — signing in with Microsoft automatically connects OneDrive.
+Connected automatically when you sign in with Microsoft OAuth.
 
 #### Dropbox
-**Auth:** OAuth (Dropbox) | **Free:** 2 GB
-
-1. Go to [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) → **Create app**
-2. Choose **Scoped access**, **Full Dropbox** or **App folder**
-3. Under **Settings**, add `http://localhost:3000/api/auth/callback/dropbox` as a Redirect URI
-4. Copy **App key** and **App secret** into `.env.local` as `DROPBOX_CLIENT_ID` and `DROPBOX_CLIENT_SECRET`
-5. Click **Sign in with Dropbox** in the connector modal
+1. [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) → Create app → Scoped access
+2. Add redirect URI: `http://localhost:3000/api/auth/callback/dropbox`
+3. Add `DROPBOX_CLIENT_ID` and `DROPBOX_CLIENT_SECRET` to `.env.local`
 
 #### Box
-**Auth:** API key (Developer Token) | **Free:** 10 GB
+[app.box.com/developers/console](https://app.box.com/developers/console) → Create New App → generate Developer Token
 
-1. Go to [app.box.com/developers/console](https://app.box.com/developers/console) → **Create New App**
-2. Choose **Custom App** with **OAuth 2.0 with JWT** or **Standard OAuth 2.0**
-3. Under **Configuration**, generate a **Developer Token** (valid for 60 min — for production, use the full OAuth flow)
-4. Paste the Developer Token into the Box connector modal
+</details>
 
----
-
-### Development Connectors
+<details>
+<summary><strong>Development connector setup</strong></summary>
 
 #### GitHub
-**Auth:** OAuth or Personal Access Token | **Free:** Yes
+**Option A (OAuth):** [github.com/settings/developers](https://github.com/settings/developers) → OAuth Apps → callback URL `http://localhost:3000/api/auth/callback/github` → add to `.env.local`
 
-**Option A — OAuth (recommended):**
-1. Go to [github.com/settings/developers](https://github.com/settings/developers) → **OAuth Apps** → **New OAuth App**
-2. Set **Authorization callback URL** to `http://localhost:3000/api/auth/callback/github`
-3. Copy **Client ID** and generate a **Client Secret** into `.env.local`
-4. Click **Sign in with GitHub** in the connector modal
-
-**Option B — Personal Access Token:**
-1. Go to [github.com/settings/tokens/new](https://github.com/settings/tokens/new)
-2. Select scopes: `repo`, `user`
-3. Click **Generate token** and paste it into the GitHub connector modal
+**Option B (PAT):** [github.com/settings/tokens/new](https://github.com/settings/tokens/new) → scopes `repo`, `user` → paste in connector modal
 
 #### Vercel
-**Auth:** API key | **Free:** Yes (Hobby plan)
-
-1. Sign in at [vercel.com](https://vercel.com)
-2. Go to **Account Settings** → **Tokens** → **Create Token**
-3. Paste the token into the Vercel connector modal
+[vercel.com](https://vercel.com) → Account Settings → Tokens → Create Token
 
 #### GitLab
-**Auth:** API key | **Free:** Yes
-
-1. Sign in at [gitlab.com](https://gitlab.com)
-2. Go to **User Settings** → **Access Tokens** → **Add new token**
-3. Select scopes: `api`, `read_repository`, `write_repository`
-4. Paste the token into the GitLab connector modal
+[gitlab.com](https://gitlab.com) → User Settings → Access Tokens → scopes `api`, `read_repository`, `write_repository`
 
 #### Sentry
-**Auth:** API key | **Free:** Yes (Developer plan)
-
-1. Sign in at [sentry.io](https://sentry.io)
-2. Go to **Settings** → **Auth Tokens** → **Create New Token**
-3. Select scopes: `project:read`, `event:read`, `event:write`
-4. Paste the token into the Sentry connector modal
+[sentry.io](https://sentry.io) → Settings → Auth Tokens → scopes `project:read`, `event:read`, `event:write`
 
 #### Datadog
-**Auth:** API key | **Free:** No (14-day trial)
+[app.datadoghq.com](https://app.datadoghq.com/organization-settings/api-keys) → API Keys + Application Keys
 
-1. Go to [app.datadoghq.com/organization-settings/api-keys](https://app.datadoghq.com/organization-settings/api-keys)
-2. Create a new **API Key**
-3. Also create an **Application Key** (needed for some endpoints)
-4. Paste the API Key into the connector modal
+</details>
 
----
-
-### Project Management Connectors
+<details>
+<summary><strong>Project management connector setup</strong></summary>
 
 #### Linear
-**Auth:** API key | **Free:** Yes (personal)
-
-1. Go to [linear.app/settings/api](https://linear.app/settings/api)
-2. Click **Create key**
-3. Paste the key into the Linear connector modal
+[linear.app/settings/api](https://linear.app/settings/api) → Create key
 
 #### Jira
-**Auth:** API key | **Free:** Yes (up to 10 users)
-
-1. Go to [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. Click **Create API token**, copy it
-3. In the connector modal, enter: `base64(your.email@example.com:YOUR_TOKEN)` — or just paste your email and token separated by a colon; the agent encodes it automatically
-4. Your Jira domain (e.g., `yourcompany.atlassian.net`) is needed for API calls — include it in the token field as `email:token@domain`
+[id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) → Create API token → enter as `email:token@domain`
 
 #### Asana
-**Auth:** API key | **Free:** Yes (up to 10 members)
-
-1. Go to [app.asana.com/0/my-apps](https://app.asana.com/0/my-apps)
-2. Click **Create new token**
-3. Paste the token into the Asana connector modal
+[app.asana.com/0/my-apps](https://app.asana.com/0/my-apps) → Create new token
 
 #### ClickUp
-**Auth:** API key | **Free:** Yes (Free Forever)
-
-1. Click your avatar → **Settings** → **Apps** → **Generate API Key**
-2. Paste the key into the ClickUp connector modal
+Avatar → Settings → Apps → Generate API Key
 
 #### Monday.com
-**Auth:** API key | **Free:** Yes (2 seats)
-
-1. Click avatar → **Developers** → **My Access Tokens** → **Show** (or create a new one)
-2. Paste the token into the Monday.com connector modal
+Avatar → Developers → My Access Tokens
 
 #### Confluence
-**Auth:** API key | **Free:** Yes (up to 10 users)
-
 Uses the same Atlassian API token as Jira.
 
----
+</details>
 
-### CRM Connectors
+<details>
+<summary><strong>CRM connector setup</strong></summary>
 
 #### HubSpot
-**Auth:** API key (Private App Token) | **Free:** Yes
-
-1. In HubSpot, go to **Settings** → **Integrations** → **Private Apps** → **Create a private app**
-2. Under **Scopes**, select `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.deals.read`
-3. Click **Create app** and copy the access token
-4. Paste the token into the HubSpot connector modal
+Settings → Integrations → Private Apps → Create → select CRM scopes → copy access token
 
 #### Salesforce
-**Auth:** API key | **Free:** Developer Edition only
-
-1. Sign up for a [Developer Edition org](https://developer.salesforce.com/signup) (free)
-2. Go to **Setup** → **Apps** → **App Manager** → **New Connected App**
-3. Enable OAuth and add the callback URL
-4. Use the generated **Access Token** in the connector modal
+[Developer Edition](https://developer.salesforce.com/signup) (free) → Setup → Connected App → copy Access Token
 
 #### Zendesk
-**Auth:** API key | **Free:** No (requires Zendesk plan)
+Admin Center → APIs → Zendesk API → enable Token Access → create API token
 
-1. Go to **Admin Center** → **Apps & Integrations** → **APIs** → **Zendesk API**
-2. Under **Settings**, enable **Token Access** and click **Add API token**
-3. Paste the token into the connector modal (format: `email/token:YOUR_TOKEN` in base64 encoding)
+</details>
 
----
-
-### Data Connectors
+<details>
+<summary><strong>Data connector setup</strong></summary>
 
 #### Airtable
-**Auth:** API key | **Free:** Yes
-
-1. Go to [airtable.com/create/tokens](https://airtable.com/create/tokens)
-2. Click **Create new token**, select scopes `data.records:read`, `data.records:write`, and the bases you want
-3. Paste the token into the Airtable connector modal
-
-#### Google Sheets
-**Auth:** OAuth (Google) | **Free:** Yes
-
-Same OAuth setup as Gmail. Signing in with Google connects Sheets automatically.
+[airtable.com/create/tokens](https://airtable.com/create/tokens) → Create token → scopes `data.records:read`, `data.records:write`
 
 #### Supabase
-**Auth:** API key (Service Role Key) | **Free:** Yes (500 MB)
-
-1. Sign up at [supabase.com](https://supabase.com) and create a project
-2. Go to **Project Settings** → **API**
-3. Copy the **service_role** key (⚠️ keep this secret — it bypasses Row Level Security)
-4. Also note your **Project URL**
-5. Paste the Service Role key into the connector modal
+[supabase.com](https://supabase.com) → Project Settings → API → copy `service_role` key
 
 #### PostgreSQL
-**Auth:** Connection string | **Free:** Yes (self-hosted or Neon/Railway/Render free tiers)
-
-1. Get your connection string in the format: `postgresql://username:password@host:5432/dbname`
-   - **Neon** (free hosted Postgres): [neon.tech](https://neon.tech) — copy from **Connection Details**
-   - **Railway**: copy from **Connect** tab in your database service
-   - **Self-hosted**: use `postgresql://postgres:yourpassword@localhost:5432/yourdb`
-2. Paste the full connection string into the connector modal
+Paste connection string: `postgresql://user:pass@host:5432/dbname` (works with [Neon](https://neon.tech), Railway, Render, or self-hosted)
 
 #### Snowflake
-**Auth:** Account credentials | **Free:** No (30-day trial)
+Enter `accountidentifier:username:password`
 
-1. Sign up or log in at [snowflake.com](https://www.snowflake.com/)
-2. Note your account identifier (e.g., `xy12345.us-east-1`)
-3. In the connector modal, enter: `accountidentifier:username:password`
+</details>
 
----
-
-### Productivity Connectors
+<details>
+<summary><strong>Productivity connector setup</strong></summary>
 
 #### Notion
-**Auth:** OAuth or Internal Integration Token | **Free:** Yes
+**OAuth:** [notion.so/my-integrations](https://www.notion.so/my-integrations) → New integration → enable Public → redirect URI `http://localhost:3000/api/auth/callback/notion`
 
-**Option A — OAuth (recommended):**
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration**
-2. Enable the integration, then go back and click **Distribution** → enable **Public integration**
-3. Set **Redirect URI** to `http://localhost:3000/api/auth/callback/notion`
-4. Copy **OAuth client ID** and **OAuth client secret** → `.env.local`
-5. Click **Sign in with Notion** in the connector modal
-
-**Option B — Internal Integration Token:**
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration**
-2. Copy the **Internal Integration Token** (starts with `secret_`)
-3. Share each page/database you want the agent to access by clicking **Share** → your integration name
-4. Paste the token into the Notion connector modal
-
-#### Google Docs
-**Auth:** OAuth (Google) | **Free:** Yes
-
-Automatically connected when you sign in with Google.
+**Token:** Copy Internal Integration Token (`secret_...`) → share pages with the integration
 
 #### Figma
-**Auth:** API key | **Free:** Yes (Starter plan)
-
-1. In Figma, go to **Account Settings** (avatar → Settings)
-2. Scroll to **Personal access tokens** → **Create a new personal access token**
-3. Paste the token into the Figma connector modal
+Account Settings → Personal access tokens → create token
 
 #### Calendly
-**Auth:** API key | **Free:** Yes (Basic plan)
-
-1. Go to [calendly.com/integrations/api_webhooks](https://calendly.com/integrations/api_webhooks)
-2. Click **Generate New Token**
-3. Paste the token into the Calendly connector modal
+[calendly.com/integrations/api_webhooks](https://calendly.com/integrations/api_webhooks) → Generate New Token
 
 #### WordPress.com
-**Auth:** Application Password | **Free:** Yes
-
-1. Log in to [wordpress.com](https://wordpress.com)
-2. Go to **Me** → **Security** → **Two-Step Authentication** (must be enabled first)
-3. Then go to **Me** → **Application Passwords** → create one
-4. Enter your username and the application password in the format `username:apppassword`
+Me → Security → enable 2FA → Application Passwords → enter as `username:apppassword`
 
 #### Webflow
-**Auth:** API key (Site API Token) | **Free:** Yes
-
-1. Open your Webflow project → **Project Settings** → **Integrations** → **API Access**
-2. Click **Generate API Token**
-3. Paste the token into the Webflow connector modal
+Project Settings → Integrations → API Access → Generate API Token
 
 #### Wix
-**Auth:** API key | **Free:** Yes
+[manage.wix.com/account/api-keys](https://manage.wix.com/account/api-keys) → Generate API Key
 
-1. Go to [manage.wix.com/account/api-keys](https://manage.wix.com/account/api-keys)
-2. Click **Generate API Key**, name it, and select the permissions
-3. Paste the key into the Wix connector modal
+</details>
 
----
+<details>
+<summary><strong>AI service connector setup</strong></summary>
 
-### AI Service Connectors
-
-#### OpenAI / ChatGPT
-**Auth:** API key | **Free:** No ($5 trial for new accounts)
-
-1. Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. Click **Create new secret key**
-3. Paste the key (starts with `sk-`) into the connector modal
+#### OpenAI
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys) → Create new secret key (`sk-...`)
 
 #### Hugging Face
-**Auth:** API key | **Free:** Yes (rate-limited)
-
-1. Sign up at [huggingface.co](https://huggingface.co)
-2. Go to [Settings → Access Tokens](https://huggingface.co/settings/tokens)
-3. Create a **Read** token (starts with `hf_`)
-4. Paste it into the Hugging Face connector modal
+[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) → Read token (`hf_...`)
 
 #### ElevenLabs
-**Auth:** API key | **Free:** Yes (10,000 chars/month)
-
-1. Sign up at [elevenlabs.io](https://elevenlabs.io)
-2. Click your avatar → **Profile** → **API Key** → copy it
-3. Paste the key into the ElevenLabs connector modal
+[elevenlabs.io](https://elevenlabs.io) → Profile → API Key
 
 #### Replicate
-**Auth:** API key | **Free:** No (pay per use)
+[replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) → copy token (`r8_...`)
 
-1. Sign up at [replicate.com](https://replicate.com)
-2. Go to [Account → API Tokens](https://replicate.com/account/api-tokens)
-3. Copy your token (starts with `r8_`)
-4. Paste it into the Replicate connector modal
+</details>
 
----
-
-### Finance Connectors
+<details>
+<summary><strong>Finance & marketing connector setup</strong></summary>
 
 #### Stripe
-**Auth:** API key | **Free:** Yes (test mode)
-
-1. Sign in at [dashboard.stripe.com](https://dashboard.stripe.com)
-2. Go to **Developers** → **API keys**
-3. For testing, copy the **Secret key** starting with `sk_test_`
-4. For live payments, use the `sk_live_` key
-5. Paste the key into the Stripe connector modal
+[dashboard.stripe.com](https://dashboard.stripe.com) → Developers → API keys → copy Secret key (`sk_test_...` or `sk_live_...`)
 
 #### Shopify
-**Auth:** Admin API Access Token | **Free:** No (requires store)
-
-1. In your Shopify admin, go to **Settings** → **Apps and sales channels** → **Develop apps**
-2. Create a new app, configure **Admin API access scopes** (e.g., `read_orders`, `write_products`)
-3. Install the app and copy the **Admin API access token**
-4. Paste it into the Shopify connector modal
-
----
-
-### Marketing Connectors
+Admin → Settings → Apps → Develop apps → configure scopes → copy Admin API access token
 
 #### Mailchimp
-**Auth:** API key | **Free:** Yes (up to 500 contacts)
-
-1. Sign in at [mailchimp.com](https://mailchimp.com)
-2. Go to **Account** → **Extras** → **API keys** → **Create A Key**
-3. Paste the key into the Mailchimp connector modal
-4. Note: Mailchimp API keys include the datacenter (e.g., `abc123-us1`). The agent reads the `us1` suffix for API routing.
+Account → Extras → API keys → Create A Key (includes datacenter: `abc123-us1`)
 
 #### Klaviyo
-**Auth:** API key | **Free:** Yes (up to 500 contacts)
+Settings → API Keys → Create Private API Key
 
-1. Sign in at [klaviyo.com](https://www.klaviyo.com)
-2. Go to **Settings** → **API Keys** → **Create Private API Key**
-3. Grant Full Access or specific scopes (Profiles, Lists, Campaigns)
-4. Paste the key into the Klaviyo connector modal
+</details>
 
----
+<details>
+<summary><strong>OAuth setup (Google, Microsoft, GitHub, Notion, Dropbox)</strong></summary>
 
-## OAuth Setup
+#### Google OAuth
+Connects Gmail, Drive, Sheets, Docs, and Calendar in one click.
 
-### Setting up Google OAuth
-
-Google OAuth allows sign-in for Gmail, Drive, Sheets, Docs, and Calendar in one click.
-
-1. **Create a project** at [console.cloud.google.com](https://console.cloud.google.com)
-2. **Enable APIs**: search for and enable each of these:
-   - Gmail API
-   - Google Calendar API
-   - Google Drive API
-   - Google Sheets API
-   - Google Docs API
-3. **Create OAuth credentials**:
-   - Go to **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth client ID**
-   - Application type: **Web application**
-   - Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
-   - For production, also add your production URL
-4. **Configure consent screen** (APIs & Services → OAuth consent screen):
-   - Add the following scopes: Gmail send/read, Calendar, Drive, Sheets, Docs
-   - Add your email as a test user
-5. **Add to `.env.local`**:
+1. Create a project at [console.cloud.google.com](https://console.cloud.google.com)
+2. Enable APIs: Gmail, Calendar, Drive, Sheets, Docs
+3. APIs & Services → Credentials → OAuth client ID (Web) → redirect URI `http://localhost:3000/api/auth/callback/google`
+4. Configure consent screen with test users
+5. Add to `.env.local`:
    ```
    GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=GOCSPX-...
    ```
 
-### Setting up Microsoft OAuth
+#### Microsoft OAuth
+Connects Outlook, OneDrive, Teams, and SharePoint.
 
-Microsoft OAuth covers Outlook, OneDrive, Teams, and SharePoint.
-
-1. Go to [Azure Portal → App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
-2. Click **New registration**
-   - Supported account types: **Accounts in any organizational directory and personal Microsoft accounts**
-   - Redirect URI (Web): `http://localhost:3000/api/auth/callback/microsoft`
-3. Under **API permissions** → **Add a permission** → **Microsoft Graph**:
-   - Add delegated permissions: `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`, `Files.ReadWrite`, `Sites.ReadWrite.All`, `ChannelMessage.Send`, `ChannelMessage.Read.All`, `offline_access`
-4. Under **Certificates & secrets** → **New client secret** → copy the value
-5. **Add to `.env.local`**:
+1. [Azure Portal → App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → New registration
+2. Redirect URI: `http://localhost:3000/api/auth/callback/microsoft`
+3. API permissions → Microsoft Graph: `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`, `Files.ReadWrite`, `offline_access`
+4. Certificates & secrets → New client secret
+5. Add to `.env.local`:
    ```
    MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
    MICROSOFT_CLIENT_SECRET=your-secret-value
    ```
 
-### Setting up GitHub OAuth
-
-1. Go to **GitHub Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**
-2. Set **Authorization callback URL**: `http://localhost:3000/api/auth/callback/github`
-3. Click **Register application**, then **Generate a new client secret**
-4. **Add to `.env.local`**:
+#### GitHub OAuth
+1. [github.com/settings/developers](https://github.com/settings/developers) → OAuth Apps → callback URL `http://localhost:3000/api/auth/callback/github`
+2. Add to `.env.local`:
    ```
    GITHUB_CLIENT_ID=your-client-id
    GITHUB_CLIENT_SECRET=your-client-secret
    ```
 
-### Setting up Notion OAuth
-
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration**
-2. In the **Distribution** section, enable **Public integration**
-3. Set **Redirect URI**: `http://localhost:3000/api/auth/callback/notion`
-4. Copy the **OAuth client ID** and **OAuth client secret**
-5. **Add to `.env.local`**:
+#### Notion OAuth
+1. [notion.so/my-integrations](https://www.notion.so/my-integrations) → New integration → enable Public → redirect URI `http://localhost:3000/api/auth/callback/notion`
+2. Add to `.env.local`:
    ```
    NOTION_CLIENT_ID=your-client-id
    NOTION_CLIENT_SECRET=your-client-secret
    ```
 
-### Setting up Dropbox OAuth
-
-1. Go to [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) → **Create app**
-2. Choose **Scoped access**, set appropriate access level
-3. Under **Settings** → **Redirect URIs**: add `http://localhost:3000/api/auth/callback/dropbox`
-4. Copy **App key** and **App secret**
-5. **Add to `.env.local`**:
+#### Dropbox OAuth
+1. [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) → Create app → redirect URI `http://localhost:3000/api/auth/callback/dropbox`
+2. Add to `.env.local`:
    ```
    DROPBOX_CLIENT_ID=your-app-key
    DROPBOX_CLIENT_SECRET=your-app-secret
    ```
+
+</details>
 
 ---
 
@@ -649,71 +474,92 @@ Microsoft OAuth covers Outlook, OneDrive, Teams, and SharePoint.
 ```
 src/
 ├── app/
-│   ├── api/
-│   │   ├── auth/
-│   │   │   ├── oauth/[provider]/   # OAuth redirect initiation
-│   │   │   └── callback/[provider]/# OAuth token exchange
-│   │   ├── connectors/             # CRUD for connector configs
+│   ├── api/                        # API routes
+│   │   ├── auth/                   # OAuth initiation + callback
 │   │   ├── tasks/                  # Task CRUD + SSE streaming
-│   │   ├── files/                  # Task file listing + serving
+│   │   ├── connectors/             # Connector config CRUD
+│   │   ├── files/                  # File listing + serving
 │   │   ├── gallery/                # Gallery items
-│   │   ├── memory/                 # Memory entries
-│   │   └── skills/                 # Skills CRUD
-│   └── computer/
-│       ├── tasks/                  # Task list + detail pages
-│       ├── connectors/             # Connectors page
-│       ├── files/                  # Files browser
-│       ├── gallery/                # Gallery view
-│       ├── memory/                 # Memory view
-│       └── skills/                 # Skills manager
+│   │   ├── memory/                 # Memory CRUD
+│   │   ├── skills/                 # Skills CRUD
+│   │   ├── pipelines/              # Pipeline execution
+│   │   ├── scheduled-tasks/        # Scheduler engine
+│   │   ├── analytics/              # Usage analytics
+│   │   ├── sessions/               # Session grouping
+│   │   ├── templates/              # Template CRUD
+│   │   ├── audit/                  # Audit log
+│   │   ├── replicate/              # Replicate model runner
+│   │   ├── dreamscape/             # Luma Dream Machine
+│   │   ├── huggingface/            # HuggingFace inference
+│   │   └── voice/                  # Whisper transcription
+│   └── computer/                   # All UI pages (22 routes)
 ├── lib/
-│   ├── agent.ts                    # Core AI agent engine
-│   ├── db.ts                       # SQLite database layer
-│   ├── types.ts                    # Shared TypeScript types
-│   ├── connectors-data.ts          # Connector metadata & capabilities
+│   ├── agent.ts                    # Core AI agent (7,500 lines)
+│   ├── db.ts                       # SQLite via better-sqlite3
+│   ├── types.ts                    # TypeScript types (550 lines)
+│   ├── connectors-data.ts          # 100+ connector definitions
+│   ├── skill-catalog.ts            # 200+ pre-built skills
+│   ├── model-fallback.ts           # Multi-provider failover
+│   ├── scheduler.ts                # Cron/interval scheduler
+│   ├── replicate.ts                # Replicate API client
+│   ├── huggingface.ts              # HuggingFace client
+│   ├── social-media-browser.ts     # Social media automation
+│   ├── personas.ts                 # Agent personality presets
+│   ├── themes.ts                   # UI theme definitions
 │   └── utils.ts                    # Shared utilities
 └── components/
-    └── sidebar.tsx                 # App sidebar navigation
+    ├── sidebar.tsx                  # Navigation sidebar
+    └── command-palette.tsx          # ⌘K command palette
 ```
 
-**Database tables** (`better-sqlite3` / SQLite):
-- `tasks` — task records with status, model, messages
-- `agent_steps` — individual tool calls and results per task
-- `task_files` — files produced by tasks
-- `sub_tasks` — spawned sub-agent tasks
-- `gallery_items` — generated media items
-- `memory_entries` — agent long-term memory
-- `skills` — saved reusable skill definitions
-- `connector_configs` — connected service credentials (api_key, oauth_token, oauth_refresh_token)
+### Database (SQLite via better-sqlite3)
+
+| Table | Purpose |
+|---|---|
+| `tasks` | Task records with status, model, messages, priority |
+| `agent_steps` | Tool calls and results per task |
+| `task_files` | Files produced by tasks |
+| `sub_tasks` | Spawned sub-agent tasks |
+| `gallery_items` | Generated media |
+| `memory_entries` | Agent long-term memory |
+| `skills` | Saved skill definitions |
+| `connector_configs` | Service credentials (API keys, OAuth tokens) |
+| `pipelines` / `pipeline_nodes` | DAG pipeline definitions |
+| `scheduled_tasks` | Cron/interval schedules |
+| `conversation_sessions` | Session groupings |
+| `task_templates` | Reusable task presets |
+| `audit_log` | Every agent action logged |
+| `settings` | Global configuration |
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript |
+| UI | Tailwind CSS + Radix UI + Framer Motion |
+| Database | SQLite (better-sqlite3) |
+| AI SDKs | @anthropic-ai/sdk, openai, @google/generative-ai |
+| Browser | Playwright |
+| Markdown | react-markdown + remark-gfm |
 
 ---
 
 ## Troubleshooting
 
-### Tasks not running / "model not found" error
-The agent requires Claude models. Ensure `ANTHROPIC_API_KEY` is set correctly in `.env.local`.
+| Problem | Solution |
+|---|---|
+| Tasks not running / "model not found" | Ensure `ANTHROPIC_API_KEY` is set in `.env.local` and restart the dev server |
+| OAuth "redirect_uri_mismatch" | Add the exact URI (including `http://` and port) in the provider's developer console |
+| "GOOGLE_CLIENT_ID not configured" | Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env.local`, restart |
+| Google "Access blocked: request is invalid" | Configure the OAuth consent screen and add test users at [APIs & Services → OAuth consent screen](https://console.cloud.google.com/apis/auth/consent) |
+| Code execution fails | Python runs via `python3` — ensure it's installed. macOS `timeout` is handled automatically |
+| Files not showing | Files are stored in `./task-files/<taskId>/` — ensure the directory is writable |
+| Connector API calls failing | Re-check the token (no extra spaces). OAuth tokens may need re-authorization |
+| Database errors | Delete `perplexity-computer.db` to reset (loses history). Schema is recreated on startup |
 
-### OAuth "redirect_uri_mismatch" error
-Your OAuth app's registered redirect URI doesn't match. Make sure you added the exact URI (including `http://` and port) in the provider's developer console.
+---
 
-### "GOOGLE_CLIENT_ID not configured" when clicking Sign in with Google
-Add `GOOGLE_CLIENT_ID=...` and `GOOGLE_CLIENT_SECRET=...` to `.env.local`. Restart the dev server after editing `.env.local`.
+## License
 
-### Google OAuth — "Access blocked: This app's request is invalid"
-Your OAuth consent screen isn't configured. Go to [APIs & Services → OAuth consent screen](https://console.cloud.google.com/apis/auth/consent), complete the form, add test users, and try again.
-
-### Code execution fails
-- On macOS, the `timeout` command is not available. The app handles this automatically.
-- Python code runs with `python3`. Ensure it's installed: `which python3`.
-- To install Python packages for use in tasks: `pip3 install <package>`.
-
-### Files not showing in the Files tab
-Files are stored in `./task-files/<taskId>/` relative to the project root. Ensure the directory is writable.
-
-### Connector API calls failing
-- Double-check the token is correct (no extra spaces or newlines).
-- Some tokens expire — regenerate them in the provider's dashboard.
-- For OAuth connectors, the token may have expired. Disconnect and re-authorize.
-
-### Database errors
-If you see SQLite errors, try deleting `perplexity-computer.db` to reset (you will lose task history). The schema is recreated on startup.
+MIT
