@@ -5,7 +5,7 @@
     Give it a goal. It plans, codes, browses, connects, and delivers — autonomously.
   </p>
   <p align="center">
-    Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a> · <a href="https://danielsheils.myportfolio.com">Portfolio</a>
+    Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>
   </p>
 </p>
 
@@ -564,8 +564,6 @@ src/
 ---
 
 ## Author
-
-**Dan Sheils** — software developer, multimedia designer, experimental artist, multi-genre musician.
 
 - GitHub: [@RhythrosaLabs](https://github.com/RhythrosaLabs)
 - Portfolio: [danielsheils.myportfolio.com](https://danielsheils.myportfolio.com)
