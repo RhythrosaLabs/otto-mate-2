@@ -2,33 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, listTasksBySource, getTask } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import type { ModelId, TaskPriority, TaskSource } from "@/lib/types";
+import { callLLMLightweight } from "@/lib/model-fallback";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Generate a concise task title from the prompt using a lightweight LLM call.
- * Falls back to truncated prompt on failure.
+ * Uses the centralized fallback system — tries all available providers.
+ * Falls back to truncated prompt if all providers fail.
  */
 async function generateTitle(prompt: string): Promise<string> {
   const fallback = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return fallback;
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 30,
-        messages: [
-          { role: "system", content: "Generate a concise 3-8 word task title for the following request. Return ONLY the title, no quotes or punctuation." },
-          { role: "user", content: prompt.slice(0, 500) },
-        ],
-      }),
+    const title = await callLLMLightweight({
+      system: "Generate a concise 3-8 word task title for the following request. Return ONLY the title, no quotes or punctuation.",
+      userMessage: prompt.slice(0, 500),
+      maxTokens: 30,
     });
-    if (!resp.ok) return fallback;
-    const data = await resp.json();
-    const title = data.choices?.[0]?.message?.content?.trim();
     return title && title.length > 0 && title.length < 100 ? title : fallback;
   } catch {
     return fallback;

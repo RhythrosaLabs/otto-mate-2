@@ -124,6 +124,20 @@ export interface SteelSessionOptions {
   dimensions?: { width: number; height: number };
   /** Store credentials securely for auto-injection */
   credentials?: Record<string, unknown>;
+  /**
+   * Namespace for Steel Credentials API (default: "default").
+   * Used to differentiate multiple credential sets.
+   */
+  namespace?: string;
+  /**
+   * Whether to enable Steel's native credential auto-injection.
+   * When true (and Steel is configured), credentials from .env.local are
+   * synced to Steel's encrypted Credentials API, and the session is created
+   * with `credentials: {}` so Steel auto-fills login forms (including shadow DOM,
+   * SPAs, and modern web components like Reddit's faceplate-text-input).
+   * Default: true when credentials exist for the target domain.
+   */
+  enableCredentialInjection?: boolean;
 }
 
 export interface SteelSession {
@@ -133,6 +147,8 @@ export interface SteelSession {
   sessionId: string | undefined;
   profileId: string | undefined;
   isSteel: boolean;
+  /** Whether Steel credential injection is active for this session */
+  hasCredentialInjection: boolean;
   /** Call this when done — releases Steel session & saves profile */
   release: () => Promise<void>;
 }
@@ -155,15 +171,18 @@ export async function createSteelSession(
 ): Promise<SteelSession> {
   const {
     purposeKey = "default",
-    solveCaptcha = true,
+    solveCaptcha = false,
     useProxy = false,
     timeout = 300000,
     dimensions = { width: 1280, height: 800 },
+    namespace = "default",
+    enableCredentialInjection = true,
   } = opts;
 
   const apiKey = STEEL_API_KEY();
   const baseUrl = STEEL_BASE_URL();
   const isSteel = !!(apiKey || baseUrl);
+  let hasCredentialInjection = false;
 
   let browser: import("playwright").Browser;
   let sessionId: string | undefined;
@@ -175,6 +194,16 @@ export async function createSteelSession(
     const existingProfileId = getStoredProfileId(purposeKey);
     const savedContext = loadSessionContext(purposeKey);
 
+    // Sync credentials from .env to Steel Credentials API (if enabled)
+    // This allows Steel to auto-inject credentials into login forms
+    // using shadow DOM traversal, mutation observers, etc.
+    if (enableCredentialInjection) {
+      const synced = await syncEnvCredentialsToSteel(namespace);
+      if (synced > 0) {
+        hasCredentialInjection = true;
+      }
+    }
+
     // Build session creation payload
     const sessionPayload: Record<string, unknown> = {
       dimensions,
@@ -182,7 +211,18 @@ export async function createSteelSession(
       useProxy,
       timeout,
       persistProfile: true, // Always persist so auth state survives
+      namespace,
     };
+
+    // Enable Steel's credential auto-injection if we synced credentials
+    // This tells Steel to detect login forms and auto-fill them
+    if (hasCredentialInjection) {
+      sessionPayload.credentials = {
+        autoSubmit: true,   // Auto-submit the form after filling
+        blurFields: true,   // Blur fields after input (privacy)
+        exactOrigin: false, // Allow sub-domain matching
+      };
+    }
 
     // Attach existing profile to reuse cookies/auth
     if (existingProfileId) {
@@ -206,17 +246,25 @@ export async function createSteelSession(
         sessionId = data.id;
         profileId = data.profileId || existingProfileId;
 
+        // Log session viewer URL for debugging
+        const viewerUrl = data.sessionViewerUrl || data.session_viewer_url;
+        if (viewerUrl) {
+          console.log(`[Steel] Session viewer: ${viewerUrl}`);
+        }
+        console.log(`[Steel] Session ${sessionId} created (profile: ${profileId || "new"}, credentials: ${hasCredentialInjection})`);
+
         browser = await chromium.connectOverCDP(
           `${steelWsBase()}?apiKey=${apiKey}&sessionId=${sessionId}`
         );
       } else {
+        const errText = await res.text().catch(() => "unknown");
+        console.error(`[Steel] Session creation failed (${res.status}): ${errText}`);
         // Retry without profile/context if that failed (profile may have expired)
         const fallbackRes = await fetch(`${steelRestBase()}/v1/sessions`, {
           method: "POST",
           headers: steelHeaders(),
           body: JSON.stringify({
             dimensions,
-            solveCaptcha,
             useProxy,
             timeout,
             persistProfile: true,
@@ -227,12 +275,16 @@ export async function createSteelSession(
           const data = await fallbackRes.json();
           sessionId = data.id;
           profileId = data.profileId;
+          console.log(`[Steel] Fallback session ${sessionId} created`);
 
           browser = await chromium.connectOverCDP(
             `${steelWsBase()}?apiKey=${apiKey}&sessionId=${sessionId}`
           );
         } else {
-          // Last resort: simple connectOverCDP
+          const errText2 = await fallbackRes.text().catch(() => "unknown");
+          console.error(`[Steel] Fallback session also failed (${fallbackRes.status}): ${errText2}`);
+          // Last resort: simple connectOverCDP (no session ID)
+          console.log(`[Steel] Connecting via direct WebSocket (no session ID — credential injection unavailable)`);
           browser = await chromium.connectOverCDP(
             `${steelWsBase()}?apiKey=${apiKey}`
           );
@@ -371,7 +423,7 @@ export async function createSteelSession(
     } catch { /* ignore cleanup errors */ }
   };
 
-  return { browser, context, page, sessionId, profileId, isSteel, release };
+  return { browser, context, page, sessionId, profileId, isSteel, hasCredentialInjection, release };
 }
 
 // ─── Credentials API helpers ─────────────────────────────────────────────────
@@ -426,5 +478,284 @@ export async function listSteelCredentials(): Promise<unknown[]> {
     return [];
   } catch {
     return [];
+  }
+}
+
+// ─── Credential Sync — .env.local → Steel Credentials API ───────────────────
+// Maps platform credentials from environment variables to Steel's encrypted
+// Credentials API. Steel then handles injection (including shadow DOM, SPAs,
+// mutations, and modern web components like Reddit's faceplate-text-input).
+
+/** Platform-to-origin mapping for Steel Credentials API */
+const PLATFORM_CREDENTIAL_MAP: Array<{
+  envPrefix: string;
+  origins: string[];    // All origins that should receive these credentials
+  label: string;
+}> = [
+  { envPrefix: "TWITTER",   origins: ["https://x.com", "https://twitter.com"], label: "Twitter/X" },
+  { envPrefix: "LINKEDIN",  origins: ["https://www.linkedin.com"], label: "LinkedIn" },
+  { envPrefix: "INSTAGRAM", origins: ["https://www.instagram.com"], label: "Instagram" },
+  { envPrefix: "REDDIT",    origins: ["https://www.reddit.com"], label: "Reddit" },
+  { envPrefix: "FACEBOOK",  origins: ["https://www.facebook.com"], label: "Facebook" },
+  { envPrefix: "BLUESKY",   origins: ["https://bsky.app"], label: "Bluesky" },
+];
+
+/** Track which credentials have already been synced this process lifecycle */
+const _syncedCredentials = new Set<string>();
+
+/**
+ * Sync all configured .env.local credentials to Steel's encrypted Credentials API.
+ * This is idempotent — only syncs once per origin per process lifecycle.
+ * Returns the number of credentials successfully synced.
+ */
+export async function syncEnvCredentialsToSteel(namespace: string = "default"): Promise<number> {
+  const apiKey = STEEL_API_KEY();
+  if (!apiKey) return 0;
+
+  let synced = 0;
+
+  for (const platform of PLATFORM_CREDENTIAL_MAP) {
+    const username = process.env[`${platform.envPrefix}_USERNAME`] || process.env[`${platform.envPrefix}_EMAIL`] || "";
+    const password = process.env[`${platform.envPrefix}_PASSWORD`] || "";
+
+    if (!username || !password) continue;
+
+    for (const origin of platform.origins) {
+      const syncKey = `${namespace}:${origin}`;
+      if (_syncedCredentials.has(syncKey)) {
+        synced++; // Already synced this run
+        continue;
+      }
+
+      const ok = await uploadSteelCredentials(origin, { username, password }, namespace);
+      if (ok) {
+        _syncedCredentials.add(syncKey);
+        synced++;
+        console.log(`[Steel] Synced ${platform.label} credentials for ${origin}`);
+      } else {
+        console.warn(`[Steel] Failed to sync ${platform.label} credentials for ${origin}`);
+      }
+    }
+  }
+
+  return synced;
+}
+
+/**
+ * Get the login URL for a domain (used to navigate before credential injection).
+ */
+export function getLoginUrlForDomain(domain: string): string | null {
+  const d = domain.replace(/^www\./, "").toLowerCase();
+  const loginUrls: Record<string, string> = {
+    "x.com":          "https://x.com/i/flow/login",
+    "twitter.com":    "https://x.com/i/flow/login",
+    "linkedin.com":   "https://www.linkedin.com/login",
+    "instagram.com":  "https://www.instagram.com/accounts/login/",
+    "reddit.com":     "https://www.reddit.com/login",
+    "facebook.com":   "https://www.facebook.com/login/",
+    "bsky.app":       "https://bsky.app/",
+  };
+  const entry = Object.entries(loginUrls).find(([key]) => d === key || d.endsWith(`.${key}`));
+  return entry ? entry[1] : null;
+}
+
+/**
+ * Check if credentials exist in .env for a given domain.
+ */
+export function hasEnvCredentialsForDomain(domain: string): boolean {
+  const d = domain.replace(/^www\./, "").toLowerCase();
+  for (const platform of PLATFORM_CREDENTIAL_MAP) {
+    const matches = platform.origins.some(o => {
+      try { return new URL(o).hostname.replace(/^www\./, "") === d || d.endsWith(new URL(o).hostname.replace(/^www\./, "")); }
+      catch { return false; }
+    });
+    if (matches) {
+      const username = process.env[`${platform.envPrefix}_USERNAME`] || process.env[`${platform.envPrefix}_EMAIL`] || "";
+      const password = process.env[`${platform.envPrefix}_PASSWORD`] || "";
+      return !!(username && password);
+    }
+  }
+  return false;
+}
+
+// ─── CAPTCHA Handling ────────────────────────────────────────────────────────
+// Steel auto-solves CAPTCHAs when solveCaptcha: true, but we should wait
+// for them to resolve before continuing with page interaction.
+
+/**
+ * Check CAPTCHA status for a Steel session.
+ * Returns array of page states with active CAPTCHA tasks.
+ */
+export async function getCaptchaStatus(sessionId: string): Promise<Array<{
+  pageId: string;
+  url: string;
+  isSolvingCaptcha: boolean;
+  tasks: Array<{ id: string; status: string; type: string }>;
+}>> {
+  const apiKey = STEEL_API_KEY();
+  if (!apiKey || !sessionId) return [];
+
+  try {
+    const res = await fetch(
+      `${steelRestBase()}/v1/sessions/${sessionId}/captchas/status`,
+      { headers: steelHeaders() }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : data.data || [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Wait for any active CAPTCHAs to be solved by Steel.
+ * Polls the CAPTCHA status API and resolves when all CAPTCHAs are done.
+ * Returns true if CAPTCHAs were detected and solved, false if none found.
+ */
+export async function waitForCaptchaSolving(
+  sessionId: string,
+  timeoutMs: number = 30000,
+  pollIntervalMs: number = 2000
+): Promise<{ solved: boolean; message: string }> {
+  const apiKey = STEEL_API_KEY();
+  if (!apiKey || !sessionId) return { solved: false, message: "Steel not configured" };
+
+  const start = Date.now();
+  let hadCaptchas = false;
+
+  while (Date.now() - start < timeoutMs) {
+    const statuses = await getCaptchaStatus(sessionId);
+    const active = statuses.filter(s => s.isSolvingCaptcha);
+
+    if (active.length === 0 && hadCaptchas) {
+      return { solved: true, message: "All CAPTCHAs solved by Steel" };
+    }
+
+    if (active.length > 0) {
+      hadCaptchas = true;
+      const solving = active.flatMap(s => s.tasks).filter(t => t.status === "solving" || t.status === "detected" || t.status === "validating");
+      const failed = active.flatMap(s => s.tasks).filter(t => t.status === "failed_to_solve" || t.status === "failed_to_detect");
+      
+      if (failed.length > 0 && solving.length === 0) {
+        return { solved: false, message: `CAPTCHA solving failed (${failed.length} task(s) failed)` };
+      }
+    } else if (!hadCaptchas) {
+      // No CAPTCHAs detected at all — don't wait forever
+      // Give it a couple polls to detect late-appearing CAPTCHAs
+      if (Date.now() - start > pollIntervalMs * 3) {
+        return { solved: false, message: "No CAPTCHAs detected" };
+      }
+    }
+
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+
+  return { solved: false, message: `CAPTCHA solving timed out after ${timeoutMs}ms` };
+}
+
+/**
+ * Navigate to a login page and wait for Steel to inject credentials.
+ * This is the preferred way to handle login when Steel is configured.
+ * 
+ * Flow:
+ * 1. Navigate to login URL
+ * 2. Wait for Steel's credential injection (~2-3 seconds)
+ * 3. Wait for any CAPTCHAs to be solved
+ * 4. Verify login succeeded
+ */
+export async function steelAutoLogin(
+  page: import("playwright").Page,
+  loginUrl: string,
+  sessionId: string | undefined,
+  postLoginCheck: () => Promise<boolean>
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // Navigate to the login page
+    await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+    // Wait for Steel to detect the form and inject credentials
+    // Steel docs say: "credentials are typically injected within 2 seconds"
+    // We give it 4 seconds to be safe + account for slow pages
+    await page.waitForTimeout(4000);
+
+    // Wait for any CAPTCHAs to be solved
+    if (sessionId) {
+      const captchaResult = await waitForCaptchaSolving(sessionId, 25000);
+      if (captchaResult.solved) {
+        // Give page time to reload after CAPTCHA
+        await page.waitForTimeout(3000);
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+      }
+    }
+
+    // Wait for potential page navigation after auto-submit
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
+    await page.waitForTimeout(3000);
+
+    // Check if login succeeded
+    const loggedIn = await postLoginCheck();
+    if (loggedIn) {
+      return { success: true, message: `Successfully logged in via Steel credential injection at ${loginUrl}` };
+    }
+
+    // If auto-submit didn't fire, try shadow DOM submit first, then standard selectors
+    const shadowSubmitted = await page.evaluate(() => {
+      function findButtonsInShadow(root: Document | ShadowRoot | Element): HTMLButtonElement[] {
+        const buttons: HTMLButtonElement[] = [];
+        const allElements = root.querySelectorAll("*");
+        for (const el of allElements) {
+          if (el instanceof HTMLButtonElement) buttons.push(el);
+          if (el.shadowRoot) buttons.push(...findButtonsInShadow(el.shadowRoot));
+        }
+        return buttons;
+      }
+      const allButtons = findButtonsInShadow(document);
+      const submitBtn = allButtons.find(b =>
+        b.type === "submit" ||
+        b.textContent?.trim().toLowerCase() === "log in" ||
+        b.textContent?.trim().toLowerCase() === "sign in"
+      );
+      if (submitBtn) { submitBtn.click(); return true; }
+      return false;
+    }).catch(() => false);
+
+    if (!shadowSubmitted) {
+      const submitSelectors = [
+        'button[type="submit"]',
+        'button:has-text("Log in")',
+        'button:has-text("Log In")',
+        'button:has-text("Sign in")',
+        'button:has-text("Sign In")',
+        '[data-testid="LoginForm_Login_Button"]',
+        'fieldset button[type="submit"]',
+      ];
+
+      for (const sel of submitSelectors) {
+        try {
+          const btn = page.locator(sel).first();
+          if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await btn.click();
+            break;
+          }
+        } catch { /* try next */ }
+      }
+    }
+
+    // Wait for SPA navigation after submit
+    await page.waitForTimeout(8000);
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    // Final login check
+    const finalCheck = await postLoginCheck();
+    if (finalCheck) {
+      return { success: true, message: `Successfully logged in via Steel (manual submit) at ${loginUrl}` };
+    }
+
+    return { success: false, message: `Steel credential injection attempted but login could not be verified. CAPTCHA or 2FA may be required.` };
+  } catch (err) {
+    return { success: false, message: `Steel auto-login error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }

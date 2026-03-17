@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { callLLMWithFallback } from "@/lib/model-fallback";
 
 // ---------------------------------------------------------------------------
 // Dreamscape API — Full-Power AI Agent (Brainstorm / Create), Command Chains,
 // Creative Query, More Like This, Concept Suggestions
 // ---------------------------------------------------------------------------
-
-function getAnthropicKey(): string | null {
-  return process.env.ANTHROPIC_API_KEY || null;
-}
-
-function getOpenAIKey(): string | null {
-  return process.env.OPENAI_API_KEY || null;
-}
 
 // ---------------------------------------------------------------------------
 // CORE KNOWLEDGE — Luma API Capabilities Reference (injected into all modes)
@@ -862,7 +855,7 @@ Keep each section tight and precise. This is a pre-flight briefing for a directo
 Return as a well-formatted markdown response — no JSON needed.`;
 
 // ---------------------------------------------------------------------------
-// Agent Call — Enhanced with higher limits and better error handling
+// Agent Call — Uses centralized model fallback system
 // ---------------------------------------------------------------------------
 
 async function callAgent(
@@ -871,87 +864,36 @@ async function callAgent(
   conversationHistory: Array<{ role: string; content: string }>,
   options: { maxTokens?: number; temperature?: number; model?: string } = {},
 ): Promise<string> {
-  const anthropicKey = getAnthropicKey();
-  const openaiKey = getOpenAIKey();
   const maxTokens = options.maxTokens || 8192;
   const temperature = options.temperature ?? 0.8;
-  const model = options.model || "claude-sonnet-4-5";
 
-  if (anthropicKey) {
-    const messages = [
-      ...conversationHistory.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-      { role: "user" as const, content: userMessage },
-    ];
+  const messages = [
+    ...conversationHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+    { role: "user", content: userMessage },
+  ];
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt,
-        messages,
-      }),
-    });
+  const result = await callLLMWithFallback({
+    system: systemPrompt,
+    messages,
+    maxTokens,
+    temperature,
+    preferredProvider: "anthropic",
+    preferredModel: options.model || "claude-sonnet-4-6",
+    onFallback: (from, to, error) => {
+      console.log(
+        `[dreamscape] Fallback: ${from.provider}/${from.model} → ${to.provider}/${to.model} (${error.slice(0, 80)})`,
+      );
+    },
+  });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Anthropic API error: ${errText}`);
-    }
-
-    const data = await res.json();
-    let text = data.content?.[0]?.text || "No response generated.";
-    // If the response was truncated due to max_tokens, append a continuation note
-    if (data.stop_reason === "max_tokens") {
-      text += "\n\n---\n⚠️ *Response was truncated due to length. Send a follow-up message like \"continue\" to get the rest of the response.*";
-    }
-    return text;
+  if (result.fellBack) {
+    console.log(`[dreamscape] Responded via fallback: ${result.provider}/${result.model} (attempt ${result.attempts})`);
   }
 
-  if (openaiKey) {
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...conversationHistory,
-      { role: "user", content: userMessage },
-    ];
-
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        max_tokens: maxTokens,
-        temperature,
-        messages,
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenAI API error: ${errText}`);
-    }
-
-    const data = await res.json();
-    let text = data.choices?.[0]?.message?.content || "No response generated.";
-    // If the response was truncated due to max_tokens, append a continuation note
-    if (data.choices?.[0]?.finish_reason === "length") {
-      text += "\n\n---\n⚠️ *Response was truncated due to length. Send a follow-up message like \"continue\" to get the rest of the response.*";
-    }
-    return text;
-  }
-
-  throw new Error("No AI provider configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.");
+  return result.text;
 }
 
 // ---------------------------------------------------------------------------

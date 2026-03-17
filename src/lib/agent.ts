@@ -78,6 +78,7 @@ interface FailoverChain {
 function getFailoverChain(primary: { provider: string; modelName: string }): FailoverChain[] {
   const chain: FailoverChain[] = [primary];
   // Add fallback providers in order of capability
+  // Priority: Anthropic → OpenAI → Google → OpenRouter (DeepSeek free) → Perplexity
   const fallbacks: FailoverChain[] = [];
   if (primary.provider !== "anthropic" && process.env.ANTHROPIC_API_KEY) {
     fallbacks.push({ provider: "anthropic", modelName: "claude-sonnet-4-6" });
@@ -87,6 +88,10 @@ function getFailoverChain(primary: { provider: string; modelName: string }): Fai
   }
   if (primary.provider !== "google" && process.env.GOOGLE_AI_API_KEY) {
     fallbacks.push({ provider: "google", modelName: "gemini-1.5-pro" });
+  }
+  // OpenRouter as last-resort free fallback (DeepSeek via OpenRouter)
+  if (primary.provider !== "openrouter" && process.env.OPENROUTER_API_KEY) {
+    fallbacks.push({ provider: "openrouter", modelName: "deepseek/deepseek-chat-v3-0324" });
   }
   if (primary.provider !== "perplexity" && process.env.PERPLEXITY_API_KEY) {
     fallbacks.push({ provider: "perplexity", modelName: "sonar-pro" });
@@ -1156,9 +1161,16 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       return await runWithAnthropic(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
     } catch (err) {
       lastError = err;
-      if (!isTransientError(err) || attempt === failoverChain.length - 1) {
-        throw err; // non-transient or exhausted all fallbacks
+      // If we've exhausted all fallbacks, throw
+      if (attempt === failoverChain.length - 1) {
+        throw err;
       }
+      // For any error (transient or not), try the next provider
+      // This ensures maximum resilience — the goal is "always get a response"
+      console.error(
+        `[agent-failover] ${provider}/${mName} failed (attempt ${attempt + 1}/${failoverChain.length}):`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
   // Should not reach here, but just in case
@@ -1380,7 +1392,11 @@ async function runWithAnthropic(
     const { getTask } = await import("./db");
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
-  } catch (err) { handleAgentError(err, taskId, onStep); }
+  } catch (err) {
+    // Re-throw transient errors (billing, rate limits) so the failover chain can try the next provider
+    if (isTransientError(err)) throw err;
+    handleAgentError(err, taskId, onStep);
+  }
 }
 
 // ─── OpenAI Provider ──────────────────────────────────────────────────────────
@@ -1537,7 +1553,10 @@ async function runWithOpenAI(
     const { getTask } = await import("./db");
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
-  } catch (err) { handleAgentError(err, taskId, onStep); }
+  } catch (err) {
+    if (isTransientError(err)) throw err;
+    handleAgentError(err, taskId, onStep);
+  }
 }
 
 // ─── Google Provider ──────────────────────────────────────────────────────────
@@ -1647,7 +1666,10 @@ async function runWithGoogle(
     const { getTask } = await import("./db");
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
-  } catch (err) { handleAgentError(err, taskId, onStep); }
+  } catch (err) {
+    if (isTransientError(err)) throw err;
+    handleAgentError(err, taskId, onStep);
+  }
 }
 
 // ─── OpenRouter Provider ──────────────────────────────────────────────────────
@@ -1814,7 +1836,10 @@ async function runWithOpenRouter(
     const { getTask } = await import("./db");
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
-  } catch (err) { handleAgentError(err, taskId, onStep); }
+  } catch (err) {
+    if (isTransientError(err)) throw err;
+    handleAgentError(err, taskId, onStep);
+  }
 }
 
 // ─── Perplexity Provider (Sonar) ──────────────────────────────────────────────
@@ -2372,6 +2397,395 @@ async function executeScrapeUrl(url: string, selector?: string): Promise<string>
   } catch (err) { return `Failed to scrape ${url}: ${err instanceof Error ? err.message : String(err)}`; }
 }
 
+// ─── Auto-Login Detection for browse_web ──────────────────────────────────────
+// When Steel is configured, uses Steel's Credentials API for native credential
+// injection (handles shadow DOM, SPAs, CAPTCHAs, mutation observers, etc.).
+// Falls back to manual Playwright-based login when Steel is not available.
+
+/**
+ * Detect login pages and handle auto-login.
+ * 
+ * Strategy:
+ * 1. Steel (preferred): Uses Steel's Credentials API — credentials are synced
+ *    from .env.local to Steel's encrypted store, then Steel injects them natively
+ *    into login forms. Handles shadow DOM (Reddit's faceplate-text-input), CAPTCHAs,
+ *    SPAs, and modern web components automatically.
+ * 2. Fallback: Manual Playwright fill for local-only browser sessions.
+ * 
+ * Returns a status message or null if no login action was taken.
+ */
+async function attemptAutoLoginIfNeeded(
+  page: import("playwright").Page,
+  url: string,
+  steelSessionId?: string,
+  isSteelSession?: boolean,
+  hasCredentialInjection?: boolean
+): Promise<string | null> {
+  try {
+    const currentUrl = page.url();
+    const domain = (() => {
+      try { return new URL(currentUrl).hostname.replace(/^www\./, ""); }
+      catch { return ""; }
+    })();
+
+    if (!domain) return null;
+
+    // Check if we have credentials for this domain
+    const { hasEnvCredentialsForDomain, getLoginUrlForDomain, isSteelEnabled, waitForCaptchaSolving } = await import("./steel-client");
+    const hasCreds = hasEnvCredentialsForDomain(domain);
+    console.log(`[AutoLogin] Domain: ${domain}, hasCredentials: ${hasCreds}, isSteelSession: ${isSteelSession}, hasCredentialInjection: ${hasCredentialInjection}`);
+    if (!hasCreds) return null;
+
+    // Detect if this is actually a login page (strict check — URL-based primarily)
+    const isLoginPage = await page.evaluate(() => {
+      const url = window.location.href.toLowerCase();
+      const pathname = window.location.pathname.toLowerCase();
+
+      // Strong signal: URL explicitly contains login/signin paths
+      const loginPathPatterns = ["/login", "/signin", "/sign-in", "/sign_in", "/auth", "/flow/login", "/accounts/login", "/i/flow/login"];
+      const hasLoginPath = loginPathPatterns.some(p => pathname.includes(p));
+      if (hasLoginPath) return true;
+
+      // Medium signal: password field visible AND minimal other content
+      // (avoids false positives on homepages that have "Log in" links)
+      const passwordFields = document.querySelectorAll('input[type="password"]:not([hidden])');
+      const visiblePasswordFields = Array.from(passwordFields).filter(el => {
+        const rect = (el as HTMLElement).getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (visiblePasswordFields.length > 0) return true;
+
+      // Check inside shadow DOM for login forms (Reddit, etc.)
+      const shadowHosts = document.querySelectorAll('*');
+      for (const host of shadowHosts) {
+        if (host.shadowRoot) {
+          const shadowPwFields = host.shadowRoot.querySelectorAll('input[type="password"]');
+          if (shadowPwFields.length > 0) return true;
+        }
+      }
+
+      return false;
+    }).catch(() => false);
+
+    if (!isLoginPage) return null;
+
+    // ── Steel credential injection (preferred path) ──────────────────────
+    if (isSteelSession && hasCredentialInjection && steelSessionId) {
+      // Steel's credential service has already been configured on this session.
+      // When we're on a login page, Steel detects the form (including shadow DOM),
+      // injects credentials, and auto-submits. We just need to wait.
+      
+      // Wait for Steel to detect the form and inject credentials (~2-4 seconds)
+      await page.waitForTimeout(4000);
+
+      // Wait for any CAPTCHAs to be solved
+      if (steelSessionId) {
+        const captchaResult = await waitForCaptchaSolving(steelSessionId, 25000);
+        if (captchaResult.solved) {
+          await page.waitForTimeout(3000);
+          await page.waitForLoadState("domcontentloaded").catch(() => {});
+        }
+      }
+
+      // Wait for potential navigation after auto-submit
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(3000);
+
+      // Check if login page is gone
+      const stillOnLogin = await page.evaluate(() => {
+        const url = window.location.href.toLowerCase();
+        const loginPaths = ["/login", "/signin", "/sign-in", "/auth", "/flow/login", "/accounts/login"];
+        const hasLoginPath = loginPaths.some(p => url.includes(p));
+        const passwordFields = document.querySelectorAll('input[type="password"]:not([hidden])');
+        return hasLoginPath || passwordFields.length > 0;
+      }).catch(() => false);
+
+      if (!stillOnLogin) {
+        return `✅ Steel auto-login successful — credentials injected and login completed. Now at: ${page.url()} (Title: ${await page.title()})`;
+      }
+
+      // Try shadow DOM submit first, then standard CSS selectors
+      const shadowSubmitted = await page.evaluate(() => {
+        function findButtonsInShadow(root: Document | ShadowRoot | Element): HTMLButtonElement[] {
+          const buttons: HTMLButtonElement[] = [];
+          for (const el of root.querySelectorAll("*")) {
+            if (el instanceof HTMLButtonElement) buttons.push(el);
+            if (el.shadowRoot) buttons.push(...findButtonsInShadow(el.shadowRoot));
+          }
+          return buttons;
+        }
+        const submitBtn = findButtonsInShadow(document).find(b =>
+          b.type === "submit" || /log\s*in|sign\s*in/i.test(b.textContent || "")
+        );
+        if (submitBtn) { submitBtn.click(); return true; }
+        return false;
+      }).catch(() => false);
+
+      if (!shadowSubmitted) {
+        const submitSelectors = [
+          'button[type="submit"]', 'button:has-text("Log in")', 'button:has-text("Log In")',
+          'button:has-text("Sign in")', 'button:has-text("Sign In")',
+          '[data-testid="LoginForm_Login_Button"]', 'fieldset button[type="submit"]',
+        ];
+        for (const sel of submitSelectors) {
+          try {
+            const btn = page.locator(sel).first();
+            if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+              await btn.click();
+              break;
+            }
+          } catch { /* try next */ }
+        }
+      }
+
+      // Wait for SPA navigation after submit
+      await page.waitForTimeout(8000);
+      await page.waitForLoadState("networkidle").catch(() => {});
+
+      const finalUrl = page.url();
+      const finalStillLogin = await page.evaluate(() => {
+        return document.querySelectorAll('input[type="password"]:not([hidden])').length > 0;
+      }).catch(() => false);
+
+      if (!finalStillLogin) {
+        return `✅ Steel auto-login successful (manual submit). Now at: ${finalUrl}`;
+      }
+
+      return `⚠ Steel attempted credential injection on login page but could not verify success. CAPTCHA or 2FA may be blocking. URL: ${finalUrl}`;
+    }
+
+    // ── Fallback: manual Playwright-based login (no Steel) ───────────────
+    // This handles the case where Steel is not configured. Uses CSS selectors
+    // first, then shadow DOM JavaScript injection for platforms like Reddit.
+    const creds = getCredentialsForDomainFallback(domain);
+    if (!creds) return null;
+
+    const { loginSelectors, platform, username, password } = creds;
+
+    // For Reddit (and other shadow DOM platforms), try direct JS injection first
+    const isShadowDomPlatform = ["reddit.com"].some(d => domain.includes(d));
+    let loginAttempted = false;
+
+    if (isShadowDomPlatform) {
+      try {
+        const shadowFilled = await page.evaluate(({ username, password }: { username: string; password: string }) => {
+          function findInputsInShadow(root: Document | ShadowRoot | Element): HTMLInputElement[] {
+            const inputs: HTMLInputElement[] = [];
+            const allElements = root.querySelectorAll('*');
+            for (const el of allElements) {
+              if (el instanceof HTMLInputElement) inputs.push(el);
+              if (el.shadowRoot) inputs.push(...findInputsInShadow(el.shadowRoot));
+            }
+            return inputs;
+          }
+
+          const allInputs = findInputsInShadow(document);
+          const usernameInput = allInputs.find(i =>
+            (i.type === 'text' || i.type === 'email' || !i.type) &&
+            (i.name === 'username' || i.id === 'login-username' || i.autocomplete === 'username')
+          );
+          const passwordInput = allInputs.find(i => i.type === 'password' || i.name === 'password');
+
+          if (!usernameInput || !passwordInput) return false;
+
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+          if (setter) {
+            setter.call(usernameInput, username);
+            usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            usernameInput.dispatchEvent(new Event('change', { bubbles: true }));
+            setter.call(passwordInput, password);
+            passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+            passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            usernameInput.value = username;
+            usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            passwordInput.value = password;
+            passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          return true;
+        }, { username, password }).catch(() => false);
+
+        if (shadowFilled) {
+          await page.waitForTimeout(800);
+          // Click submit button (also check shadow DOM)
+          await page.evaluate(() => {
+            function findButtonsInShadow(root: Document | ShadowRoot | Element): HTMLButtonElement[] {
+              const buttons: HTMLButtonElement[] = [];
+              for (const el of root.querySelectorAll('*')) {
+                if (el instanceof HTMLButtonElement) buttons.push(el);
+                if (el.shadowRoot) buttons.push(...findButtonsInShadow(el.shadowRoot));
+              }
+              return buttons;
+            }
+            const submitBtn = findButtonsInShadow(document).find(b =>
+              b.type === 'submit' || /log\s*in|sign\s*in/i.test(b.textContent || '')
+            );
+            submitBtn?.click();
+          }).catch(() => {});
+
+          await page.waitForTimeout(8000);
+          await page.waitForLoadState("networkidle").catch(() => {});
+          loginAttempted = true;
+        }
+      } catch { /* fall through to CSS approach */ }
+    }
+
+    if (!loginAttempted) {
+      if (loginSelectors.multiStep && loginSelectors.nextButtonSelector) {
+      try {
+        const usernameInput = page.locator(loginSelectors.usernameSelector);
+        await usernameInput.first().waitFor({ state: "visible", timeout: 8000 });
+        await usernameInput.first().click();
+        await usernameInput.first().fill("");
+        await page.keyboard.type(username, { delay: 30 });
+        await page.waitForTimeout(500);
+        const nextBtn = page.locator(loginSelectors.nextButtonSelector);
+        await nextBtn.first().click();
+        await page.waitForTimeout(2000);
+      } catch { /* may already be past step 1 */ }
+
+      try {
+        const passwordInput = page.locator(loginSelectors.passwordSelector);
+        await passwordInput.first().waitFor({ state: "visible", timeout: 8000 });
+        await passwordInput.first().click();
+        await passwordInput.first().fill("");
+        await page.keyboard.type(password, { delay: 30 });
+        await page.waitForTimeout(500);
+        const submitBtn = page.locator(loginSelectors.submitSelector);
+        await submitBtn.first().click();
+        await page.waitForTimeout(5000);
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+      } catch (e) {
+        return `⚠ Auto-login to ${platform} partially failed (password step): ${e instanceof Error ? e.message : String(e)}`;
+      }
+    } else {
+      try {
+        const usernameInput = page.locator(loginSelectors.usernameSelector);
+        await usernameInput.first().waitFor({ state: "visible", timeout: 8000 });
+        await usernameInput.first().click();
+        await usernameInput.first().fill("");
+        await page.keyboard.type(username, { delay: 30 });
+        await page.waitForTimeout(300);
+        const passwordInput = page.locator(loginSelectors.passwordSelector);
+        await passwordInput.first().waitFor({ state: "visible", timeout: 8000 });
+        await passwordInput.first().click();
+        await passwordInput.first().fill("");
+        await page.keyboard.type(password, { delay: 30 });
+        await page.waitForTimeout(500);
+        const submitBtn = page.locator(loginSelectors.submitSelector);
+        await submitBtn.first().waitFor({ state: "visible", timeout: 5000 });
+        await submitBtn.first().click();
+        await page.waitForTimeout(5000);
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+      } catch (e) {
+        return `⚠ Auto-login to ${platform} failed: ${e instanceof Error ? e.message : String(e)}. Consider setting up Steel for reliable auto-login.`;
+      }
+    }
+    } // end if (!loginAttempted)
+
+    const postLoginUrl = page.url();
+    const loginStillPresent = await page.evaluate(() => {
+      return document.querySelectorAll('input[type="password"]:not([hidden])').length > 0;
+    }).catch(() => false);
+
+    if (loginStillPresent) {
+      return `⚠ Auto-login to ${platform} attempted but may not have succeeded. Consider using Steel (steel.dev) for reliable login with CAPTCHA solving.`;
+    }
+
+    return `✅ Auto-logged into ${platform} using .env credentials. Now at: ${postLoginUrl}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback credential lookup for non-Steel sessions (CSS selector based) */
+interface FallbackDomainCredentials {
+  username: string;
+  password: string;
+  platform: string;
+  loginSelectors: {
+    usernameSelector: string;
+    passwordSelector: string;
+    submitSelector: string;
+    multiStep?: boolean;
+    nextButtonSelector?: string;
+  };
+}
+
+function getCredentialsForDomainFallback(domain: string): FallbackDomainCredentials | null {
+  const d = domain.replace(/^www\./, "").toLowerCase();
+  const domainMap: Record<string, { envPrefix: string; platform: string; loginSelectors: FallbackDomainCredentials["loginSelectors"] }> = {
+    "x.com": {
+      envPrefix: "TWITTER", platform: "Twitter/X",
+      loginSelectors: {
+        usernameSelector: 'input[autocomplete="username"], input[name="text"], input[type="text"]',
+        passwordSelector: 'input[type="password"], input[name="password"]',
+        submitSelector: 'button:has-text("Log in"), [data-testid="LoginForm_Login_Button"]',
+        multiStep: true,
+        nextButtonSelector: 'button:has-text("Next"), [role="button"]:has-text("Next")',
+      },
+    },
+    "twitter.com": {
+      envPrefix: "TWITTER", platform: "Twitter/X",
+      loginSelectors: {
+        usernameSelector: 'input[autocomplete="username"], input[name="text"], input[type="text"]',
+        passwordSelector: 'input[type="password"], input[name="password"]',
+        submitSelector: 'button:has-text("Log in"), [data-testid="LoginForm_Login_Button"]',
+        multiStep: true,
+        nextButtonSelector: 'button:has-text("Next"), [role="button"]:has-text("Next")',
+      },
+    },
+    "linkedin.com": {
+      envPrefix: "LINKEDIN", platform: "LinkedIn",
+      loginSelectors: {
+        usernameSelector: '#username, input[name="session_key"]',
+        passwordSelector: '#password, input[name="session_password"]',
+        submitSelector: 'button[type="submit"], button:has-text("Sign in")',
+      },
+    },
+    "instagram.com": {
+      envPrefix: "INSTAGRAM", platform: "Instagram",
+      loginSelectors: {
+        usernameSelector: 'input[name="username"]',
+        passwordSelector: 'input[name="password"]',
+        submitSelector: 'button[type="submit"]:has-text("Log in"), button:has-text("Log In")',
+      },
+    },
+    "reddit.com": {
+      envPrefix: "REDDIT", platform: "Reddit",
+      loginSelectors: {
+        usernameSelector: 'input[name="username"], #login-username',
+        passwordSelector: 'input[name="password"], input[type="password"], #login-password',
+        submitSelector: 'button[type="submit"]:has-text("Log In"), button:has-text("Log In"), button:has-text("Log in")',
+      },
+    },
+    "facebook.com": {
+      envPrefix: "FACEBOOK", platform: "Facebook",
+      loginSelectors: {
+        usernameSelector: '#email, input[name="email"]',
+        passwordSelector: '#pass, input[name="pass"]',
+        submitSelector: 'button[name="login"], button[type="submit"], button:has-text("Log in")',
+      },
+    },
+    "bsky.app": {
+      envPrefix: "BLUESKY", platform: "Bluesky",
+      loginSelectors: {
+        usernameSelector: 'input[placeholder*="handle"], input[aria-label*="account"], input[type="text"]',
+        passwordSelector: 'input[type="password"]',
+        submitSelector: 'button:has-text("Sign in"), button:has-text("Log in"), button[type="submit"]',
+      },
+    },
+  };
+
+  const entry = Object.entries(domainMap).find(([key]) => d === key || d.endsWith(`.${key}`));
+  if (!entry) return null;
+  const [, config] = entry;
+  const username = process.env[`${config.envPrefix}_USERNAME`] || process.env[`${config.envPrefix}_EMAIL`] || "";
+  const password = process.env[`${config.envPrefix}_PASSWORD`] || "";
+  if (!username || !password) return null;
+  return { username, password, platform: config.platform, loginSelectors: config.loginSelectors };
+}
+
 // ─── Browse Web (Automation) ──────────────────────────────────────────────────
 
 async function executeBrowseWeb(
@@ -2440,6 +2854,15 @@ async function executeBrowseWeb(
         results.push(`Loaded: ${page.url()}`);
         results.push(`Title: ${await page.title()}`);
 
+        // ── Auto-login detection ──────────────────────────────────────────
+        // If the page looks like a login page and we have credentials for
+        // this domain in .env.local, automatically fill them in so the agent
+        // doesn't have to ask the user to log in manually.
+        const autoLoginResult = await attemptAutoLoginIfNeeded(page, url, steel.sessionId, steel.isSteel, steel.hasCredentialInjection);
+        if (autoLoginResult) {
+          results.push(autoLoginResult);
+        }
+
         // Execute browser actions — each wrapped individually so one failure
         // logs an error and continues rather than aborting the whole run
         if (actions && actions.length > 0) {
@@ -2455,6 +2878,9 @@ async function executeBrowseWeb(
                   const dest = (action.url as string) || value || url;
                   await page.goto(dest, { waitUntil: "domcontentloaded", timeout: 20000 });
                   await page.waitForLoadState("networkidle").catch(() => {});
+                  // Auto-login on navigation to new pages too
+                  const gotoLoginResult = await attemptAutoLoginIfNeeded(page, dest, steel.sessionId, steel.isSteel, steel.hasCredentialInjection);
+                  if (gotoLoginResult) results.push(gotoLoginResult);
                   results.push(`Navigated to: ${page.url()}`);
                   break;
                 }
@@ -3496,6 +3922,110 @@ function selectSubAgentModel(agentType: string, requested: string): { provider: 
   }
 }
 
+/** Run a sub-agent loop using the OpenAI-compatible SDK (works for OpenAI and OpenRouter) */
+async function runSubAgentOpenAICompat(
+  client: OpenAI,
+  modelName: string,
+  subSystemPrompt: string,
+  fullPrompt: string,
+  subTools: typeof TOOLS,
+  maxIterations: number,
+  ctx: ToolContext,
+): Promise<string> {
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: subSystemPrompt },
+    { role: "user", content: fullPrompt },
+  ];
+  const oaiTools = convertToolsToOpenAIFormat().filter(t => t.type === "function" && subTools.some(st => st.name === (t as { type: "function"; function: { name: string } }).function.name)) as Array<{ type: "function"; function: { name: string; description?: string; parameters: Record<string, unknown> } }>;
+  let iterations = 0;
+  let result = "";
+
+  while (iterations < maxIterations) {
+    iterations++;
+    const resp = await client.chat.completions.create({
+      model: modelName, max_tokens: 4096, messages, tools: oaiTools,
+      tool_choice: iterations === 1 ? "required" : "auto",
+    });
+    const msg = resp.choices[0]?.message;
+    if (!msg) break;
+
+    const text = msg.content || "";
+    const tcs = (msg.tool_calls || []).filter((tc): tc is { id: string; type: "function"; function: { name: string; arguments: string } } => tc.type === "function");
+
+    if (tcs.length === 0) {
+      result += text;
+      break;
+    }
+
+    messages.push({ role: "assistant", content: text || null, tool_calls: tcs.map(tc => ({ id: tc.id, type: "function" as const, function: { name: tc.function.name, arguments: tc.function.arguments } })) });
+
+    for (const tc of tcs) {
+      let toolInput: Record<string, unknown> = {};
+      try { toolInput = JSON.parse(tc.function.arguments); } catch { /* empty */ }
+      let toolResult = "";
+      try {
+        toolResult = await executeTool(tc.function.name as ToolName, toolInput, ctx);
+      } catch (err) {
+        toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult.slice(0, 8000) });
+    }
+
+    if (text) result += text + "\n";
+  }
+
+  return result;
+}
+
+/** Run a sub-agent loop using the Anthropic SDK */
+async function runSubAgentAnthropic(
+  modelName: string,
+  subSystemPrompt: string,
+  fullPrompt: string,
+  subTools: typeof TOOLS,
+  maxIterations: number,
+  ctx: ToolContext,
+): Promise<string> {
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: fullPrompt },
+  ];
+  let iterations = 0;
+  let result = "";
+
+  while (iterations < maxIterations) {
+    iterations++;
+    const resp = await anthropic.messages.create({
+      model: modelName, max_tokens: 4096, system: subSystemPrompt, tools: subTools, messages,
+      tool_choice: iterations === 1 ? { type: "any" as const } : { type: "auto" as const },
+    });
+
+    const texts = resp.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text);
+    const toolBlocks = resp.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+
+    if (texts.length > 0) result += texts.join("\n") + "\n";
+
+    if (toolBlocks.length === 0) break;
+
+    messages.push({ role: "assistant", content: resp.content });
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const tb of toolBlocks) {
+      let toolResult = "";
+      try {
+        toolResult = await executeTool(tb.name as ToolName, tb.input as Record<string, unknown>, ctx);
+      } catch (err) {
+        toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      toolResults.push({ type: "tool_result", tool_use_id: tb.id, content: toolResult.slice(0, 8000) });
+    }
+    messages.push({ role: "user", content: toolResults });
+
+    if (resp.stop_reason === "end_turn" && toolBlocks.length === 0) break;
+  }
+
+  return result;
+}
+
 async function createSubAgent(
   title: string, agentType: string, instructions: string,
   context: string, model: string, ctx: ToolContext
@@ -3507,107 +4037,63 @@ async function createSubAgent(
 
   // Sub-agents get access to most tools (excluding recursive sub-agent creation beyond depth 1, and task-lifecycle tools)
   const subTools = TOOLS.filter((t) => !["complete_task", "request_user_input", "dream_machine"].includes(t.name));
-  const MAX_SUB_ITERATIONS = 15; // Multi-turn: up to 15 iterations (not single-turn)
+  const MAX_SUB_ITERATIONS = 15;
+  const fullPrompt = `${context ? `Context:\n${context}\n\n` : ""}Task: ${instructions}`;
+
+  // Build failover chain for the sub-agent
+  const failoverChain = getFailoverChain(subModel);
 
   try {
     let result = "";
-    const fullPrompt = `${context ? `Context:\n${context}\n\n` : ""}Task: ${instructions}`;
+    let lastError: unknown = null;
 
-    if (subModel.provider === "openai" && process.env.OPENAI_API_KEY) {
-      // Multi-turn agentic loop with OpenAI
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        { role: "system", content: subSystemPrompt },
-        { role: "user", content: fullPrompt },
-      ];
-      const oaiTools = convertToolsToOpenAIFormat().filter(t => t.type === "function" && subTools.some(st => st.name === (t as { type: "function"; function: { name: string } }).function.name)) as Array<{ type: "function"; function: { name: string; description?: string; parameters: Record<string, unknown> } }>;
-      let iterations = 0;
+    for (let attempt = 0; attempt < failoverChain.length; attempt++) {
+      const { provider, modelName: mName } = failoverChain[attempt];
 
-      while (iterations < MAX_SUB_ITERATIONS) {
-        iterations++;
-        const resp = await openai.chat.completions.create({
-          model: subModel.modelName, max_tokens: 4096, messages, tools: oaiTools,
-          // Force tool use on first iteration so sub-agent acts instead of just planning
-          tool_choice: iterations === 1 ? "required" : "auto",
-        });
-        const msg = resp.choices[0]?.message;
-        if (!msg) break;
-
-        const text = msg.content || "";
-        const tcs = (msg.tool_calls || []).filter((tc): tc is { id: string; type: "function"; function: { name: string; arguments: string } } => tc.type === "function");
-
-        if (tcs.length === 0) {
-          // No more tool calls — agent is done
-          result += text;
-          break;
-        }
-
-        // Add assistant message with tool calls
-        messages.push({ role: "assistant", content: text || null, tool_calls: tcs.map(tc => ({ id: tc.id, type: "function" as const, function: { name: tc.function.name, arguments: tc.function.arguments } })) });
-
-        // Execute each tool call
-        for (const tc of tcs) {
-          let toolInput: Record<string, unknown> = {};
-          try { toolInput = JSON.parse(tc.function.arguments); } catch { /* empty */ }
-          let toolResult = "";
-          try {
-            toolResult = await executeTool(tc.function.name as ToolName, toolInput, ctx);
-          } catch (err) {
-            toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`;
-          }
-          messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult.slice(0, 8000) });
-        }
-
-        if (text) result += text + "\n";
+      if (attempt > 0) {
+        const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
+        console.log(`[sub-agent-failover] ${failoverChain[attempt - 1].provider}/${failoverChain[attempt - 1].modelName} failed (${errMsg.slice(0, 120)}), trying ${provider}/${mName}`);
+        await sleep(FAILOVER_BACKOFF_MS[Math.min(attempt - 1, FAILOVER_BACKOFF_MS.length - 1)]);
       }
-    } else {
-      // Multi-turn agentic loop with Anthropic
-      const messages: Anthropic.MessageParam[] = [
-        { role: "user", content: fullPrompt },
-      ];
-      let iterations = 0;
 
-      while (iterations < MAX_SUB_ITERATIONS) {
-        iterations++;
-        const resp = await anthropic.messages.create({
-          model: subModel.modelName, max_tokens: 4096, system: subSystemPrompt, tools: subTools, messages,
-          // Force tool use on first iteration so sub-agent acts instead of just planning
-          tool_choice: iterations === 1 ? { type: "any" as const } : { type: "auto" as const },
-        });
-
-        const texts = resp.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text);
-        const toolBlocks = resp.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-
-        if (texts.length > 0) result += texts.join("\n") + "\n";
-
-        if (toolBlocks.length === 0) {
-          // No more tool calls — agent is done
-          break;
+      try {
+        if (provider === "openai" && process.env.OPENAI_API_KEY) {
+          result = await runSubAgentOpenAICompat(openai, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
+        } else if (provider === "openrouter" && process.env.OPENROUTER_API_KEY) {
+          const orClient = new OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: process.env.OPENROUTER_API_KEY || "",
+            defaultHeaders: {
+              "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+              "X-Title": "Ottomatron",
+            },
+          });
+          result = await runSubAgentOpenAICompat(orClient, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
+        } else if (provider === "anthropic" && process.env.ANTHROPIC_API_KEY) {
+          result = await runSubAgentAnthropic(mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
+        } else {
+          // Google / Perplexity — fall through to next since they don't support tool use in sub-agent format
+          continue;
         }
 
-        // Add assistant response
-        messages.push({ role: "assistant", content: resp.content });
-
-        // Execute each tool call and add results
-        const toolResults: Anthropic.ToolResultBlockParam[] = [];
-        for (const tb of toolBlocks) {
-          let toolResult = "";
-          try {
-            toolResult = await executeTool(tb.name as ToolName, tb.input as Record<string, unknown>, ctx);
-          } catch (err) {
-            toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`;
-          }
-          toolResults.push({ type: "tool_result", tool_use_id: tb.id, content: toolResult.slice(0, 8000) });
-        }
-        messages.push({ role: "user", content: toolResults });
-
-        // If model signaled end_turn without tools, break
-        if (resp.stop_reason === "end_turn" && toolBlocks.length === 0) break;
+        // Success — break out of failover loop
+        const trimmedResult = result.trim() || "Sub-agent completed.";
+        updateSubTask(subTaskId, "completed", trimmedResult);
+        return trimmedResult;
+      } catch (err) {
+        lastError = err;
+        console.error(
+          `[sub-agent-failover] ${provider}/${mName} error (attempt ${attempt + 1}/${failoverChain.length}):`,
+          err instanceof Error ? err.message : String(err),
+        );
+        // Continue to next provider
       }
     }
 
-    const trimmedResult = result.trim() || "Sub-agent completed.";
-    updateSubTask(subTaskId, "completed", trimmedResult);
-    return trimmedResult;
+    // All providers failed
+    const msg = lastError instanceof Error ? lastError.message : String(lastError);
+    updateSubTask(subTaskId, "failed", msg);
+    return `Sub-agent failed after trying ${failoverChain.length} providers: ${msg}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     updateSubTask(subTaskId, "failed", msg);
@@ -6809,9 +7295,29 @@ function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(skills?: string): string {
+  // Build a list of platforms that have credentials configured in .env.local
+  const configuredCredentials: string[] = [];
+  const credPlatforms = [
+    { env: "TWITTER", label: "Twitter/X" },
+    { env: "LINKEDIN", label: "LinkedIn" },
+    { env: "INSTAGRAM", label: "Instagram" },
+    { env: "REDDIT", label: "Reddit" },
+    { env: "FACEBOOK", label: "Facebook" },
+    { env: "BLUESKY", label: "Bluesky" },
+  ];
+  for (const p of credPlatforms) {
+    const user = process.env[`${p.env}_USERNAME`] || process.env[`${p.env}_EMAIL`];
+    const pass = process.env[`${p.env}_PASSWORD`];
+    if (user && pass) configuredCredentials.push(p.label);
+  }
+
+  const credentialsSection = configuredCredentials.length > 0
+    ? `\n\n## Configured Login Credentials\nThe following platforms have login credentials pre-configured in .env.local — you do NOT need to ask the user to log in manually:\n${configuredCredentials.map(p => `- **${p}**`).join("\n")}\n\nWhen using browse_web on these sites, auto-login will happen automatically if a login page is detected. When using social_media_post, credentials are used automatically. NEVER ask the user to open a browser and log in manually for these platforms — the system handles login for you.`
+    : "";
+
   return `You are Ottomatron — a general-purpose digital computer that creates and executes entire workflows autonomously. You are the next evolution beyond AI chat. Where chat interfaces answer questions, you take action. Where task agents complete tasks, you orchestrate entire workflows that can run for hours.
 
-Current date/time: ${new Date().toISOString()}
+Current date/time: ${new Date().toISOString()}${credentialsSection}
 
 ## Core Identity
 You operate the software stack just like a human co-worker would: by using it. You reason, delegate, search, build, remember, code, and deliver. Every task runs in an isolated compute environment with a real filesystem, real browser capabilities, and real tool integrations.
@@ -6861,7 +7367,7 @@ When tasks involve finance, data, or analytics:
 ## Your Tools
 - **web_search**: Real-time search (Perplexity Sonar, Brave, Serper, Tavily) — cascading fallback
 - **scrape_url**: Fetch and extract content from any URL with smart content extraction
-- **browse_web**: Full browser automation — fill forms, click buttons, navigate pages, take screenshots
+- **browse_web**: Full browser automation — fill forms, click buttons, navigate pages, take screenshots. AUTO-LOGIN: automatically detects login pages and fills credentials from .env.local
 - **execute_code**: Run Python, JavaScript, or Bash. Auto-installs packages (pip/npm). Use for calculations, data processing, chart generation, data visualization, file manipulation.
 - **write_file / read_file / list_files**: Full filesystem access in task working directory
 - **generate_image**: Create images via DALL-E 3
@@ -6869,7 +7375,8 @@ When tasks involve finance, data, or analytics:
 - **dream_machine**: Multi-shot video/image production — commercials, storyboards, brand films
 - **send_email**: Send emails via Resend or connected services (Gmail, Outlook)
 - **connector_call**: 40+ external services — Slack, GitHub, Notion, Stripe, Google Sheets, Linear, Jira, Salesforce, HubSpot, Airtable, and more
-- **social_media_post**: Post to Twitter/X, LinkedIn, Instagram, Reddit, Facebook, Bluesky using real browser automation — no API keys needed. Also read feeds and search. Uses persistent browser sessions (cookies saved after first login). Inspired by Browser Use and OpenClaw patterns.
+- **social_media_post**: Post to Twitter/X, LinkedIn, Instagram, Reddit, Facebook, Bluesky using real browser automation — no API keys needed. Also read feeds and search. Uses persistent browser sessions. Credentials from .env.local are used automatically for login — NEVER ask the user to manually log in if credentials are configured (see Configured Login Credentials section above).
+- **browse_web**: Full browser automation with AUTO-LOGIN — when navigating to any site that has credentials in .env.local, login forms are automatically detected and filled. No manual intervention needed.
 - **memory_store / memory_recall / memory_list / memory_update / memory_delete**: Full persistent memory system — store, search, list, update, and delete memories. Self-evolving: update stale memories rather than creating duplicates. Delete incorrect memories to keep the bank clean.
 - **list_skills**: List all available skills with their triggers and status. Use to discover what specialized capabilities are configured.
 - **organize_files**: Manage the global file system — create folders, move files into folders, list all files across tasks. All changes are visible in the Files page.
