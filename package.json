@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "npx concurrently --names next,bolt --prefix-colors cyan,magenta \"next dev\" \"cd bolt-diy && pnpm run dev\"",
+    "dev:bolt": "cd bolt-diy && pnpm run dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -37,11 +42,13 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "concurrently": "^9.2.1",
     "eslint": "^8",
     "eslint-config-next": "15.1.4",
     "postcss": "^8.5.8",

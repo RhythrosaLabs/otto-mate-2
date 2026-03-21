@@ -12,6 +12,36 @@ const nextConfig: NextConfig = {
     appIsrStatus: false,
     buildActivity: false,
   },
+  // Keep bolt proxy rewrite available as fallback
+  async rewrites() {
+    return [
+      {
+        source: "/bolt/:path*",
+        destination: "http://localhost:5173/:path*",
+      },
+    ];
+  },
+  // Enable cross-origin isolation on the Computer UI so bolt.diy WebContainers
+  // can use SharedArrayBuffer. Scoped to /computer/* only (not API routes or
+  // static assets). "credentialless" allows the cross-origin iframe to load.
+  async headers() {
+    return [
+      {
+        source: "/computer",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+        ],
+      },
+      {
+        source: "/computer/:path*",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

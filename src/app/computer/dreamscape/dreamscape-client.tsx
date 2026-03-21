@@ -56,7 +56,6 @@ import {
   LayoutGrid,
   ArrowDown,
   ArrowUp,
-  Target,
   Crosshair,
   RotateCw,
   Bookmark,
@@ -183,7 +182,7 @@ interface CommandStep {
   model: string;
   phase?: "draft" | "hifi";
   settings: Record<string, unknown>;
-  depends_on: string | null;
+  depends_on: string | string[] | null;
   use_output_as: string | null;
   status?: "pending" | "running" | "completed" | "failed";
   result?: { videoUrl?: string; imageUrl?: string; audioUrl?: string; generationId?: string };
@@ -230,7 +229,6 @@ interface PromptVariation {
   style?: string;
 }
 
-type AgentMode = "brainstorm" | "create" | "brief";
 type ViewMode = "boards" | "ideas";
 
 // ==========================================================================
@@ -238,7 +236,7 @@ type ViewMode = "boards" | "ideas";
 // ==========================================================================
 
 const VIDEO_MODELS = [
-  { id: "ray-3", name: "Ray 3", desc: "High quality", tier: "premium" },
+  { id: "ray-2", name: "Ray 2", desc: "High quality", tier: "premium" },
   { id: "ray-flash-2", name: "Ray Flash 2", desc: "Fast", tier: "standard" },
 ];
 
@@ -254,19 +252,30 @@ const AUDIO_MODELS = [
 
 // Auto-model intelligence: recommended model per mode/intent
 const AUTO_MODEL_MAP: Record<string, { video: string; image: string; reason: string }> = {
-  "character-ref": { video: "ray-3", image: "photon-1", reason: "Character consistency requires full model" },
-  "style-ref":     { video: "ray-3", image: "photon-1", reason: "Style transfer benefits from higher quality" },
-  "modify-video":  { video: "ray-3", image: "photon-1", reason: "Modify needs Ray3 reasoning" },
-  "modify-video-keyframes": { video: "ray-3", image: "photon-1", reason: "Keyframe modify needs full Ray3" },
+  "character-ref": { video: "ray-2", image: "photon-1", reason: "Character consistency requires full model" },
+  "style-ref":     { video: "ray-2", image: "photon-1", reason: "Style transfer benefits from higher quality" },
+  "modify-video":  { video: "ray-2", image: "photon-1", reason: "Modify needs Ray 2 quality" },
+  "modify-video-keyframes": { video: "ray-2", image: "photon-1", reason: "Keyframe modify needs full Ray 2" },
   "text-to-video": { video: "ray-flash-2", image: "photon-flash-1", reason: "Draft first with flash, then upgrade" },
   "text-to-image": { video: "ray-flash-2", image: "photon-flash-1", reason: "Fast iteration for concept art" },
-  "extend":        { video: "ray-3", image: "photon-1", reason: "Continuity needs full model" },
-  "interpolate":   { video: "ray-3", image: "photon-1", reason: "Smooth transitions need full model" },
+  "extend":        { video: "ray-2", image: "photon-1", reason: "Continuity needs full model" },
+  "interpolate":   { video: "ray-2", image: "photon-1", reason: "Smooth transitions need full model" },
 };
 
 const RESOLUTIONS = ["540p", "720p", "1080p", "4k"];
 const ASPECT_RATIOS = ["1:1", "3:4", "4:3", "9:16", "16:9", "9:21", "21:9"];
-const DURATIONS = ["5s", "9s"];
+const DURATIONS = ["5s", "9s", "10s"];
+const VALID_DURATIONS = new Set(["5s", "9s", "10s"]);
+const normalizeDuration = (d: string | undefined): string | undefined => {
+  if (!d) return undefined;
+  if (VALID_DURATIONS.has(d)) return d;
+  // Parse numeric value and snap to nearest valid duration
+  const num = parseFloat(d);
+  if (isNaN(num)) return "5s";
+  if (num <= 7) return "5s";
+  if (num <= 9.5) return "9s";
+  return "10s";
+};
 
 const CAMERA_MOTIONS = [
   { id: "none", label: "None", desc: "No camera motion" },
@@ -333,7 +342,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     prompt: "",
     mode: "text-to-video",
     status: "idle",
-    model: "ray-3",
+    model: "ray-2",
     resolution: "720p",
     aspectRatio: "16:9",
     duration: "5s",
@@ -436,7 +445,12 @@ function ConceptPillsBar({
 // Main Component
 // ==========================================================================
 
-export function DreamscapeClient() {
+interface DreamscapeClientProps {
+  /** When true, the AI Agent panel starts open by default */
+  defaultAgentOpen?: boolean;
+}
+
+export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientProps = {}) {
   // --------------- Board State ---------------
   // Initialize with a stable default for SSR — load persisted state from
   // localStorage in a useEffect after mount to avoid hydration mismatch.
@@ -484,7 +498,7 @@ export function DreamscapeClient() {
   // --------------- View State ---------------
   const [viewMode, setViewMode] = useState<ViewMode>("boards");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
+  const [agentPanelOpen, setAgentPanelOpen] = useState(defaultAgentOpen);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -494,7 +508,7 @@ export function DreamscapeClient() {
   // --------------- Generation Panel ---------------
   const [mode, setMode] = useState<GenerationMode>("text-to-video");
   const [prompt, setPrompt] = useState("");
-  const [videoModel, setVideoModel] = useState("ray-3");
+  const [videoModel, setVideoModel] = useState("ray-2");
   const [imageModel, setImageModel] = useState("photon-1");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
@@ -534,7 +548,6 @@ export function DreamscapeClient() {
   const [selectedReplicateModel, setSelectedReplicateModel] = useState("");
 
   // --------------- Agent State ---------------
-  const [agentMode, setAgentMode] = useState<AgentMode>("brainstorm");
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
   const [agentInput, setAgentInput] = useState("");
   const [agentLoading, setAgentLoading] = useState(false);
@@ -1054,19 +1067,20 @@ export function DreamscapeClient() {
         break;
       case "generate-sfx":
         Object.assign(body, {
-          action: "generate-audio", prompt: finalPrompt, model: audioModel, duration, type: "sfx",
+          action: "generate-sfx", prompt: finalPrompt, model: audioModel, duration, type: "sfx",
         });
         break;
       case "voiceover":
         Object.assign(body, {
-          action: "generate-audio", prompt: voiceoverText || finalPrompt, model: audioModel, type: "voiceover",
+          action: "voiceover", prompt: finalPrompt, model: audioModel, type: "voiceover",
+          script: voiceoverText || finalPrompt,
         });
         break;
       case "lip-sync":
         if (!lipSyncVideoUrl.trim()) throw new Error("Provide a video URL for lip sync");
         if (!lipSyncAudioUrl.trim()) throw new Error("Provide an audio URL for lip sync");
         Object.assign(body, {
-          action: "generate-audio", prompt: finalPrompt, model: audioModel, type: "lip-sync",
+          action: "lip-sync", prompt: finalPrompt, model: audioModel, type: "lip-sync",
           video_url: lipSyncVideoUrl.trim(), audio_url: lipSyncAudioUrl.trim(),
         });
         break;
@@ -1150,8 +1164,6 @@ export function DreamscapeClient() {
 
     try {
       const history = agentMessages.map((m) => ({ role: m.role, content: m.content }));
-      // Map mode to API action
-      const apiAction = agentMode === "brief" ? "director-intent" : agentMode;
       // Build enriched message with board context + continuity library
       let enrichedMessage = agentInput;
       if (board?.description) enrichedMessage += `\n\n[Board Description: ${board.description}]`;
@@ -1160,25 +1172,23 @@ export function DreamscapeClient() {
       const res = await fetch("/api/dreamscape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: apiAction, message: enrichedMessage, history: agentMode === "brief" ? [] : history }),
+        body: JSON.stringify({ action: "agent", message: enrichedMessage, history }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Agent request failed");
 
-      // Try to parse command chain from response
+      // Try to parse command chain from response (always attempt — unified agent can output chains at any time)
       let chain: CommandChain | undefined;
-      if (agentMode === "create") {
-        try {
-          const jsonMatch = data.response.match(/```json\s*([\s\S]*?)```/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[1]);
-            if (parsed.steps && Array.isArray(parsed.steps)) {
-              chain = parsed as CommandChain;
-              chain.steps = chain.steps.map((s) => ({ ...s, status: "pending" }));
-            }
+      try {
+        const jsonMatch = data.response.match(/```json\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[1]);
+          if (parsed.steps && Array.isArray(parsed.steps)) {
+            chain = parsed as CommandChain;
+            chain.steps = chain.steps.map((s) => ({ ...s, status: "pending" }));
           }
-        } catch { /* not a chain */ }
-      }
+        }
+      } catch { /* not a chain */ }
 
       const assistantMsg: AgentMessage = {
         role: "assistant",
@@ -1200,9 +1210,166 @@ export function DreamscapeClient() {
   };
 
   // =======================================================================
+  // Command Chain Validation & Sanitization
+  // =======================================================================
+
+  /** Fix common LLM mistakes in a command step before sending to API */
+  function sanitizeStep(step: CommandStep): CommandStep {
+    const s = { ...step, settings: { ...step.settings } };
+
+    // Model ↔ Action enforcement
+    const videoActions = new Set(["generate-video", "extend", "reverse-extend", "interpolate", "modify-video", "modify-video-keyframes", "reframe", "upscale"]);
+    const imageActions = new Set(["generate-image"]);
+    const audioActions = new Set(["generate-audio", "generate-sfx", "voiceover", "lip-sync", "add-audio"]);
+
+    if (videoActions.has(s.action) && !["ray-2", "ray-flash-2"].includes(s.model)) {
+      console.warn(`[Chain Sanitize] Step "${s.name}": model "${s.model}" invalid for ${s.action}, fixing to ray-2`);
+      s.model = s.model?.includes("flash") ? "ray-flash-2" : "ray-2";
+    }
+    if (imageActions.has(s.action) && !["photon-1", "photon-flash-1"].includes(s.model)) {
+      console.warn(`[Chain Sanitize] Step "${s.name}": model "${s.model}" invalid for ${s.action}, fixing to photon-1`);
+      s.model = s.model?.includes("flash") ? "photon-flash-1" : "photon-1";
+    }
+    // Audio actions don't need model correction — the API route handles audio model routing
+
+    // Duration enforcement
+    const dur = s.settings.duration as string | undefined;
+    if (dur && !["5s", "9s", "10s"].includes(dur)) {
+      const num = parseFloat(String(dur).replace(/[^0-9.]/g, ""));
+      s.settings.duration = isNaN(num) || num <= 7 ? "5s" : num <= 9.5 ? "9s" : "10s";
+      console.warn(`[Chain Sanitize] Step "${s.name}": duration "${dur}" → "${s.settings.duration}"`);
+    }
+    // Flash models can't do 10s
+    if (s.model?.includes("flash") && s.settings.duration === "10s") {
+      s.settings.duration = "9s";
+    }
+
+    // Aspect ratio enforcement
+    const validAR = new Set(["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"]);
+    const ar = s.settings.aspect_ratio as string | undefined;
+    if (ar && !validAR.has(ar)) {
+      s.settings.aspect_ratio = "16:9"; // safe default
+      console.warn(`[Chain Sanitize] Step "${s.name}": aspect_ratio "${ar}" → "16:9"`);
+    }
+
+    // Resolution enforcement — strip invalid values, prefer omitting to avoid "no access" errors
+    const validRes = new Set(["540p", "720p", "1080p", "4k"]);
+    const res = s.settings.resolution as string | undefined;
+    if (res && !validRes.has(res)) {
+      delete s.settings.resolution;
+      console.warn(`[Chain Sanitize] Step "${s.name}": resolution "${res}" removed (invalid)`);
+    }
+
+    // Boolean enforcement
+    if (s.settings.hdr !== undefined) s.settings.hdr = s.settings.hdr === true || s.settings.hdr === "true";
+    if (s.settings.loop !== undefined) s.settings.loop = s.settings.loop === true || s.settings.loop === "true";
+
+    // modify-video must have a mode
+    if (s.action === "modify-video" && !s.settings.mode) {
+      s.settings.mode = "flex_1";
+      console.warn(`[Chain Sanitize] Step "${s.name}": modify-video missing mode, defaulted to flex_1`);
+    }
+
+    // upscale steps must reference a generation
+    if (s.action === "upscale" && !s.settings.generation_id && !s.depends_on) {
+      console.warn(`[Chain Sanitize] Step "${s.name}": upscale needs generation_id or depends_on`);
+    }
+
+    // add-audio steps must have a prompt
+    if (s.action === "add-audio" && !s.prompt && !s.settings.prompt) {
+      console.warn(`[Chain Sanitize] Step "${s.name}": add-audio missing prompt for audio description`);
+    }
+
+    // Concepts validation — ensure proper array format
+    if (s.settings.concepts) {
+      if (Array.isArray(s.settings.concepts)) {
+        const validKeys = new Set(["dolly_zoom", "orbit_right", "orbit_left", "pull_out", "tilt_down", "tilt_up", "hand_held", "zoom_in", "zoom_out", "aerial_drone", "pedestal_up", "pedestal_down", "tiny_planet", "bolt_camera"]);
+        s.settings.concepts = (s.settings.concepts as Array<{key: string}>).filter(c => c && typeof c === "object" && validKeys.has(c.key));
+        if ((s.settings.concepts as Array<{key: string}>).length === 0) delete s.settings.concepts;
+      } else {
+        delete s.settings.concepts;
+        console.warn(`[Chain Sanitize] Step "${s.name}": concepts must be an array, removed`);
+      }
+    }
+
+    return s;
+  }
+
+  /** Validate entire chain before execution — returns list of issues found (and auto-fixed) */
+  function validateChain(chain: CommandChain): string[] {
+    const issues: string[] = [];
+    const stepIds = new Set(chain.steps.map(s => s.id));
+
+    for (const step of chain.steps) {
+      // Check for orphaned dependencies
+      const deps = Array.isArray(step.depends_on) ? step.depends_on : (step.depends_on ? [step.depends_on] : []);
+      const validDeps = deps.filter(d => {
+        if (!stepIds.has(d)) {
+          issues.push(`Step "${step.name}" depends on "${d}" which doesn't exist — dependency removed`);
+          return false;
+        }
+        if (d === step.id) {
+          issues.push(`Step "${step.name}" depends on itself — dependency removed`);
+          return false;
+        }
+        return true;
+      });
+      step.depends_on = validDeps.length === 0 ? null : validDeps.length === 1 ? validDeps[0] : validDeps;
+
+      // Check for required fields
+      if (!step.prompt && !["lip-sync", "reframe", "upscale", "add-audio"].includes(step.action)) {
+        issues.push(`Step "${step.name}" has no prompt`);
+      }
+      if (!step.model) {
+        issues.push(`Step "${step.name}" has no model — will use defaults`);
+      }
+
+      // Voiceover must have script
+      if (step.action === "voiceover" && !step.settings?.script) {
+        issues.push(`Step "${step.name}" is a voiceover but missing "script" field`);
+      }
+    }
+
+    // Check for circular dependencies
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    function hasCycle(stepId: string): boolean {
+      if (visiting.has(stepId)) return true;
+      if (visited.has(stepId)) return false;
+      visiting.add(stepId);
+      const step = chain.steps.find(s => s.id === stepId);
+      const deps = step ? (Array.isArray(step.depends_on) ? step.depends_on : (step.depends_on ? [step.depends_on] : [])) : [];
+      for (const dep of deps) {
+        if (hasCycle(dep)) return true;
+      }
+      visiting.delete(stepId);
+      visited.add(stepId);
+      return false;
+    }
+    for (const step of chain.steps) {
+      if (hasCycle(step.id)) {
+        issues.push(`Circular dependency detected involving "${step.name}" — dependencies cleared`);
+        step.depends_on = null;
+        step.use_output_as = null;
+      }
+    }
+
+    if (issues.length > 0) {
+      console.warn(`[Chain Validate] ${issues.length} issue(s):`, issues);
+    }
+    return issues;
+  }
+
+  // =======================================================================
   // Command Chain Execution (with parallel independent steps)
   // =======================================================================
   const executeChain = async (chain: CommandChain) => {
+    // Pre-execution validation — fix issues before they cause API errors
+    const issues = validateChain(chain);
+    if (issues.length > 0) {
+      console.log(`[Chain] Auto-fixed ${issues.length} issue(s) before execution`);
+    }
+
     setChainRunning(true);
     setChainProgress(0);
     const totalSteps = chain.steps.length;
@@ -1238,10 +1405,20 @@ export function DreamscapeClient() {
       if (completed.has(step.id)) return false;
       if (step.status === "running" || step.status === "completed") return false;
       if (!step.depends_on) return true;
+      // Support both single dependency and array of dependencies
+      if (Array.isArray(step.depends_on)) {
+        return step.depends_on.every((dep) => completed.has(dep));
+      }
       return completed.has(step.depends_on);
     };
 
     const runStep = async (step: CommandStep): Promise<void> => {
+      // Sanitize the step before execution — auto-fix LLM parameter mistakes
+      const sanitized = sanitizeStep(step);
+      // Merge sanitized values back
+      step.model = sanitized.model;
+      step.settings = sanitized.settings;
+
       setActiveChain((prev) =>
         prev ? { ...prev, steps: prev.steps.map((s) => (s.id === step.id ? { ...s, status: "running" } : s)) } : prev,
       );
@@ -1252,10 +1429,12 @@ export function DreamscapeClient() {
         // If this step depends on a previous step that failed and we need its output, 
         // try running without the dependency (skip keyframe wiring) instead of failing entirely
         let skipDependencyWiring = false;
-        if (step.depends_on && step.use_output_as) {
-          const depStep = stepMap.get(step.depends_on);
+        // Normalize depends_on: resolve primary dependency for wiring (first dep, or the single dep)
+        const primaryDep = Array.isArray(step.depends_on) ? step.depends_on[0] : step.depends_on;
+        if (primaryDep && step.use_output_as) {
+          const depStep = stepMap.get(primaryDep);
           if (!depStep?.result) {
-            console.warn(`[Dreamscape Chain] Dependency "${step.depends_on}" has no result — running "${step.name}" without dependency output`);
+            console.warn(`[Dreamscape Chain] Dependency "${primaryDep}" has no result — running "${step.name}" without dependency output`);
             skipDependencyWiring = true;
           }
         }
@@ -1280,6 +1459,8 @@ export function DreamscapeClient() {
           "modify-video": "modify-video",
           "modify-video-keyframes": "modify-video",
           "reframe": "reframe",
+          "upscale": "upscale",
+          "add-audio": "add-audio",
           "generate-audio": "generate-audio",
           "generate-sfx": "generate-sfx",
           "voiceover": "voiceover",
@@ -1292,12 +1473,16 @@ export function DreamscapeClient() {
           prompt: step.prompt,
           model: step.model,
           ...step.settings,
-          provider,
         };
+        // Explicitly set provider last to prevent step.settings from overriding it
+        body.provider = provider;
+
+        // Normalize duration to valid API values (5s, 9s, 10s)
+        if (body.duration) body.duration = normalizeDuration(body.duration as string);
 
         // Handle dependencies — wire up output from previous step
-        if (step.depends_on && step.use_output_as && !skipDependencyWiring) {
-          const depStep = stepMap.get(step.depends_on);
+        if (primaryDep && step.use_output_as && !skipDependencyWiring) {
+          const depStep = stepMap.get(primaryDep);
           if (depStep?.result) {
             const depUrl = depStep.result.imageUrl || depStep.result.videoUrl;
             switch (step.use_output_as) {
@@ -1322,6 +1507,57 @@ export function DreamscapeClient() {
               case "audio_track":
                 if (depStep.result.audioUrl) body.audio_url = depStep.result.audioUrl;
                 break;
+              case "upscale_source":
+                if (depStep.result.generationId) body.generation_id = depStep.result.generationId;
+                break;
+              case "audio_target":
+                if (depStep.result.generationId) body.generation_id = depStep.result.generationId;
+                break;
+            }
+          }
+        }
+
+        // === SMART RESOLUTION for upscale / add-audio ===
+        // Always resolve generation_id from dependency chain (overrides any stale placeholder)
+        if (apiAction === "upscale" || apiAction === "add-audio") {
+          const deps = Array.isArray(step.depends_on) ? step.depends_on : (step.depends_on ? [step.depends_on] : []);
+          for (const depId of deps) {
+            const depStep = stepMap.get(depId);
+            if (depStep?.result?.generationId) {
+              body.generation_id = depStep.result.generationId;
+              break; // Use first available generation_id
+            }
+          }
+          // If still no generation_id, clear any stale placeholder the LLM may have put in settings
+          if (!body.generation_id) {
+            console.warn(`[Chain] ${apiAction} step "${step.name}" has no generation_id from dependencies — step may fail`);
+          }
+        }
+
+        // === SMART RESOLUTION for lip-sync ===
+        // Lip-sync needs both video_url and audio_url from dependencies
+        if (apiAction === "lip-sync") {
+          const deps = Array.isArray(step.depends_on) ? step.depends_on : (step.depends_on ? [step.depends_on] : []);
+          for (const depId of deps) {
+            const depStep = stepMap.get(depId);
+            if (depStep?.result) {
+              // Wire video from any dep that produced a video
+              if (!body.video_url && depStep.result.videoUrl) {
+                body.video_url = depStep.result.videoUrl;
+              }
+              // Wire audio from any dep that produced audio
+              if (!body.audio_url && depStep.result.audioUrl) {
+                body.audio_url = depStep.result.audioUrl;
+              }
+            }
+          }
+          // Also search ALL completed steps for video/audio if deps didn't provide them
+          if (!body.video_url || !body.audio_url) {
+            for (const [, s] of stepMap) {
+              if (s.result && completed.has(s.id)) {
+                if (!body.video_url && s.result.videoUrl) body.video_url = s.result.videoUrl;
+                if (!body.audio_url && s.result.audioUrl) body.audio_url = s.result.audioUrl;
+              }
             }
           }
         }
@@ -1329,15 +1565,48 @@ export function DreamscapeClient() {
         const res = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         let data = await res.json();
 
-        // Retry once on transient/credit errors (the server already retries internally, but do one more client-side)
-        if (!res.ok && (data.error?.includes("Insufficient credits") || data.error?.includes("rate limit") || res.status >= 500)) {
-          console.warn(`[Dreamscape Chain] Transient error for "${step.name}", retrying in 3s...`);
-          await new Promise(r => setTimeout(r, 3000));
-          const retryRes = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-          data = await retryRes.json();
-          if (!retryRes.ok) throw new Error(data.error || `API returned ${retryRes.status}`);
-        } else if (!res.ok) {
-          throw new Error(data.error || `API returned ${res.status}`);
+        // Smart retry with progressive degradation
+        if (!res.ok) {
+          const errMsg = data.error || `HTTP ${res.status}`;
+          const isTransient = errMsg.includes("Insufficient credits") || errMsg.includes("rate limit") || res.status === 429 || res.status >= 500;
+          const isNoAccess = errMsg.includes("no access") || errMsg.includes("not available") || errMsg.includes("403");
+
+          if (isNoAccess) {
+            // Strip resolution and HDR (common cause of "no access" on lower-tier plans)
+            console.warn(`[Chain] "no access" for "${step.name}" — retrying without resolution/hdr`);
+            delete body.resolution;
+            delete body.hdr;
+            await new Promise(r => setTimeout(r, 1000));
+            const retryRes = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            data = await retryRes.json();
+            if (!retryRes.ok) {
+              // Try one more time with flash model (cheaper, more accessible)
+              if (!step.model?.includes("flash") && (step.action === "generate-video" || step.action === "generate-image")) {
+                console.warn(`[Chain] Still failing — downgrading to flash model for "${step.name}"`);
+                body.model = step.action === "generate-image" ? "photon-flash-1" : "ray-flash-2";
+                if (body.duration === "10s") body.duration = "9s";
+                await new Promise(r => setTimeout(r, 1000));
+                const retry2 = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                data = await retry2.json();
+                if (!retry2.ok) throw new Error(data.error || `API returned ${retry2.status}`);
+              } else {
+                throw new Error(data.error || `API returned ${retryRes.status}`);
+              }
+            }
+          } else if (isTransient) {
+            // Exponential backoff: 3s, then 6s
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              const delay = attempt * 3000;
+              console.warn(`[Chain] Transient error for "${step.name}", retry ${attempt}/2 in ${delay}ms...`);
+              await new Promise(r => setTimeout(r, delay));
+              const retryRes = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+              data = await retryRes.json();
+              if (retryRes.ok) break;
+              if (attempt === 2) throw new Error(data.error || `API returned ${retryRes.status}`);
+            }
+          } else {
+            throw new Error(errMsg);
+          }
         }
 
         updateShot(shot.id, { generationId: data.id, status: "queued" });
@@ -1543,7 +1812,7 @@ export function DreamscapeClient() {
     setSelectedShotId(hifiShot.id);
 
     // Upgrade model: flash → premium
-    const hifiVideoModel = shot.model?.includes("flash") ? "ray-3" : shot.model || "ray-3";
+    const hifiVideoModel = shot.model?.includes("flash") ? "ray-2" : shot.model || "ray-2";
     const hifiImageModel = shot.model?.includes("flash") ? "photon-1" : shot.model || "photon-1";
     const isVid = ["text-to-video", "image-to-video", "extend", "reverse-extend", "interpolate", "modify-video", "modify-video-keyframes"].includes(shot.mode);
 
@@ -1970,43 +2239,21 @@ export function DreamscapeClient() {
                   </div>
                   <span className="text-xs font-bold">AI Agent</span>
                 </div>
-                <button onClick={() => setAgentPanelOpen(false)} className="text-pplx-muted hover:text-pplx-text">
-                  <X size={14} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setAgentMessages([]); setActiveChain(null); }}
+                    className="text-pplx-muted hover:text-pplx-text p-0.5 rounded hover:bg-white/5"
+                    title="New conversation"
+                  >
+                    <Plus size={12} />
+                  </button>
+                  <button onClick={() => setAgentPanelOpen(false)} className="text-pplx-muted hover:text-pplx-text">
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
-              {/* Agent mode toggle */}
-              <div className="flex gap-1 bg-pplx-card rounded-lg p-0.5 border border-pplx-border">
-                <button
-                  onClick={() => setAgentMode("brief")}
-                  className={cn("flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors",
-                    agentMode === "brief" ? "bg-emerald-500/20 text-emerald-300" : "text-pplx-muted hover:text-pplx-text",
-                  )}
-                >
-                  <Target size={11} /> Brief
-                </button>
-                <button
-                  onClick={() => setAgentMode("brainstorm")}
-                  className={cn("flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors",
-                    agentMode === "brainstorm" ? "bg-amber-500/20 text-amber-300" : "text-pplx-muted hover:text-pplx-text",
-                  )}
-                >
-                  <Lightbulb size={11} /> Brainstorm
-                </button>
-                <button
-                  onClick={() => setAgentMode("create")}
-                  className={cn("flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors",
-                    agentMode === "create" ? "bg-violet-500/20 text-violet-300" : "text-pplx-muted hover:text-pplx-text",
-                  )}
-                >
-                  <Wand2 size={11} /> Create
-                </button>
-              </div>
-              <p className="text-[10px] text-pplx-muted mt-1.5">
-                {agentMode === "brief"
-                  ? "Decode your creative intent before generating anything."
-                  : agentMode === "brainstorm"
-                  ? "Explore creative concepts and develop ideas without generating media."
-                  : "Generate command chains and production-ready prompts for execution."}
+              <p className="text-[10px] text-pplx-muted">
+                Describe your vision — I&apos;ll analyze, brainstorm, and create production-ready command chains.
               </p>
               {/* Continuity Library toggle */}
               <button
@@ -2078,12 +2325,8 @@ export function DreamscapeClient() {
                     <MessageSquare size={24} className="text-violet-400" />
                   </div>
                   <p className="text-xs font-medium">Start a conversation</p>
-                  <p className="text-[10px] text-pplx-muted/60 mt-1 text-center max-w-[200px]">
-                    {agentMode === "brief"
-                      ? 'Try "I want to make a luxury perfume launch campaign"'
-                      : agentMode === "brainstorm"
-                      ? 'Try "I want to create a cinematic product reveal for a luxury watch"'
-                      : 'Try "Create a 3-shot sequence of a spaceship launching"'}
+                  <p className="text-[10px] text-pplx-muted/60 mt-1 text-center max-w-[220px]">
+                    Describe your creative vision and I&apos;ll brainstorm concepts, then build executable command chains when you&apos;re ready.
                   </p>
                 </div>
               )}
@@ -2152,7 +2395,7 @@ export function DreamscapeClient() {
                   value={agentInput}
                   onChange={(e) => setAgentInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } }}
-                  placeholder={agentMode === "brief" ? "What are you trying to make? Describe your project..." : agentMode === "brainstorm" ? "Describe your creative vision..." : "What should I create?"}
+                  placeholder="Describe your vision, or say 'create' to generate a command chain..."
                   className="flex-1 bg-pplx-card border border-pplx-border rounded-lg px-3 py-2 text-xs placeholder:text-pplx-muted/40 focus:outline-none focus:border-violet-500/50"
                 />
                 <button
@@ -3133,7 +3376,7 @@ export function DreamscapeClient() {
 
             {/* Generate button */}
             <div className="p-3 border-t border-pplx-border space-y-2">
-              <button onClick={generate} disabled={generating || (!prompt.trim() && mode !== "reframe")}
+              <button onClick={generate} disabled={generating || (!prompt.trim() && mode !== "reframe" && !isAudioMode)}
                 className={cn("w-full py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2",
                   generating ? "bg-violet-500/30 text-violet-300 cursor-wait" : "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-500 hover:to-fuchsia-500 shadow-lg shadow-violet-500/20",
                 )}>

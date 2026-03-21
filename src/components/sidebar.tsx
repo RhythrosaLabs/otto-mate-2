@@ -105,9 +105,16 @@ export function Sidebar() {
       <nav className="px-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const isActive = item.exact
+          // Determine if this item matches the current pathname
+          const matches = item.exact
             ? pathname === item.href || pathname === "/computer/new"
             : pathname.startsWith(item.href) && item.href !== "/computer";
+          // Only highlight if no more-specific sibling route also matches
+          const isActive = matches && !NAV_ITEMS.some(
+            (other) => other.href !== item.href
+              && other.href.startsWith(item.href)
+              && pathname.startsWith(other.href)
+          );
 
           return (
             <Link

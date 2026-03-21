@@ -21,6 +21,8 @@ import {
   GitBranch,
   MessageSquare,
   Code2,
+  Clapperboard,
+  Flame,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -41,8 +43,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/skills", label: "Skills", icon: Zap },
   { href: "/computer/gallery", label: "Gallery", icon: ImageIcon },
   { href: "/computer/playground", label: "Multimedia Playground", icon: Sparkles },
-  { href: "/computer/dreamscape", label: "Video Producer", icon: Sparkles },
+  { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
   { href: "/computer/app-builder", label: "App Builder", icon: Code2 },
+  { href: "/computer/firefly", label: "Firefly", icon: Flame },
   { href: "/computer/channels", label: "Channels", icon: Globe },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/templates", label: "Templates", icon: LayoutTemplate },

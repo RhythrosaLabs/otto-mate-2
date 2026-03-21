@@ -104,7 +104,7 @@ interface ReplicateModelInfo {
 // ---------------------------------------------------------------------------
 
 const VIDEO_MODELS = [
-  { id: "ray-3", name: "Ray 3", desc: "High quality" },
+  { id: "ray-2", name: "Ray 2", desc: "High quality" },
   { id: "ray-flash-2", name: "Ray Flash 2", desc: "Fast" },
 ];
 
@@ -151,7 +151,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     prompt: "",
     mode: "text-to-video",
     status: "idle",
-    model: "ray-3",
+    model: "ray-2",
     resolution: "720p",
     aspectRatio: "16:9",
     duration: "5s",
@@ -217,7 +217,7 @@ export function DreamMachineClient() {
   // Generation panel
   const [mode, setMode] = useState<GenerationMode>("text-to-video");
   const [prompt, setPrompt] = useState("");
-  const [videoModel, setVideoModel] = useState("ray-3");
+  const [videoModel, setVideoModel] = useState("ray-2");
   const [imageModel, setImageModel] = useState("photon-1");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");

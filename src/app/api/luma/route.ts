@@ -89,8 +89,8 @@ const REPLICATE_MODELS: Record<
   { owner: string; name: string; desc: string; type: "video" | "image" }
 > = {
   // Video generation — Luma on Replicate
-  "luma-ray-3-720p":     { owner: "luma",               name: "ray-3-720p",              desc: "Luma Ray 3 720p",               type: "video" },
-  "luma-ray-3-540p":     { owner: "luma",               name: "ray-3-540p",              desc: "Luma Ray 3 540p",               type: "video" },
+  "luma-ray-2-720p":     { owner: "luma",               name: "ray-2-720p",              desc: "Luma Ray 2 720p",               type: "video" },
+  "luma-ray-2-540p":     { owner: "luma",               name: "ray-2-540p",              desc: "Luma Ray 2 540p",               type: "video" },
   "luma-ray-flash-720p": { owner: "luma",               name: "ray-flash-2-720p",        desc: "Luma Ray Flash 2 720p (fast)",   type: "video" },
   "luma-ray-flash-540p": { owner: "luma",               name: "ray-flash-2-540p",        desc: "Luma Ray Flash 2 540p (fast)",   type: "video" },
   // Video generation — other providers
@@ -125,19 +125,31 @@ const REPLICATE_AUDIO_MODELS: Record<string, { owner: string; name: string; vers
 async function replicateFetch(path: string, options: RequestInit = {}) {
   const token = getReplicateToken();
   if (!token) throw new Error("REPLICATE_API_TOKEN is not set. Set it or connect Replicate in Connectors.");
-  const res = await fetch(`https://api.replicate.com/v1${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Replicate API error (${res.status}): ${errText}`);
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(`https://api.replicate.com/v1${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      // Rate limited — exponential backoff: 2s, 4s, 8s
+      const delay = Math.pow(2, attempt + 1) * 1000;
+      console.warn(`[Replicate] 429 rate limit on attempt ${attempt + 1}, retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Replicate API error (${res.status}): ${errText}`);
+    }
+    return res.json();
   }
-  return res.json();
+  throw new Error("Replicate API error: max retries exceeded (429 rate limit)");
 }
 
 function normalizeReplicateOutput(output: unknown): { video?: string; image?: string; audio?: string } {
@@ -235,7 +247,7 @@ function mapToReplicateModel(lumaModel: string, action: string): string {
   if (action.includes("video") || action === "extend" || action === "interpolate") {
     // Pick best video model based on original Luma model name
     if (lumaModel?.includes("flash")) return "luma-ray-flash-720p";
-    return "luma-ray-3-720p";
+    return "luma-ray-2-720p";
   }
 
   // Image generation
@@ -343,10 +355,165 @@ export async function GET(req: NextRequest) {
 // ---------------------------------------------------------------------------
 // POST
 // ---------------------------------------------------------------------------
+
+// Normalize duration to valid Luma API values, model-aware
+// ray-2 supports: 5s, 9s, 10s
+// ray-flash-2 supports: 5s, 9s only (10s causes 400 error)
+function normalizeDuration(d: string | undefined, model?: string): string | undefined {
+  if (!d) return undefined;
+  const isFlash = model?.includes("flash");
+  const maxValid = isFlash ? new Set(["5s", "9s"]) : new Set(["5s", "9s", "10s"]);
+  if (maxValid.has(d)) return d;
+  const num = parseFloat(d);
+  if (isNaN(num)) return "5s";
+  if (num <= 7) return "5s";
+  if (isFlash) return "9s"; // ray-flash-2 caps at 9s
+  if (num <= 9.5) return "9s";
+  return "10s";
+}
+
+// Parse duration to integer seconds for Replicate models (musicgen expects int, not "5s")
+function parseDurationToSeconds(d: string | number | undefined): number | undefined {
+  if (d === undefined || d === null) return undefined;
+  if (typeof d === "number") return Math.round(d);
+  const num = parseInt(d.replace(/[^0-9]/g, ""), 10);
+  return isNaN(num) ? 5 : num;
+}
+
+// Normalize resolution — strip unsupported values for plans that lack 1080p/4k
+function normalizeResolution(r: string | undefined, model?: string): string | undefined {
+  if (!r) return undefined;
+  // ray-flash-2 typically only supports up to 720p
+  if (model?.includes("flash") && (r === "1080p" || r === "4k")) return "720p";
+  const valid = new Set(["540p", "720p", "1080p", "4k"]);
+  return valid.has(r) ? r : undefined;
+}
+
+// ==========================================================================
+// REQUEST SANITIZER — Catch and fix bad parameters BEFORE hitting any API
+// ==========================================================================
+// The LLM agent sometimes hallucinates invalid parameters. This layer acts as
+// a safety net, silently correcting issues that would otherwise cause 400/422.
+
+const VALID_VIDEO_MODELS = new Set(["ray-2", "ray-flash-2"]);
+const VALID_IMAGE_MODELS = new Set(["photon-1", "photon-flash-1"]);
+const VALID_AUDIO_MODELS = new Set(["musicgen", "bark", "ray-audio", "stable-audio"]);
+const VALID_DURATIONS = new Set(["5s", "9s", "10s"]);
+const VALID_ASPECT_RATIOS = new Set(["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"]);
+const VALID_RESOLUTIONS = new Set(["540p", "720p", "1080p", "4k"]);
+const VALID_MODIFY_MODES = new Set([
+  "adhere_1", "adhere_2", "adhere_3",
+  "flex_1", "flex_2", "flex_3",
+  "reimagine_1", "reimagine_2", "reimagine_3",
+]);
+
+const VIDEO_ACTIONS = new Set(["generate-video", "extend", "reverse-extend", "interpolate", "modify-video", "modify-video-keyframes", "reframe"]);
+const IMAGE_ACTIONS = new Set(["generate-image"]);
+const AUDIO_ACTIONS = new Set(["generate-audio", "generate-sfx", "voiceover", "lip-sync"]);
+
+function sanitizeRequestBody(body: Record<string, unknown>): { body: Record<string, unknown>; warnings: string[] } {
+  const warnings: string[] = [];
+  const action = body.action as string;
+
+  // 1. Model ↔ Action enforcement — auto-correct mismatched models
+  if (VIDEO_ACTIONS.has(action) && body.model && !VALID_VIDEO_MODELS.has(body.model as string)) {
+    const old = body.model;
+    body.model = (body.model as string).includes("flash") ? "ray-flash-2" : "ray-2";
+    warnings.push(`Model "${old}" invalid for ${action}, corrected to "${body.model}"`);
+  }
+  if (IMAGE_ACTIONS.has(action) && body.model && !VALID_IMAGE_MODELS.has(body.model as string)) {
+    const old = body.model;
+    body.model = (body.model as string).includes("flash") ? "photon-flash-1" : "photon-1";
+    warnings.push(`Model "${old}" invalid for ${action}, corrected to "${body.model}"`);
+  }
+  if (AUDIO_ACTIONS.has(action) && body.model && !VALID_AUDIO_MODELS.has(body.model as string) && !VALID_AUDIO_MODELS.has(body.audio_model as string)) {
+    // Don't override model for audio — the audio routing handles this separately
+  }
+
+  // 2. Duration enforcement
+  if (body.duration !== undefined) {
+    const d = String(body.duration);
+    if (!VALID_DURATIONS.has(d)) {
+      const num = parseFloat(d.replace(/[^0-9.]/g, ""));
+      const model = body.model as string || "";
+      const isFlash = model.includes("flash");
+      let corrected: string;
+      if (isNaN(num) || num <= 7) corrected = "5s";
+      else if (isFlash || num <= 9.5) corrected = "9s";
+      else corrected = "10s";
+      warnings.push(`Duration "${d}" invalid, corrected to "${corrected}"`);
+      body.duration = corrected;
+    }
+    // Flash models cap at 9s
+    if ((body.model as string)?.includes("flash") && body.duration === "10s") {
+      body.duration = "9s";
+      warnings.push("Duration 10s not supported on flash models, capped to 9s");
+    }
+  }
+
+  // 3. Aspect ratio enforcement
+  if (body.aspect_ratio !== undefined && !VALID_ASPECT_RATIOS.has(body.aspect_ratio as string)) {
+    // Will be caught by normalizeAspectRatio downstream, but log
+    warnings.push(`Aspect ratio "${body.aspect_ratio}" non-standard, will be normalized`);
+  }
+
+  // 4. Resolution enforcement — strip invalid or risky values
+  if (body.resolution !== undefined) {
+    if (!VALID_RESOLUTIONS.has(body.resolution as string)) {
+      warnings.push(`Resolution "${body.resolution}" invalid, removed`);
+      delete body.resolution;
+    }
+  }
+
+  // 5. Modify mode enforcement
+  if (action === "modify-video" && body.mode && !VALID_MODIFY_MODES.has(body.mode as string)) {
+    const old = body.mode;
+    body.mode = "flex_1"; // safe default
+    warnings.push(`Modify mode "${old}" invalid, defaulted to "flex_1"`);
+  }
+
+  // 6. Boolean enforcement — hdr, loop must be actual booleans
+  if (body.hdr !== undefined && typeof body.hdr !== "boolean") {
+    body.hdr = body.hdr === "true" || body.hdr === true;
+  }
+  if (body.loop !== undefined && typeof body.loop !== "boolean") {
+    body.loop = body.loop === "true" || body.loop === true;
+  }
+
+  // 7. Strip empty/null/undefined fields that could confuse the API
+  for (const key of Object.keys(body)) {
+    if (body[key] === null || body[key] === undefined || body[key] === "") {
+      if (key !== "depends_on" && key !== "use_output_as") {
+        delete body[key];
+      }
+    }
+  }
+
+  // 8. Prompt safety — strip obvious prompt injection attempts
+  if (typeof body.prompt === "string") {
+    // Remove any JSON/code injection attempts embedded in prompts
+    body.prompt = (body.prompt as string)
+      .replace(/```[\s\S]*?```/g, "") // Remove code blocks
+      .replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, "") // Remove embedded JSON commands
+      .trim();
+  }
+
+  if (warnings.length > 0) {
+    console.log(`[Sanitizer] ${action}: ${warnings.join("; ")}`);
+  }
+  return { body, warnings };
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const action: string = body.action;
+    const rawBody = await req.json();
+    const sanitized = sanitizeRequestBody({ ...rawBody });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: any = sanitized.body;
+    const action: string = body.action as string;
+    if (sanitized.warnings.length > 0) {
+      console.log(`[Luma API] Sanitized ${sanitized.warnings.length} issue(s) in request`);
+    }
     const provider = chooseProvider(body);
 
     // ==== REPLICATE PROVIDER =============================================
@@ -399,7 +566,7 @@ export async function POST(req: NextRequest) {
         }
         const audioInput: Record<string, unknown> = {};
         if (body.prompt) audioInput.prompt = body.prompt;
-        if (body.duration) audioInput.duration = body.duration;
+        if (body.duration) audioInput.duration = parseDurationToSeconds(body.duration);
         if (body.script) audioInput.text_prompt = body.script;
 
         const prediction = await replicateFetch(
@@ -448,24 +615,60 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "generate-video") {
+      const model = body.model || "ray-2";
       const payload: Record<string, unknown> = {
         prompt: body.prompt,
-        model: body.model || "ray-3",
+        model,
       };
-      if (body.resolution) payload.resolution = body.resolution;
-      if (body.duration) payload.duration = body.duration;
+      const res = normalizeResolution(body.resolution, model);
+      if (res) payload.resolution = res;
+      if (body.duration) payload.duration = normalizeDuration(body.duration, model);
       if (body.aspect_ratio) payload.aspect_ratio = normalizeAspectRatio(body.aspect_ratio);
       if (body.loop !== undefined) payload.loop = body.loop;
       if (body.keyframes) payload.keyframes = body.keyframes;
-      if (body.concepts) payload.concepts = body.concepts;
       if (body.callback_url) payload.callback_url = body.callback_url;
       if (body.hdr !== undefined) payload.hdr = body.hdr;
 
-      const result = await lumaFetch("/generations", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      return NextResponse.json(result);
+      // Concepts API — structured camera motion/angle concepts
+      // Pass concepts array directly to the API: [{ "key": "dolly_zoom" }]
+      if (body.concepts && Array.isArray(body.concepts) && body.concepts.length > 0) {
+        payload.concepts = body.concepts;
+      }
+
+      try {
+        // Use /generations (the documented endpoint) as primary. /generations/video may also work.
+        const result = await lumaFetch("/generations", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        return NextResponse.json(result);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+
+        // Auto-retry without concepts on "invalid concept" error
+        if (errMsg.includes("invalid concept") && payload.concepts) {
+          console.warn(`[Luma API] "invalid concept" error — retrying without concepts`);
+          delete payload.concepts;
+          const retryResult = await lumaFetch("/generations", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          return NextResponse.json(retryResult);
+        }
+
+        // Auto-retry on "no access" — likely resolution/feature not available on this plan
+        if (errMsg.includes("no access")) {
+          console.warn(`[Luma API] "no access" error — retrying without resolution/hdr`);
+          delete payload.resolution;
+          delete payload.hdr;
+          const retryResult = await lumaFetch("/generations", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          return NextResponse.json(retryResult);
+        }
+        throw err;
+      }
     }
 
     if (action === "generate-image") {
@@ -488,102 +691,201 @@ export async function POST(req: NextRequest) {
 
     if (action === "modify-video") {
       const payload: Record<string, unknown> = {
+        generation_type: "modify_video",
         prompt: body.prompt,
-        model: body.model || "ray-3",
+        model: body.model || "ray-2",
         mode: body.mode || "adhere_1",
       };
-      if (body.media) payload.media = body.media;
-      if (body.first_frame) payload.first_frame = body.first_frame;
+      // Structured media object — the proper Modify Video API format
+      if (body.media) {
+        payload.media = body.media;
+      } else if (body.video_url) {
+        payload.media = { url: body.video_url };
+      }
+      // First frame guidance — optional but improves quality
+      if (body.first_frame) {
+        payload.first_frame = body.first_frame;
+      }
       // Keyframes support for modify-video-keyframes (start + end frame control)
       if (body.keyframes) payload.keyframes = body.keyframes;
       if (body.hdr !== undefined) payload.hdr = body.hdr;
+      if (body.callback_url) payload.callback_url = body.callback_url;
 
-      const result = await lumaFetch("/generations", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      return NextResponse.json(result);
+      try {
+        const result = await lumaFetch("/generations/video/modify", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        return NextResponse.json(result);
+      } catch (err) {
+        // Fallback to old endpoint if the new one returns 404
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes("404")) {
+          console.warn(`[Luma API] /generations/video/modify returned 404, falling back to /generations`);
+          delete payload.generation_type;
+          const fallbackResult = await lumaFetch("/generations", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          return NextResponse.json(fallbackResult);
+        }
+        throw err;
+      }
     }
 
     if (action === "reframe") {
+      const isImage = body.media_type === "image";
       const payload: Record<string, unknown> = {
+        generation_type: isImage ? "reframe_image" : "reframe_video",
         aspect_ratio: normalizeAspectRatio(body.aspect_ratio) || "16:9",
-        model: body.model || "ray-3",
+        model: body.model || "ray-2",
       };
-      if (body.media) payload.media = body.media;
+      // Structured media object
+      if (body.media) {
+        payload.media = body.media;
+      } else if (body.video_url) {
+        payload.media = { url: body.video_url };
+      } else if (body.image_url) {
+        payload.media = { url: body.image_url };
+      }
       if (body.prompt) payload.prompt = body.prompt;
+      if (body.callback_url) payload.callback_url = body.callback_url;
+      // Advanced reframe positioning
+      if (body.grid_position_x !== undefined) payload.grid_position_x = body.grid_position_x;
+      if (body.grid_position_y !== undefined) payload.grid_position_y = body.grid_position_y;
 
-      const endpoint =
-        body.media_type === "image" ? "/generations/image" : "/generations";
-
-      const result = await lumaFetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      return NextResponse.json(result);
-    }
-
-    // ==== AUDIO GENERATION (Luma provider) ================================
-    if (action === "generate-audio" || action === "generate-sfx" || action === "voiceover" || action === "lip-sync") {
-      // Try Luma native audio API first
+      const endpoint = isImage ? "/generations/image/reframe" : "/generations/video/reframe";
       try {
-        const audioPayload: Record<string, unknown> = {
-          prompt: body.prompt,
-          model: body.model || "ray-audio",
-        };
-        if (body.duration) audioPayload.duration = body.duration;
-        if (body.media) audioPayload.media = body.media;
-        if (action === "lip-sync") {
-          audioPayload.type = "lip-sync";
-          if (body.video_url) audioPayload.video = { url: body.video_url };
-          if (body.audio_url) audioPayload.audio = { url: body.audio_url };
-        }
-        if (action === "voiceover") {
-          audioPayload.type = "voiceover";
-          if (body.script) audioPayload.script = body.script;
-        }
-        const result = await lumaFetch("/generations/audio", {
+        const result = await lumaFetch(endpoint, {
           method: "POST",
-          body: JSON.stringify(audioPayload),
+          body: JSON.stringify(payload),
         });
         return NextResponse.json(result);
-      } catch {
-        // Luma audio endpoint may not exist yet — fallback to Replicate
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes("404")) {
+          console.warn(`[Luma API] ${endpoint} returned 404, falling back to /generations`);
+          delete payload.generation_type;
+          const fallbackEndpoint = isImage ? "/generations/image" : "/generations";
+          const fallbackResult = await lumaFetch(fallbackEndpoint, {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          return NextResponse.json(fallbackResult);
+        }
+        throw err;
+      }
+    }
+
+    // ==== UPSCALE — upscale an existing generation to higher resolution ===
+    if (action === "upscale") {
+      const generationId = body.generation_id || body.id;
+      if (!generationId) {
+        return NextResponse.json({ error: "generation_id is required for upscale" }, { status: 400 });
+      }
+      const payload: Record<string, unknown> = {
+        generation_type: "upscale_video",
+      };
+      if (body.resolution) payload.resolution = body.resolution;
+      if (body.callback_url) payload.callback_url = body.callback_url;
+
+      try {
+        const result = await lumaFetch(`/generations/${generationId}/upscale`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        return NextResponse.json(result);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[Luma API] Upscale failed: ${errMsg}`);
+        throw err;
+      }
+    }
+
+    // ==== ADD AUDIO TO GENERATION — native Luma audio addition ============
+    if (action === "add-audio") {
+      const generationId = body.generation_id || body.id;
+      if (!generationId) {
+        return NextResponse.json({ error: "generation_id is required for add-audio" }, { status: 400 });
+      }
+      const payload: Record<string, unknown> = {
+        generation_type: "add_audio",
+      };
+      if (body.prompt) payload.prompt = body.prompt;
+      if (body.negative_prompt) payload.negative_prompt = body.negative_prompt;
+      if (body.callback_url) payload.callback_url = body.callback_url;
+
+      try {
+        const result = await lumaFetch(`/generations/${generationId}/audio`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        return NextResponse.json(result);
+      } catch (err) {
+        // Fallback to Replicate audio if Luma audio endpoint fails
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Luma API] Native add-audio failed (${errMsg}), falling back to Replicate`);
         const replicateToken = getReplicateToken();
         if (replicateToken) {
-          let audioModelKey = "musicgen";
-          if (action === "voiceover" || action === "lip-sync") audioModelKey = "bark";
-          if (body.audio_model === "musicgen") audioModelKey = "musicgen";
-
-          const audioModel = REPLICATE_AUDIO_MODELS[audioModelKey];
-          if (!audioModel) {
-            return NextResponse.json({ error: `Unknown audio model: ${audioModelKey}` }, { status: 400 });
-          }
+          const audioModel = REPLICATE_AUDIO_MODELS["musicgen"];
           const audioInput: Record<string, unknown> = {};
           if (body.prompt) audioInput.prompt = body.prompt;
-          if (body.duration) audioInput.duration = body.duration;
-          if (body.script) audioInput.text_prompt = body.script;
-
+          if (body.duration) audioInput.duration = parseDurationToSeconds(body.duration);
           const prediction = await replicateFetch(
             `/predictions`,
             { method: "POST", body: JSON.stringify({ version: audioModel.version, input: audioInput }) },
           );
-
           return NextResponse.json({
             id: `rep_${prediction.id}`,
-            state: prediction.status === "succeeded" ? "completed" :
-                   prediction.status === "failed" ? "failed" : "queued",
-            assets: prediction.status === "succeeded"
-              ? normalizeReplicateOutput(prediction.output)
-              : undefined,
+            state: prediction.status === "succeeded" ? "completed" : prediction.status === "failed" ? "failed" : "queued",
+            assets: prediction.status === "succeeded" ? normalizeReplicateOutput(prediction.output) : undefined,
             error: prediction.error || undefined,
           });
         }
-        return NextResponse.json(
-          { error: "No provider available for audio generation." },
-          { status: 400 },
-        );
+        throw err;
       }
+    }
+
+    // ==== AUDIO GENERATION (Luma provider) ================================
+    // Luma does NOT have an audio API yet (returns 405). Always route audio
+    // through Replicate when available, regardless of provider selection.
+    // This is expected — Luma is for video/image, Replicate handles audio.
+    if (action === "generate-audio" || action === "generate-sfx" || action === "voiceover" || action === "lip-sync") {
+      const replicateToken = getReplicateToken();
+      if (replicateToken) {
+        console.log(`[Luma API] Audio action "${action}" → routing to Replicate (Luma has no audio API)`);
+        let audioModelKey = "musicgen";
+        if (action === "voiceover" || action === "lip-sync") audioModelKey = "bark";
+        if (body.audio_model === "musicgen") audioModelKey = "musicgen";
+
+        const audioModel = REPLICATE_AUDIO_MODELS[audioModelKey];
+        if (!audioModel) {
+          return NextResponse.json({ error: `Unknown audio model: ${audioModelKey}` }, { status: 400 });
+        }
+        const audioInput: Record<string, unknown> = {};
+        if (body.prompt) audioInput.prompt = body.prompt;
+        if (body.duration) audioInput.duration = parseDurationToSeconds(body.duration);
+        if (body.script) audioInput.text_prompt = body.script;
+
+        const prediction = await replicateFetch(
+          `/predictions`,
+          { method: "POST", body: JSON.stringify({ version: audioModel.version, input: audioInput }) },
+        );
+
+        return NextResponse.json({
+          id: `rep_${prediction.id}`,
+          state: prediction.status === "succeeded" ? "completed" :
+                 prediction.status === "failed" ? "failed" : "queued",
+          assets: prediction.status === "succeeded"
+            ? normalizeReplicateOutput(prediction.output)
+            : undefined,
+          error: prediction.error || undefined,
+        });
+      }
+      return NextResponse.json(
+        { error: "No Replicate API token available for audio generation. Set REPLICATE_API_TOKEN in .env.local." },
+        { status: 400 },
+      );
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

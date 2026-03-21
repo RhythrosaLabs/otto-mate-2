@@ -710,7 +710,7 @@ WHEN TO USE:
   - User asks for multiple video clips in a cohesive production
 
 Models:
-  - Video: ray-3 (high quality), ray-flash-2 (fast/cheap)
+  - Video: ray-2 (high quality), ray-flash-2 (fast/cheap)
   - Image: photon-1 (high quality), photon-flash-1 (fast)
 
 IMPORTANT: Plan descriptive, cinematic prompts for each shot before calling this tool. Include camera angle, lighting, subject action, mood, and setting in each prompt.`,
@@ -733,8 +733,8 @@ IMPORTANT: Plan descriptive, cinematic prompts for each shot before calling this
               },
               model: {
                 type: "string",
-                enum: ["ray-3", "ray-flash-2", "ray-hdr-3", "ray-3-14", "ray-hdr-3-14", "photon-1", "photon-flash-1"],
-                description: "Model to use (default: ray-3 for video, photon-1 for image)",
+                enum: ["ray-2", "ray-flash-2", "photon-1", "photon-flash-1"],
+                description: "Model to use (default: ray-2 for video, photon-1 for image)",
               },
               aspect_ratio: { type: "string", enum: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"], default: "16:9" },
               duration: { type: "string", enum: ["5s", "9s"], default: "5s" },
@@ -3310,7 +3310,7 @@ async function executeDreamMachine(
       const body: Record<string, unknown> = {
         action: isVideo ? "generate-video" : "generate-image",
         prompt: shot.prompt,
-        model: shot.model || (isVideo ? "ray-3" : "photon-1"),
+        model: shot.model || (isVideo ? "ray-2" : "photon-1"),
         aspect_ratio: shot.aspect_ratio || "16:9",
         duration: isVideo ? (shot.duration || "5s") : undefined,
         provider,
@@ -3392,7 +3392,7 @@ async function executeDreamMachine(
       videoUrl: r.videoUrl,
       imageUrl: r.imageUrl,
       error: r.error,
-      model: shots[i]?.model || "ray-3",
+      model: shots[i]?.model || "ray-2",
       resolution: "720p",
       aspectRatio: shots[i]?.aspect_ratio || "16:9",
       duration: shots[i]?.duration || "5s",
@@ -5308,7 +5308,7 @@ async function dispatchConnectorAction(
     case "luma": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "generate_video" || action === "create_generation") {
-        const body: Record<string, unknown> = { prompt: params.prompt, model: (params.model as string) || "ray-3", aspect_ratio: (params.aspect_ratio as string) || "16:9" };
+        const body: Record<string, unknown> = { prompt: params.prompt, model: (params.model as string) || "ray-2", aspect_ratio: (params.aspect_ratio as string) || "16:9" };
         if (params.keyframes) body.keyframes = params.keyframes;
         if (params.loop !== undefined) body.loop = params.loop;
         const r = await fetch("https://api.lumalabs.ai/dream-machine/v1/generations", { method: "POST", headers: h, body: JSON.stringify(body) });

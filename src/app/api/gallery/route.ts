@@ -30,12 +30,17 @@ export async function POST(req: NextRequest) {
     description: body.description || "",
     prompt: body.prompt,
     category: body.category || "coding",
-    preview_url: body.preview_url,
+    preview_url: body.preview_url ?? "",
     task_id: undefined,
     is_featured: body.is_featured || false,
     created_at: new Date().toISOString(),
   };
 
-  addGalleryItem(item);
-  return NextResponse.json(item, { status: 201 });
+  try {
+    addGalleryItem(item);
+    return NextResponse.json(item, { status: 201 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
