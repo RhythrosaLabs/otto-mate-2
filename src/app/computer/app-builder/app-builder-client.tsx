@@ -13,8 +13,8 @@ import Link from "next/link";
 const BOLT_DIY_URL = "http://localhost:5173";
 
 /**
- * Embeds bolt.diy in a full-height iframe within the Ottomate layout.
- * Shows a fallback screen when bolt.diy is not running.
+ * Embeds Forge (bolt.diy) in a full-height iframe within the Ottomate layout.
+ * Shows a fallback screen when Forge is not running.
  */
 export function AppBuilderEmbed({ initiallyRunning }: { initiallyRunning: boolean }) {
   const [running, setRunning] = useState(initiallyRunning);
@@ -64,7 +64,7 @@ export function AppBuilderEmbed({ initiallyRunning }: { initiallyRunning: boolea
           </div>
         </div>
 
-        {/* bolt.diy iframe */}
+        {/* Forge iframe */}
         <iframe
           src={BOLT_DIY_URL}
           className="flex-1 w-full border-0"

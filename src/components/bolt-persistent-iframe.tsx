@@ -138,7 +138,7 @@ export function BoltPersistentIframe() {
                     <button
                       onClick={handleForceReload}
                       className="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium flex items-center gap-1 transition-colors mr-1"
-                      title="Force reload bolt.diy"
+                      title="Force reload Forge"
                     >
                       <RotateCcw className="w-3 h-3" />
                       Reload
