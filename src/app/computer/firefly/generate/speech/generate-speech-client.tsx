@@ -143,7 +143,7 @@ export function GenerateSpeechClient() {
 
   function downloadAudio() {
     if (!result?.audioUrl) return;
-    downloadFile(result.audioUrl, `firefly-speech-${result.id}.mp3`);
+    downloadFile(result.audioUrl, `nova-speech-${result.id}.mp3`);
   }
 
   return (

@@ -149,7 +149,7 @@ export function GenerateVideoClient() {
 
   async function handleDownloadVideo() {
     if (!result?.video?.url) return;
-    await downloadFile(result.video.url, `firefly-video-${result.id}.mp4`);
+    await downloadFile(result.video.url, `nova-video-${result.id}.mp4`);
   }
 
   return (

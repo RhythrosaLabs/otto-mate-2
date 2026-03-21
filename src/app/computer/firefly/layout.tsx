@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Firefly — Ottomate" };
+export const metadata: Metadata = { title: "Nova — Ottomate" };
 
 /**
  * Firefly layout — provides the inner Firefly navigation sidebar

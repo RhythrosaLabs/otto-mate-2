@@ -39,8 +39,6 @@ async function generateVideo(body: GenerateVideoRequest): Promise<{ url: string;
   let replicateModel: string;
   let input: Record<string, unknown>;
 
-  const modelName = body.model || "minimax";
-  
   switch (modelName) {
     case "minimax":
     case "firefly-video": {

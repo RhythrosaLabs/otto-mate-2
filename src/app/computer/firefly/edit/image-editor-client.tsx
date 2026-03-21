@@ -396,7 +396,7 @@ export function ImageEditorClient() {
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
-      a.download = `firefly-edit-${Date.now()}.png`;
+      a.download = `nova-edit-${Date.now()}.png`;
       a.click();
       URL.revokeObjectURL(dlUrl);
     } catch { /* ignore */ }

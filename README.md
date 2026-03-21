@@ -35,6 +35,9 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 - **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
 - **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
 - **190+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
+- **Nova AI creative suite** — generate images, video, soundtracks, speech, and edit images with AI — all from one unified hub
+- **Dreamscape Video Studio** — 17-mode AI creative studio built around Luma Dream Machine with storyboards, camera presets, and an AI Director
+- **Forge App Builder** — full-stack visual app builder powered by bolt.diy, embedded as a persistent iframe that survives route changes
 - **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), DALL-E 3, ElevenLabs (voice)
 - **Sub-agents** — spawns specialized child agents for parallel work
 - **Persistent memory** — key-value store the agent reads/writes across tasks
@@ -83,7 +86,7 @@ The core loop: you describe a goal → the agent creates a plan → executes ste
 ### Multi-Model Failover
 The agent picks the best model automatically or you choose manually. If a provider is down or rate-limited, it fails over through the chain: **Anthropic → OpenAI → Google → OpenRouter (DeepSeek) → Perplexity** with exponential backoff.
 
-### Dreamscape Studio
+### Dreamscape Video Studio
 A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 3, Ray Flash 2, Photon 1, Photon Flash 1) with **Replicate** model support and **MusicGen/Bark** audio generation. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
 
 **Generation modes:** text-to-video, image-to-video, extend, reverse-extend, interpolate, text-to-image, image reference, character reference (persistent identity across shots), style reference, modify video, modify video with keyframes, modify image, reframe (change aspect ratio of existing media), music generation (MusicGen), sound effects (Bark), voiceover, and lip-sync.
@@ -95,6 +98,24 @@ A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 3, Ray
 **AI Director:** A built-in chat agent (brainstorm, create, or brief modes) that interprets natural language into multi-step command chains with dependency ordering, continuity sheets (style anchors, character references, setting references), and concept pill word-swapping for rapid prompt iteration.
 
 **Additional features:** Shot tagging, likes, and bookmarks for organization. Annotation overlay system (arrows, rectangles, text) that feeds spatial context into prompts. Board export/import as JSON. Per-shot media preview with mute controls. Search and filter across all shots.
+
+### Nova — AI Creative Suite
+A full-featured **AI media generation hub** with six creation modes accessible from a polished home page with a unified prompt bar. Generate from text, edit existing media, and browse community creations — all in one place.
+
+**Generate Image:** Text-to-image with Nova Image 4, Nova Image 4 Ultra, Nova Image 5 (Preview), FLUX Schnell, FLUX 1.1 Pro, and DALL-E 3. Supports 6 aspect ratios, negative prompts, style references, structure references with adjustable strength, seed control, and batch generation (1–4 images). Inline quick actions: edit, generative fill, animate to video, upscale, save to gallery.
+
+**Generate Video:** Text-to-video and image-to-video generation with multiple model options. Supports aspect ratio selection, duration control, and direct download.
+
+**Generate Soundtrack:** AI music generation for video content. Describe a mood, genre, or scene and generate studio-quality soundtracks — licensed to use anywhere.
+
+**Generate Speech:** Professional AI voiceovers and narration. Choose from multiple voice profiles with speed and style controls.
+
+**Edit Image:** Full image editing suite — remove backgrounds, replace backgrounds, upscale, expand, generative fill, and prompt-based editing. Upload or paste an image and apply AI transformations.
+
+**Gallery:** Browse, filter, and manage all generated creations (images, videos, soundtracks, speech) in a unified media gallery with type filtering and quick actions.
+
+### Forge — App Builder
+A **full-stack visual app builder** powered by [bolt.diy](https://github.com/stackblitz-labs/bolt.diy), embedded as a persistent iframe within the Ottomate shell. The iframe survives route changes without losing state (WebContainers stay alive in the background). Includes connection health monitoring, force-reload capability for frozen sessions, and a fallback screen with setup instructions when the builder isn't running.
 
 ### Pipelines
 A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency edges on a canvas, and run the entire pipeline — nodes execute in topological (dependency) order with per-node status tracking. Supports connecting any node to any other as a dependency.
@@ -136,15 +157,20 @@ The main prompt interface — type a goal, use slash commands, attach files, or 
 
 ![Connectors](docs/screenshots/connectors.png)
 
-### Dreamscape Studio
+### Dreamscape Video Studio
 17-mode AI creative studio with storyboards, camera presets, and the AI Director chat.
 
 ![Dreamscape](docs/screenshots/dreamscape.png)
 
-### Playground
-Run any ML model from Replicate & HuggingFace with side-by-side comparison.
+### Nova — Generate
+AI-powered creative hub — generate images, video, soundtracks, speech, and edit images from one unified interface.
 
-![Playground](docs/screenshots/playground.png)
+![Nova](docs/screenshots/nova.png)
+
+### Forge — App Builder
+Full-stack visual app builder powered by bolt.diy with persistent WebContainers.
+
+![App Builder](docs/screenshots/app-builder.png)
 
 ### Skills Marketplace
 270+ pre-built skills across 10 categories — or create your own.
@@ -183,8 +209,10 @@ Community example tasks — browse, filter by category, one-click run.
 | **Connectors** | Integration marketplace — connect 190+ services via OAuth or API key |
 | **Skills** | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
 | **Gallery** | Browse community example tasks, filter by category, one-click run |
-| **Playground** | Run any of thousands of ML models from Replicate & HuggingFace — image gen, video, music, upscaling, background removal, 3D, style transfer — with multi-column side-by-side comparison, quick actions (upscale, animate, restyle, remove BG, make 3D, social post), file upload for img2img/upscale workflows, and a result gallery filterable by media type |
-| **Dreamscape** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat that turns natural language into multi-step command chains |
+| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat that turns natural language into multi-step command chains |
+| **Generate (Nova)** | AI creative hub — generate images (6 models), video, soundtracks, speech, edit images (remove/replace BG, upscale, expand, generative fill), and browse creations in a unified gallery. Features a prompt bar, tabbed navigation, and quick actions |
+| **App Builder (Forge)** | Full-stack visual app builder powered by bolt.diy embedded as a persistent iframe. WebContainers survive route changes. Includes health monitoring, force-reload for frozen sessions, and fallback setup instructions |
+| **Dreamscape** | Storyboard-based creative workspace for organizing Dream Machine generations into boards with shots |
 | **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
 | **Templates** | Reusable one-click task presets by category |
 | **Scheduled** | Cron-based task scheduler with interval, daily, weekly, and cron modes |
@@ -195,9 +223,6 @@ Community example tasks — browse, filter by category, one-click run.
 | **Audit Trail** | Paginated log of every agent action with filters and metadata |
 | **Settings** | Default model, token/cost budgets, themes, verbose mode, health check |
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
-| **Replicate** | Dedicated Replicate model explorer with quick-run categories |
-| **WhatsApp** | WhatsApp Cloud API dashboard — connection status, message sender, webhook |
-| **App Builder** | Visual app builder for creating custom AI-powered applications |
 | **Dream Machine** | Dedicated Luma Dream Machine interface for video and image generation |
 
 ---
@@ -569,8 +594,9 @@ src/
 │   │   ├── dreamscape/             # Luma Dream Machine
 │   │   ├── huggingface/            # HuggingFace inference
 │   │   ├── luma/                   # Luma Dream Machine API
+│   │   ├── firefly/                # Nova creative suite APIs (image/video/audio/speech/models)
 │   │   ├── generate/               # Generic model generation
-│   │   ├── app-builder/            # App builder API
+│   │   ├── app-builder/            # Forge app builder API
 │   │   ├── health/                 # Health check endpoint
 │   │   ├── context/                # Context management
 │   │   ├── usage/                  # Usage tracking
@@ -580,7 +606,11 @@ src/
 │   │   ├── social-auth/            # Social media OAuth
 │   │   ├── whatsapp/               # WhatsApp Cloud API
 │   │   └── voice/                  # Whisper transcription
-│   └── computer/                   # All UI pages (23 routes)
+│   └── computer/                   # All UI pages (25+ routes)
+│       ├── firefly/                # Nova creative suite (generate, edit, gallery)
+│       ├── app-builder/            # Forge app builder (bolt.diy embed)
+│       ├── dreamscape/             # Dreamscape + Video Studio
+│       └── ...                     # Tasks, Files, Connectors, Skills, etc.
 ├── lib/
 │   ├── agent.ts                    # Core AI agent (~7,500 lines)
 │   ├── db.ts                       # SQLite via better-sqlite3
@@ -602,13 +632,16 @@ src/
 │   ├── running-tasks.ts            # Global AbortController map for live tasks
 │   ├── skill-converters.ts         # Skill format converters
 │   ├── themes.ts                   # UI theme definitions
+│   ├── app-builder/                # Forge app builder utilities (action runner, system prompt, streaming parser)
 │   └── utils.ts                    # Shared utilities
-└── components/
-    ├── sidebar.tsx                  # Navigation sidebar
-    ├── command-palette.tsx          # ⌘K command palette
-    ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
-    ├── background-status.tsx        # Background task status indicator
-    └── persistent-layout.tsx        # Persistent layout wrapper
+├── components/
+│   ├── sidebar.tsx                  # Navigation sidebar
+│   ├── bolt-persistent-iframe.tsx   # Persistent Forge/bolt.diy iframe (survives route changes)
+│   ├── command-palette.tsx          # ⌘K command palette
+│   ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
+│   ├── background-status.tsx        # Background task status indicator
+│   └── persistent-layout.tsx        # Persistent layout wrapper
+└── tests/                           # Playwright E2E tests
 ```
 
 ### Database (SQLite via better-sqlite3)

@@ -158,7 +158,7 @@ export function GenerateSoundtrackClient() {
 
   async function downloadAudio() {
     if (!result?.audio?.url) return;
-    await downloadFile(result.audio.url, `firefly-soundtrack-${result.id}.wav`);
+    await downloadFile(result.audio.url, `nova-soundtrack-${result.id}.wav`);
   }
 
   return (

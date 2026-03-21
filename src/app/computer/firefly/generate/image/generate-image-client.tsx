@@ -66,9 +66,9 @@ interface SettingsPanelProps {
 /* ─── Constants ─────────────────────────────────────────────────── */
 
 const MODELS = [
-  { id: "firefly-image-4", label: "Firefly Image 4", description: "High quality, fast generation", tag: "Default" },
-  { id: "firefly-image-4-ultra", label: "Firefly Image 4 Ultra", description: "Single ultra-high quality image", tag: "Premium" },
-  { id: "firefly-image-5", label: "Firefly Image 5 (Preview)", description: "Latest model with enhanced detail", tag: "New" },
+  { id: "firefly-image-4", label: "Nova Image 4", description: "High quality, fast generation", tag: "Default" },
+  { id: "firefly-image-4-ultra", label: "Nova Image 4 Ultra", description: "Single ultra-high quality image", tag: "Premium" },
+  { id: "firefly-image-5", label: "Nova Image 5 (Preview)", description: "Latest model with enhanced detail", tag: "New" },
   { id: "flux-schnell", label: "FLUX Schnell", description: "Fast generation, good quality", tag: "Fast" },
   { id: "flux-pro", label: "FLUX 1.1 Pro", description: "Professional quality", tag: "Pro" },
   { id: "dall-e-3", label: "DALL-E 3", description: "OpenAI's latest image model", tag: "OpenAI" },
@@ -560,7 +560,7 @@ function ImageActions({ image, prompt }: { image: GeneratedImage; prompt: string
 
   async function handleDownload() {
     setDownloading(true);
-    const ok = await downloadFile(image.url, `firefly-${image.id}.png`);
+    const ok = await downloadFile(image.url, `nova-${image.id}.png`);
     if (!ok) console.warn("Download failed");
     setDownloading(false);
   }

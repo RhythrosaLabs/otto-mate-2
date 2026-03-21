@@ -76,7 +76,7 @@ export function ModelSearchSelector({ category, value, onChange, accent = "viole
 
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const colors = ACCENT_CLASSES[accent] || ACCENT_CLASSES.violet;
 

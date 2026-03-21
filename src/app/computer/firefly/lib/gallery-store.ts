@@ -1,5 +1,5 @@
 /**
- * Shared gallery utility for Firefly.
+ * Shared gallery utility for Nova.
  * All generation pages use this to persist results to the Gallery.
  */
 

@@ -125,8 +125,9 @@ export function BoltPersistentIframe() {
                       frozen ? "bg-amber-500" : "bg-green-500 animate-pulse"
                     }`}
                   />
-                  <span className="text-xs text-zinc-400 font-medium">
-                    bolt.diy — App Builder
+                  <span className="text-xs font-medium">
+                    <span className="bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">Forge</span>
+                    <span className="text-zinc-400"> — App Builder</span>
                     {frozen && (
                       <span className="text-amber-400 ml-2">(unresponsive)</span>
                     )}
@@ -197,7 +198,7 @@ function BoltFallback({
       <AlertTriangle className="w-12 h-12 text-amber-400 mb-4" />
       <h2 className="text-xl font-semibold mb-2">App Builder Not Running</h2>
       <p className="text-zinc-400 text-sm text-center max-w-md mb-6">
-        The bolt.diy app builder server isn&apos;t running on port 5173.
+        The Forge app builder server isn&apos;t running on port 5173.
         <br />
         Start it with the command below:
       </p>
