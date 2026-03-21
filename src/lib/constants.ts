@@ -44,7 +44,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/gallery", label: "Gallery", icon: ImageIcon },
   { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
   { href: "/computer/app-builder", label: "App Builder", icon: Code2 },
-  { href: "/computer/firefly", label: "Generate", icon: Flame },
+  { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
   { href: "/computer/channels", label: "Channels", icon: Globe },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/templates", label: "Templates", icon: LayoutTemplate },
