@@ -48,6 +48,10 @@ task-files/
 browser-profiles/
 steel-profiles/
 .ottomate/
+
+# research notes (internal, not for public repo)
+*RESEARCH*.md
+useful.txt
 **/cookies.json
 **/storage-state.json
 **/local-storage.json
