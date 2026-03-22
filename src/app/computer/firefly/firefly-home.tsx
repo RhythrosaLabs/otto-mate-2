@@ -99,7 +99,8 @@ const SHOWCASE = [
     title: "Ethereal Bioluminescence",
     prompt: "A vast underground cavern with a crystal-clear lake, bioluminescent jellyfish floating above the water surface, ancient stone columns draped with glowing moss, volumetric light rays streaming through cracks in the ceiling, ultra-detailed fantasy landscape, 8K",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 20% 50%, rgba(13,75,110,0.8) 0%, transparent 70%), radial-gradient(ellipse at 80% 20%, rgba(74,32,128,0.6) 0%, transparent 60%), linear-gradient(135deg, #0a1628 0%, #0d3b66 40%, #1a8a8a 70%, #2d1854 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800&h=600&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #0a1628 0%, #0d3b66 40%, #1a8a8a 70%, #2d1854 100%)",
     span: "md:col-span-2 md:row-span-2",
   },
   {
@@ -107,7 +108,8 @@ const SHOWCASE = [
     title: "Neon Dystopia",
     prompt: "A rain-soaked cyberpunk metropolis at midnight, towering holographic advertisements reflected in wet streets, a lone figure in a transparent LED-lit raincoat, dense fog diffusing neon light, cinematic wide-angle, Blade Runner aesthetic",
     type: "image" as const,
-    background: "radial-gradient(circle at 30% 70%, rgba(192,37,211,0.5) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(0,102,255,0.4) 0%, transparent 50%), linear-gradient(135deg, #1a0a2e 0%, #c025d3 40%, #0066ff 70%, #2d1b69 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #1a0a2e 0%, #c025d3 40%, #0066ff 70%, #2d1b69 100%)",
     span: "",
   },
   {
@@ -115,7 +117,8 @@ const SHOWCASE = [
     title: "Celestial Garden",
     prompt: "An impossible floating garden among nebulae, crystalline trees bearing fruit made of starlight, paths of solidified aurora borealis, a figure in flowing robes tending luminous flowers, cosmic background with swirling galaxies, digital masterpiece",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 60% 30%, rgba(199,125,187,0.6) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(212,165,116,0.4) 0%, transparent 40%), linear-gradient(135deg, #2d1b69 0%, #c77dbb 35%, #d4a574 55%, #0a1628 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #2d1b69 0%, #c77dbb 35%, #d4a574 55%, #0a1628 100%)",
     span: "",
   },
   {
@@ -123,7 +126,8 @@ const SHOWCASE = [
     title: "The Last Library",
     prompt: "An infinite library spiraling upward into golden mist, leather-bound books with glowing spines, warm candlelight from floating lanterns, a solitary reader among towering shelves, baroque meets art nouveau architecture, dramatic chiaroscuro",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 50% 30%, rgba(218,165,32,0.5) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(139,69,19,0.4) 0%, transparent 40%), linear-gradient(135deg, #3d2008 0%, #b8860b 40%, #8b4513 70%, #daa520 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #3d2008 0%, #b8860b 40%, #8b4513 70%, #daa520 100%)",
     span: "",
   },
   {
@@ -131,7 +135,8 @@ const SHOWCASE = [
     title: "Submerged Sanctuary",
     prompt: "An Art Deco underwater temple reclaimed by nature, coral growing through marble columns, tropical fish swimming through grand hallways, shafts of emerald light filtering from the ocean surface, photorealistic rendering",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 70% 20%, rgba(0,131,143,0.6) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(0,105,92,0.5) 0%, transparent 40%), linear-gradient(135deg, #001f3f 0%, #004d40 30%, #00838f 60%, #003333 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1559825481-12a05cc00344?w=800&h=600&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #001f3f 0%, #004d40 30%, #00838f 60%, #003333 100%)",
     span: "md:col-span-2 md:row-span-2",
   },
   {
@@ -139,7 +144,8 @@ const SHOWCASE = [
     title: "Aurora Mechanica",
     prompt: "A massive steampunk orrery in a Victorian observatory, clockwork planets orbiting a plasma sun, brass gears and crystal lenses catching aurora borealis light through a glass dome, copper and midnight blue contrast, hyper-detailed",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 40% 40%, rgba(184,115,51,0.5) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(46,139,87,0.4) 0%, transparent 40%), linear-gradient(135deg, #5c2e00 0%, #b87333 35%, #191970 65%, #2e8b57 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #5c2e00 0%, #b87333 35%, #191970 65%, #2e8b57 100%)",
     span: "",
   },
   {
@@ -147,7 +153,8 @@ const SHOWCASE = [
     title: "Paper Universe",
     prompt: "A miniature paper-craft landscape unfolding from an open book, tiny origami mountains with real waterfalls, paper lanterns floating above a folded village, dramatic macro photography with shallow depth of field, magical realism",
     type: "image" as const,
-    background: "radial-gradient(ellipse at 50% 40%, rgba(180,160,130,0.3) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(150,100,80,0.3) 0%, transparent 40%), linear-gradient(135deg, #2a2420 0%, #6b4f3a 35%, #544838 65%, #3d3028 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #2a2420 0%, #6b4f3a 35%, #544838 65%, #3d3028 100%)",
     span: "",
   },
   {
@@ -155,7 +162,26 @@ const SHOWCASE = [
     title: "Digital Genesis",
     prompt: "The moment of creation visualized as a supernova of data streams, fractal patterns forming into faces and landscapes, binary rain transforming into cherry blossoms, the boundary between digital and organic, cinematic concept art",
     type: "video" as const,
-    background: "radial-gradient(circle at 50% 50%, rgba(0,80,255,0.6) 0%, transparent 40%), radial-gradient(circle at 30% 30%, rgba(139,0,255,0.4) 0%, transparent 50%), linear-gradient(135deg, #000833 0%, #0050ff 35%, #8b00ff 65%, #1a0033 100%)",
+    imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #000833 0%, #0050ff 35%, #8b00ff 65%, #1a0033 100%)",
+    span: "",
+  },
+  {
+    id: "sc9",
+    title: "Frozen Monarch",
+    prompt: "A colossal ice palace perched atop a frozen waterfall under the northern lights, crystal spires refracting aurora into prismatic arcs, a lone snow fox on the bridge of frost, extreme detail, fantasy realism, 8K cinematic",
+    type: "image" as const,
+    imageUrl: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #0a1929 0%, #1a4a6b 35%, #4dd0e1 65%, #0d2137 100%)",
+    span: "",
+  },
+  {
+    id: "sc10",
+    title: "Volcanic Dreamscape",
+    prompt: "A surreal volcanic island at golden hour, rivers of glowing magma flowing into a turquoise ocean creating billowing steam, obsidian rock formations shaped like ancient gods, dramatic aerial perspective, National Geographic quality",
+    type: "image" as const,
+    imageUrl: "https://images.unsplash.com/photo-1462332420958-a05d1e002413?w=600&h=400&fit=crop&auto=format&q=80",
+    background: "linear-gradient(135deg, #1a0500 0%, #bf360c 35%, #ff6f00 65%, #3e2723 100%)",
     span: "",
   },
 ];
@@ -169,6 +195,9 @@ function ShowcaseCard({
   item: (typeof SHOWCASE)[number];
   onClick: () => void;
 }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
   return (
     <button
       onClick={onClick}
@@ -176,19 +205,27 @@ function ShowcaseCard({
         "relative rounded-2xl overflow-hidden cursor-pointer group text-left transition-transform duration-300 hover:scale-[1.02] hover:z-10 focus:outline-none focus:ring-2 focus:ring-violet-500/50",
         item.span
       )}
-      style={{ background: item.background }}
+      style={{ background: item.background, minHeight: item.span ? undefined : 180 }}
     >
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.12) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.06) 0%, transparent 40%)",
-        }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+      {/* Real image */}
+      {!imgError && (
+        <img
+          src={item.imageUrl}
+          alt={item.title}
+          loading="lazy"
+          onLoad={() => setImgLoaded(true)}
+          onError={() => setImgError(true)}
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover transition-opacity duration-700",
+            imgLoaded ? "opacity-100" : "opacity-0"
+          )}
+        />
+      )}
+      {/* Dark overlay for legibility */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10" />
       <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded-full text-white/80 font-medium uppercase tracking-wider">
+          <span className="text-[10px] px-2 py-0.5 bg-black/30 backdrop-blur-sm rounded-full text-white/90 font-medium uppercase tracking-wider">
             {item.type === "video" ? (
               <><Play className="w-2.5 h-2.5 inline mr-0.5 -mt-px" />Video</>
             ) : (
@@ -197,7 +234,7 @@ function ShowcaseCard({
           </span>
         </div>
         <h4 className="text-sm font-semibold text-white mb-1 drop-shadow-lg">{item.title}</h4>
-        <p className="text-[11px] text-white/50 line-clamp-2 leading-relaxed">{item.prompt}</p>
+        <p className="text-[11px] text-white/60 line-clamp-2 leading-relaxed drop-shadow">{item.prompt}</p>
       </div>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center z-20">
         <span className="px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-sm font-medium flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
