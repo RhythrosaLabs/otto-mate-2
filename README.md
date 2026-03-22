@@ -14,7 +14,7 @@
     <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-black?logo=next.js"/>
     <img alt="Claude" src="https://img.shields.io/badge/Claude-Anthropic-orange"/>
     <img alt="GPT-4.1" src="https://img.shields.io/badge/GPT--4.1-OpenAI-74aa9c?logo=openai"/>
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue"/>
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?logo=opensourceinitiative"/>
     <img alt="self-hosted" src="https://img.shields.io/badge/self--hosted-✓-green"/>
   </p>
 </p>
@@ -739,4 +739,10 @@ src/
 
 ## License
 
-MIT
+Copyright © 2026 Dan Sheils / [RhythrosaLabs](https://github.com/RhythrosaLabs). All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
