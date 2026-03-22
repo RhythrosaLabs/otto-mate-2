@@ -934,6 +934,12 @@ export function addGalleryItem(item: GalleryItem): void {
   });
 }
 
+export function deleteGalleryItem(id: string): boolean {
+  const db = getDb();
+  const result = db.prepare("DELETE FROM gallery_items WHERE id = ?").run(id);
+  return result.changes > 0;
+}
+
 // ─── Connector Config ─────────────────────────────────────────────────────────
 
 export function getConnectorConfig(connectorId: string): Record<string, unknown> | null {

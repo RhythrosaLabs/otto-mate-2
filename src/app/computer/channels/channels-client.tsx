@@ -106,7 +106,7 @@ export function ChannelsClient() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pplx-accent to-emerald-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center">
           <Globe size={20} className="text-white" />
         </div>
         <div>

@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/sidebar";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { PersistentLayout } from "@/components/persistent-layout";
 import { BackgroundStatus } from "@/components/background-status";
+import { BoltPersistentIframe } from "@/components/bolt-persistent-iframe";
 
 export default function ComputerLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function ComputerLayout({ children }: { children: React.ReactNode
             {children}
           </PersistentLayout>
         </KeyboardShortcuts>
+        <BoltPersistentIframe />
       </main>
       <BackgroundStatus />
     </div>

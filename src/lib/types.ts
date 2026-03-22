@@ -259,7 +259,10 @@ export type ToolName =
   | "organize_files"
   | "deep_research"
   | "finance_data"
-  | "social_media_post";
+  | "social_media_post"
+  | "computer_use"
+  | "execute_connector"
+  | "sandbox_execute";
 
 // ─── Token Usage (OpenClaw-inspired) ──────────────────────────────────────────
 

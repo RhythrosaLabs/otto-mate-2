@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Sparkles, Image as ImageIcon, Video, Music, Mic2, Wand2,
   ZoomIn, Eraser, ArrowRight, Paintbrush,
   Film, Palette, Grid,
-  Expand, Globe, Flame,
+  Expand, Globe, Flame, Play, Heart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadGallery, type GalleryItem } from "./lib/gallery-store";
+import { usePageVisible } from "@/components/persistent-layout";
 
 /* ─── Feature Cards ──────────────────────────────────────────────── */
 
@@ -88,6 +90,124 @@ const TABS = [
   { id: "video", label: "Video" },
   { id: "audio", label: "Audio" },
 ] as const;
+
+/* ─── Showcase Data ──────────────────────────────────────────────── */
+
+const SHOWCASE = [
+  {
+    id: "sc1",
+    title: "Ethereal Bioluminescence",
+    prompt: "A vast underground cavern with a crystal-clear lake, bioluminescent jellyfish floating above the water surface, ancient stone columns draped with glowing moss, volumetric light rays streaming through cracks in the ceiling, ultra-detailed fantasy landscape, 8K",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 20% 50%, rgba(13,75,110,0.8) 0%, transparent 70%), radial-gradient(ellipse at 80% 20%, rgba(74,32,128,0.6) 0%, transparent 60%), linear-gradient(135deg, #0a1628 0%, #0d3b66 40%, #1a8a8a 70%, #2d1854 100%)",
+    span: "md:col-span-2 md:row-span-2",
+  },
+  {
+    id: "sc2",
+    title: "Neon Dystopia",
+    prompt: "A rain-soaked cyberpunk metropolis at midnight, towering holographic advertisements reflected in wet streets, a lone figure in a transparent LED-lit raincoat, dense fog diffusing neon light, cinematic wide-angle, Blade Runner aesthetic",
+    type: "image" as const,
+    background: "radial-gradient(circle at 30% 70%, rgba(192,37,211,0.5) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(0,102,255,0.4) 0%, transparent 50%), linear-gradient(135deg, #1a0a2e 0%, #c025d3 40%, #0066ff 70%, #2d1b69 100%)",
+    span: "",
+  },
+  {
+    id: "sc3",
+    title: "Celestial Garden",
+    prompt: "An impossible floating garden among nebulae, crystalline trees bearing fruit made of starlight, paths of solidified aurora borealis, a figure in flowing robes tending luminous flowers, cosmic background with swirling galaxies, digital masterpiece",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 60% 30%, rgba(199,125,187,0.6) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(212,165,116,0.4) 0%, transparent 40%), linear-gradient(135deg, #2d1b69 0%, #c77dbb 35%, #d4a574 55%, #0a1628 100%)",
+    span: "",
+  },
+  {
+    id: "sc4",
+    title: "The Last Library",
+    prompt: "An infinite library spiraling upward into golden mist, leather-bound books with glowing spines, warm candlelight from floating lanterns, a solitary reader among towering shelves, baroque meets art nouveau architecture, dramatic chiaroscuro",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 50% 30%, rgba(218,165,32,0.5) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(139,69,19,0.4) 0%, transparent 40%), linear-gradient(135deg, #3d2008 0%, #b8860b 40%, #8b4513 70%, #daa520 100%)",
+    span: "",
+  },
+  {
+    id: "sc5",
+    title: "Submerged Sanctuary",
+    prompt: "An Art Deco underwater temple reclaimed by nature, coral growing through marble columns, tropical fish swimming through grand hallways, shafts of emerald light filtering from the ocean surface, photorealistic rendering",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 70% 20%, rgba(0,131,143,0.6) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(0,105,92,0.5) 0%, transparent 40%), linear-gradient(135deg, #001f3f 0%, #004d40 30%, #00838f 60%, #003333 100%)",
+    span: "md:col-span-2 md:row-span-2",
+  },
+  {
+    id: "sc6",
+    title: "Aurora Mechanica",
+    prompt: "A massive steampunk orrery in a Victorian observatory, clockwork planets orbiting a plasma sun, brass gears and crystal lenses catching aurora borealis light through a glass dome, copper and midnight blue contrast, hyper-detailed",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 40% 40%, rgba(184,115,51,0.5) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(46,139,87,0.4) 0%, transparent 40%), linear-gradient(135deg, #5c2e00 0%, #b87333 35%, #191970 65%, #2e8b57 100%)",
+    span: "",
+  },
+  {
+    id: "sc7",
+    title: "Paper Universe",
+    prompt: "A miniature paper-craft landscape unfolding from an open book, tiny origami mountains with real waterfalls, paper lanterns floating above a folded village, dramatic macro photography with shallow depth of field, magical realism",
+    type: "image" as const,
+    background: "radial-gradient(ellipse at 50% 40%, rgba(180,160,130,0.3) 0%, transparent 50%), radial-gradient(circle at 30% 70%, rgba(150,100,80,0.3) 0%, transparent 40%), linear-gradient(135deg, #2a2420 0%, #6b4f3a 35%, #544838 65%, #3d3028 100%)",
+    span: "",
+  },
+  {
+    id: "sc8",
+    title: "Digital Genesis",
+    prompt: "The moment of creation visualized as a supernova of data streams, fractal patterns forming into faces and landscapes, binary rain transforming into cherry blossoms, the boundary between digital and organic, cinematic concept art",
+    type: "video" as const,
+    background: "radial-gradient(circle at 50% 50%, rgba(0,80,255,0.6) 0%, transparent 40%), radial-gradient(circle at 30% 30%, rgba(139,0,255,0.4) 0%, transparent 50%), linear-gradient(135deg, #000833 0%, #0050ff 35%, #8b00ff 65%, #1a0033 100%)",
+    span: "",
+  },
+];
+
+/* ─── Showcase Card ──────────────────────────────────────────────── */
+
+function ShowcaseCard({
+  item,
+  onClick,
+}: {
+  item: (typeof SHOWCASE)[number];
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative rounded-2xl overflow-hidden cursor-pointer group text-left transition-transform duration-300 hover:scale-[1.02] hover:z-10 focus:outline-none focus:ring-2 focus:ring-violet-500/50",
+        item.span
+      )}
+      style={{ background: item.background }}
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 25% 25%, rgba(255,255,255,0.12) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.06) 0%, transparent 40%)",
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded-full text-white/80 font-medium uppercase tracking-wider">
+            {item.type === "video" ? (
+              <><Play className="w-2.5 h-2.5 inline mr-0.5 -mt-px" />Video</>
+            ) : (
+              "Image"
+            )}
+          </span>
+        </div>
+        <h4 className="text-sm font-semibold text-white mb-1 drop-shadow-lg">{item.title}</h4>
+        <p className="text-[11px] text-white/50 line-clamp-2 leading-relaxed">{item.prompt}</p>
+      </div>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center z-20">
+        <span className="px-5 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-sm font-medium flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+          <Sparkles className="w-4 h-4" />
+          Try this prompt
+        </span>
+      </div>
+    </button>
+  );
+}
 
 /* ─── Prompt Bar ────────────────────────────────────────────────── */
 
@@ -168,6 +288,14 @@ function PromptBar() {
 export function FireflyHome() {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]["id"]>("featured");
   const router = useRouter();
+  const isVisible = usePageVisible();
+  const [recentItems, setRecentItems] = useState<GalleryItem[]>([]);
+
+  useEffect(() => {
+    if (isVisible) {
+      setRecentItems(loadGallery().slice(0, 8));
+    }
+  }, [isVisible]);
 
   const filteredFeatures = activeTab === "featured"
     ? FEATURES
@@ -229,6 +357,91 @@ export function FireflyHome() {
           <PromptBar />
         </div>
       </div>
+
+      {/* Featured Creations */}
+      <div className="px-6 pb-12">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Featured Creations</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Award-winning prompts to inspire your next masterpiece</p>
+            </div>
+            <Link
+              href="/computer/firefly/gallery"
+              className="text-xs text-zinc-500 hover:text-violet-400 transition-colors flex items-center gap-1"
+            >
+              View gallery <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 auto-rows-[160px] md:auto-rows-[180px] gap-2 md:gap-3 grid-flow-dense">
+            {SHOWCASE.map((item) => (
+              <ShowcaseCard
+                key={item.id}
+                item={item}
+                onClick={() => {
+                  const encoded = encodeURIComponent(item.prompt);
+                  router.push(
+                    item.type === "video"
+                      ? `/computer/firefly/generate/video?prompt=${encoded}`
+                      : `/computer/firefly/generate/image?prompt=${encoded}`
+                  );
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Your Recent Creations */}
+      {recentItems.length > 0 && (
+        <div className="px-6 pb-10">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-white">Your Creations</h3>
+              <Link
+                href="/computer/firefly/gallery"
+                className="text-xs text-zinc-500 hover:text-violet-400 transition-colors flex items-center gap-1"
+              >
+                View all <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {recentItems.map((item) => (
+                <Link
+                  key={item.id}
+                  href="/computer/firefly/gallery"
+                  className="relative rounded-xl overflow-hidden aspect-square bg-zinc-900 border border-zinc-800/50 hover:border-zinc-700 transition-all group"
+                >
+                  {item.type === "image" ? (
+                    <img
+                      src={item.url}
+                      alt={item.prompt}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : item.type === "video" ? (
+                    <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-blue-900/30 flex items-center justify-center">
+                      <Play className="w-8 h-8 text-cyan-400" />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-amber-900/30 to-orange-900/30 flex items-center justify-center">
+                      <Music className="w-8 h-8 text-amber-400" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <p className="text-xs text-white/80 line-clamp-1">{item.prompt}</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{item.model}</p>
+                  </div>
+                  {item.favorite && (
+                    <div className="absolute top-2 right-2">
+                      <Heart className="w-3.5 h-3.5 text-red-400 fill-red-400" />
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Ways to Create */}
       <div className="px-6 pb-8">

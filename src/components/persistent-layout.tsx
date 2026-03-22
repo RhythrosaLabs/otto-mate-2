@@ -47,11 +47,17 @@ export function PersistentLayout({ children }: { children: ReactNode }) {
   const cacheRef = useRef(new Map<string, CachedPage>());
   const orderRef = useRef<string[]>([]);
 
-  // Always update the current page in cache
-  cacheRef.current.set(pathname, {
-    element: children,
-    lastVisited: Date.now(),
-  });
+  // Only cache the FIRST render for each page. Subsequent navigations back
+  // reuse the original element tree so React preserves component instances
+  // (iframes, WebSocket connections, form state, etc.).
+  if (!cacheRef.current.has(pathname)) {
+    cacheRef.current.set(pathname, {
+      element: children,
+      lastVisited: Date.now(),
+    });
+  } else {
+    cacheRef.current.get(pathname)!.lastVisited = Date.now();
+  }
 
   // Update visit order (move to end = most recent)
   const orderIdx = orderRef.current.indexOf(pathname);
@@ -83,9 +89,9 @@ export function PersistentLayout({ children }: { children: ReactNode }) {
               // Prevent hidden panels from capturing focus/tab navigation
               {...(isActive ? {} : { inert: true })}
             >
-              {/* For the active page, always render fresh children from Next.js.
-                  For cached pages, render the stored element (preserves component tree). */}
-              {isActive ? children : cached.element}
+              {/* Always render the cached element tree so React preserves
+                  component instances across navigations. */}
+              {cached.element}
             </div>
           </PageVisibleContext.Provider>
         );

@@ -30,8 +30,8 @@ export const THEMES: Theme[] = [
   {
     id: "default",
     name: "Default",
-    description: "The original Ottomate dark theme",
-    icon: "⬛",
+    description: "Nova-inspired violet gradient theme",
+    icon: "💜",
     category: "dark",
     colors: {
       bg: "#0f0f10",
@@ -40,7 +40,8 @@ export const THEMES: Theme[] = [
       border: "#2a2a2e",
       text: "#e8e8ea",
       muted: "#8b8b94",
-      accent: "#20b2aa",
+      accent: "#8b5cf6",
+      accentHover: "#7c3aed",
     },
   },
   {
@@ -252,7 +253,7 @@ export const THEMES: Theme[] = [
       border: "#e2e4e8",
       text: "#1a1a2e",
       muted: "#6b7280",
-      accent: "#0d9488",
+      accent: "#7c3aed",
     },
   },
 ];

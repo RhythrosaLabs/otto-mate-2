@@ -212,12 +212,12 @@ function FileUploadZone({
         "flex items-center gap-2 rounded-lg border border-dashed cursor-pointer transition-all",
         compact ? "p-2" : "p-3",
         dragging
-          ? "border-[#20b2aa] bg-[#20b2aa]/5"
-          : "border-[#2a2a2e] hover:border-[#20b2aa]/40 bg-[#0f0f10]/50"
+          ? "border-[#8b5cf6] bg-[#8b5cf6]/5"
+          : "border-[#2a2a2e] hover:border-[#8b5cf6]/40 bg-[#0f0f10]/50"
       )}
     >
       {uploading ? (
-        <Loader2 className="w-4 h-4 text-[#20b2aa] animate-spin" />
+        <Loader2 className="w-4 h-4 text-[#8b5cf6] animate-spin" />
       ) : (
         <Upload className="w-4 h-4 text-[#8b8b94]" />
       )}
@@ -370,11 +370,11 @@ function ModelSelector({
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all text-sm",
           open
-            ? "border-[#20b2aa] bg-[#161618]"
+            ? "border-[#8b5cf6] bg-[#161618]"
             : "border-[#2a2a2e] bg-[#161618] hover:border-[#3a3a3e]"
         )}
       >
-        <Sparkles className="w-3.5 h-3.5 text-[#20b2aa] shrink-0" />
+        <Sparkles className="w-3.5 h-3.5 text-[#8b5cf6] shrink-0" />
         <span className={cn("flex-1 truncate", value ? "text-[#e8e8ea]" : "text-[#8b8b94]")}>
           {displayName}
         </span>
@@ -393,7 +393,7 @@ function ModelSelector({
                 value={searchQ}
                 onChange={e => handleInput(e.target.value)}
                 placeholder="Search models..."
-                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0f0f10] border border-[#2a2a2e] text-[#e8e8ea] text-xs focus:outline-none focus:border-[#20b2aa] placeholder:text-[#8b8b94]/50"
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0f0f10] border border-[#2a2a2e] text-[#e8e8ea] text-xs focus:outline-none focus:border-[#8b5cf6] placeholder:text-[#8b8b94]/50"
               />
             </div>
             {/* Provider tabs */}
@@ -403,7 +403,7 @@ function ModelSelector({
                   className={cn(
                     "px-2 py-1 rounded text-[10px] font-medium transition-all",
                     provider === p
-                      ? "bg-[#20b2aa] text-white"
+                      ? "bg-[#8b5cf6] text-white"
                       : "text-[#8b8b94] hover:text-[#e8e8ea] hover:bg-white/5"
                   )}>
                   {p === "auto" ? "Auto" : p === "replicate" ? "Replicate" : "Hugging Face"}
@@ -416,7 +416,7 @@ function ModelSelector({
           <div className="max-h-[300px] overflow-y-auto">
             {searching && (
               <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-4 h-4 text-[#20b2aa] animate-spin" />
+                <Loader2 className="w-4 h-4 text-[#8b5cf6] animate-spin" />
               </div>
             )}
 
@@ -434,7 +434,7 @@ function ModelSelector({
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 transition-colors text-left",
-                      value === m.fullName && "bg-[#20b2aa]/5"
+                      value === m.fullName && "bg-[#8b5cf6]/5"
                     )}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -444,7 +444,7 @@ function ModelSelector({
                       <span className="text-[10px] text-[#8b8b94] font-mono">{m.fullName}</span>
                     </div>
                     <ProviderBadge provider={m.provider} />
-                    {value === m.fullName && <Check className="w-3.5 h-3.5 text-[#20b2aa]" />}
+                    {value === m.fullName && <Check className="w-3.5 h-3.5 text-[#8b5cf6]" />}
                   </button>
                 ))}
               </>
@@ -463,7 +463,7 @@ function ModelSelector({
                 }}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 transition-colors text-left",
-                  value === m.fullName && "bg-[#20b2aa]/5"
+                  value === m.fullName && "bg-[#8b5cf6]/5"
                 )}>
                 {m.cover_image_url ? (
                   <img src={m.cover_image_url} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
@@ -561,7 +561,7 @@ function OutputViewer({
     return (
       <div>
         <div className="flex items-center gap-3 p-3 rounded-lg bg-[#161618] border border-[#2a2a2e]">
-          <Volume2 className="w-4 h-4 text-[#20b2aa] shrink-0" />
+          <Volume2 className="w-4 h-4 text-[#8b5cf6] shrink-0" />
           <audio src={url} controls className="w-full h-8" />
         </div>
         {actionBar}
@@ -579,7 +579,7 @@ function OutputViewer({
             <p className="text-[10px] text-[#8b8b94]">3D Model</p>
           </div>
           <a href={url} download={file.filename}
-            className="px-2.5 py-1 rounded-md bg-[#20b2aa]/10 text-[#20b2aa] text-[10px] font-medium hover:bg-[#20b2aa]/20">
+            className="px-2.5 py-1 rounded-md bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-medium hover:bg-[#8b5cf6]/20">
             Download
           </a>
         </div>
@@ -597,7 +597,7 @@ function OutputViewer({
           <p className="text-[10px] text-[#8b8b94]">{mime}</p>
         </div>
         <a href={url} download={file.filename}
-          className="px-2.5 py-1 rounded-md bg-[#1c1c1f] border border-[#2a2a2e] text-[#e8e8ea] text-[10px] hover:border-[#20b2aa]/40">
+          className="px-2.5 py-1 rounded-md bg-[#1c1c1f] border border-[#2a2a2e] text-[#e8e8ea] text-[10px] hover:border-[#8b5cf6]/40">
           Download
         </a>
       </div>
@@ -677,7 +677,7 @@ function PlaygroundColumnPanel({
                     className={cn(
                       "px-2 py-0.5 rounded text-[10px] font-medium transition-all border",
                       column.params.aspect_ratio === ar
-                        ? "border-[#20b2aa] bg-[#20b2aa]/10 text-[#20b2aa]"
+                        ? "border-[#8b5cf6] bg-[#8b5cf6]/10 text-[#8b5cf6]"
                         : "border-[#2a2a2e] text-[#8b8b94] hover:text-[#e8e8ea]"
                     )}>
                     {ar}
@@ -694,7 +694,7 @@ function PlaygroundColumnPanel({
                 onChange={e => onUpdateColumn(column.id, {
                   params: { ...column.params, num_inference_steps: Number(e.target.value) }
                 })}
-                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#20b2aa]"
+                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#8b5cf6]"
               />
             </div>
             <div>
@@ -704,7 +704,7 @@ function PlaygroundColumnPanel({
                 onChange={e => onUpdateColumn(column.id, {
                   params: { ...column.params, seed: e.target.value ? Number(e.target.value) : undefined }
                 })}
-                className="w-full px-2 py-1 rounded-md bg-[#161618] border border-[#2a2a2e] text-[#e8e8ea] text-[10px] focus:outline-none focus:border-[#20b2aa] placeholder:text-[#8b8b94]/50"
+                className="w-full px-2 py-1 rounded-md bg-[#161618] border border-[#2a2a2e] text-[#e8e8ea] text-[10px] focus:outline-none focus:border-[#8b5cf6] placeholder:text-[#8b8b94]/50"
               />
             </div>
             <div>
@@ -716,7 +716,7 @@ function PlaygroundColumnPanel({
                     className={cn(
                       "px-2 py-0.5 rounded text-[10px] font-medium transition-all border",
                       column.params.output_format === f
-                        ? "border-[#20b2aa] bg-[#20b2aa]/10 text-[#20b2aa]"
+                        ? "border-[#8b5cf6] bg-[#8b5cf6]/10 text-[#8b5cf6]"
                         : "border-[#2a2a2e] text-[#8b8b94] hover:text-[#e8e8ea]"
                     )}>
                     {f.toUpperCase()}
@@ -733,7 +733,7 @@ function PlaygroundColumnPanel({
                 onChange={e => onUpdateColumn(column.id, {
                   params: { ...column.params, output_quality: Number(e.target.value) }
                 })}
-                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#20b2aa]"
+                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#8b5cf6]"
               />
             </div>
             <div>
@@ -745,7 +745,7 @@ function PlaygroundColumnPanel({
                 onChange={e => onUpdateColumn(column.id, {
                   params: { ...column.params, num_outputs: Number(e.target.value) }
                 })}
-                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#20b2aa]"
+                className="w-full h-1 bg-[#2a2a2e] rounded-lg appearance-none cursor-pointer accent-[#8b5cf6]"
               />
             </div>
           </div>
@@ -757,7 +757,7 @@ function PlaygroundColumnPanel({
         {column.running && (
           <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-3">
             <div className="relative">
-              <div className="w-12 h-12 rounded-full border-2 border-[#2a2a2e] border-t-[#20b2aa] animate-spin" />
+              <div className="w-12 h-12 rounded-full border-2 border-[#2a2a2e] border-t-[#8b5cf6] animate-spin" />
             </div>
             <div className="text-center">
               <p className="text-xs text-[#e8e8ea] font-medium">Generating...</p>
@@ -766,7 +766,7 @@ function PlaygroundColumnPanel({
               </p>
             </div>
             <div className="w-32 h-1 bg-[#2a2a2e] rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#20b2aa] to-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+              <div className="h-full bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 rounded-full animate-pulse" style={{ width: "60%" }} />
             </div>
           </div>
         )}
@@ -915,7 +915,7 @@ function HistoryRail({
                   <button key={f} onClick={() => setGalleryFilter(f)}
                     className={cn(
                       "px-1.5 py-0.5 rounded text-[9px] font-medium transition-all capitalize",
-                      galleryFilter === f ? "bg-[#20b2aa] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]"
+                      galleryFilter === f ? "bg-[#8b5cf6] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]"
                     )}>
                     {f}
                   </button>
@@ -931,11 +931,11 @@ function HistoryRail({
               {/* View mode */}
               <div className="flex items-center gap-0.5 bg-[#0f0f10] rounded-md p-0.5 border border-[#2a2a2e]" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setViewMode("grid")}
-                  className={cn("p-0.5 rounded transition-all", viewMode === "grid" ? "bg-[#20b2aa] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]")}>
+                  className={cn("p-0.5 rounded transition-all", viewMode === "grid" ? "bg-[#8b5cf6] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]")}>
                   <Grid className="w-3 h-3" />
                 </button>
                 <button onClick={() => setViewMode("list")}
-                  className={cn("p-0.5 rounded transition-all", viewMode === "list" ? "bg-[#20b2aa] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]")}>
+                  className={cn("p-0.5 rounded transition-all", viewMode === "list" ? "bg-[#8b5cf6] text-white" : "text-[#8b8b94] hover:text-[#e8e8ea]")}>
                   <List className="w-3 h-3" />
                 </button>
               </div>
@@ -959,7 +959,7 @@ function HistoryRail({
             return (
               <div key={i}
                 onClick={() => onSelect(r)}
-                className="shrink-0 w-[140px] rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] overflow-hidden cursor-pointer hover:border-[#20b2aa]/40 transition-all group">
+                className="shrink-0 w-[140px] rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] overflow-hidden cursor-pointer hover:border-[#8b5cf6]/40 transition-all group">
                 {previewFile?.url ? (
                   imgFile ? (
                     <img src={previewFile.url} alt="" className="w-full h-20 object-cover" />
@@ -993,7 +993,7 @@ function HistoryRail({
           {filteredHistory.map((r, i) => (
             <div key={i}
               onClick={() => onSelect(r)}
-              className="flex items-center gap-3 p-2 rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] hover:border-[#20b2aa]/40 cursor-pointer transition-all">
+              className="flex items-center gap-3 p-2 rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] hover:border-[#8b5cf6]/40 cursor-pointer transition-all">
               <div className="w-8 h-8 rounded bg-[#0f0f10] flex items-center justify-center shrink-0">
                 {r.files.some(f => f.mimeType.startsWith("image/")) ? <ImageIcon className="w-3.5 h-3.5 text-purple-400" /> :
                  r.files.some(f => f.mimeType.startsWith("video/")) ? <Video className="w-3.5 h-3.5 text-blue-400" /> :
@@ -1236,7 +1236,7 @@ export function PlaygroundClient() {
       <div className="shrink-0 h-[52px] border-b border-[#2a2a2e] bg-[#161618] flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-[#20b2aa]" />
+            <Zap className="w-4 h-4 text-[#8b5cf6]" />
             <h1 className="text-sm font-semibold text-[#e8e8ea]">Multimedia Playground</h1>
           </div>
           <span className="text-[10px] text-[#8b8b94] bg-[#0f0f10] px-2 py-0.5 rounded border border-[#2a2a2e]">
@@ -1262,7 +1262,7 @@ export function PlaygroundClient() {
             {/* Prompt label */}
             <div>
               <label className="text-xs font-medium text-[#e8e8ea] flex items-center gap-1.5 mb-2">
-                <Type className="w-3.5 h-3.5 text-[#20b2aa]" />
+                <Type className="w-3.5 h-3.5 text-[#8b5cf6]" />
                 Prompt
               </label>
               <textarea
@@ -1277,7 +1277,7 @@ export function PlaygroundClient() {
                 }}
                 placeholder="Describe what you want to generate...&#10;&#10;Shift+Enter for new line"
                 rows={6}
-                className="w-full px-3 py-2.5 rounded-lg bg-[#0f0f10] border border-[#2a2a2e] text-[#e8e8ea] text-sm resize-none focus:outline-none focus:border-[#20b2aa] placeholder:text-[#8b8b94]/40 leading-relaxed"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#0f0f10] border border-[#2a2a2e] text-[#e8e8ea] text-sm resize-none focus:outline-none focus:border-[#8b5cf6] placeholder:text-[#8b8b94]/40 leading-relaxed"
               />
               <p className="text-[10px] text-[#8b8b94] mt-1">Press Enter to run &middot; Shift+Enter for new line</p>
             </div>
@@ -1285,7 +1285,7 @@ export function PlaygroundClient() {
             {/* File upload */}
             <div>
               <label className="text-xs font-medium text-[#e8e8ea] flex items-center gap-1.5 mb-2">
-                <Upload className="w-3.5 h-3.5 text-[#20b2aa]" />
+                <Upload className="w-3.5 h-3.5 text-[#8b5cf6]" />
                 Input File
               </label>
               <FileUploadZone
@@ -1299,7 +1299,7 @@ export function PlaygroundClient() {
             {/* Quick categories */}
             <div>
               <label className="text-xs font-medium text-[#e8e8ea] flex items-center gap-1.5 mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#20b2aa]" />
+                <Sparkles className="w-3.5 h-3.5 text-[#8b5cf6]" />
                 Quick Start
               </label>
               <div className="grid grid-cols-2 gap-1.5">
@@ -1318,7 +1318,7 @@ export function PlaygroundClient() {
                       setPrompt(cat.prompt);
                       promptRef.current?.focus();
                     }}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] hover:border-[#20b2aa]/30 transition-all text-left">
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-[#2a2a2e] bg-[#1c1c1f] hover:border-[#8b5cf6]/30 transition-all text-left">
                     <cat.icon className={cn("w-3.5 h-3.5", cat.color)} />
                     <span className="text-[11px] text-[#e8e8ea]">{cat.label}</span>
                   </button>
@@ -1348,7 +1348,7 @@ export function PlaygroundClient() {
                 "w-full py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2",
                 isRunning || !prompt.trim()
                   ? "bg-[#2a2a2e] text-[#8b8b94] cursor-not-allowed"
-                  : "bg-[#20b2aa] hover:bg-[#17a39b] text-white shadow-lg shadow-[#20b2aa]/20"
+                  : "bg-[#8b5cf6] hover:bg-[#7c3aed] text-white shadow-lg shadow-[#8b5cf6]/20"
               )}
             >
               {isRunning ? (

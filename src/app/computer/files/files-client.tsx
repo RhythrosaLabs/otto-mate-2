@@ -321,7 +321,7 @@ function PreviewContent({ file }: { file: FilesWithTask }) {
 function FolderThumbnail({ folder, sizeClass = "w-14 h-14", iconSize = 26 }: { folder: FileFolder; sizeClass?: string; iconSize?: number }) {
   return (
     <div className={cn(sizeClass, "rounded-xl flex items-center justify-center flex-shrink-0")}>
-      <FolderClosed size={iconSize} style={{ color: folder.color || "#5e9cf0" }} />
+      <FolderClosed size={iconSize} style={{ color: folder.color || "#8b5cf6" }} />
     </div>
   );
 }
@@ -552,7 +552,7 @@ export function FilesClient({ files, initialFolders, stats }: {
   }, [files, folders]);
 
   const sidebarItems: Array<{ key: SidebarFilter; label: string; icon: ReactNode }> = [
-    { key: "all",       label: "All Files",       icon: <FolderOpen      size={13} className="text-[#5e9cf0]" /> },
+    { key: "all",       label: "All Files",       icon: <FolderOpen      size={13} className="text-violet-400" /> },
     { key: "browser",   label: "Browser Sessions", icon: <Monitor        size={13} className="text-[#60a5fa]" /> },
     { key: "generated", label: "Generated",        icon: <Wand2          size={13} className="text-[#f472b6]" /> },
     { key: "images",    label: "Images",           icon: <ImageIcon      size={13} className="text-[#f27a54]" /> },
@@ -606,7 +606,7 @@ export function FilesClient({ files, initialFolders, stats }: {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={() => handleRenameFolder(folder.id, renameValue)}
             onKeyDown={(e) => { if (e.key === "Enter") handleRenameFolder(folder.id, renameValue); if (e.key === "Escape") setRenamingFolderId(null); }}
-            className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-[#5e9cf0]"
+            className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-violet-500"
             onClick={(e) => e.stopPropagation()}
           />
         </>
@@ -631,7 +631,7 @@ export function FilesClient({ files, initialFolders, stats }: {
       )}
     >
       <div className="flex-1 min-w-0 flex items-center gap-2">
-        <FolderClosed size={14} style={{ color: folder.color || "#5e9cf0" }} className="flex-shrink-0" />
+        <FolderClosed size={14} style={{ color: folder.color || "#8b5cf6" }} className="flex-shrink-0" />
         {renamingFolderId === folder.id ? (
           <input
             ref={renameInputRef}
@@ -639,7 +639,7 @@ export function FilesClient({ files, initialFolders, stats }: {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={() => handleRenameFolder(folder.id, renameValue)}
             onKeyDown={(e) => { if (e.key === "Enter") handleRenameFolder(folder.id, renameValue); if (e.key === "Escape") setRenamingFolderId(null); }}
-            className="text-xs text-white/80 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 outline-none focus:border-[#5e9cf0] flex-1"
+            className="text-xs text-white/80 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 outline-none focus:border-[#8b5cf6] flex-1"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -678,7 +678,7 @@ export function FilesClient({ files, initialFolders, stats }: {
   return (
     <div className="h-screen flex flex-col overflow-hidden p-4">
       {/* ── Finder Window ── */}
-      <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-white/[0.08] finder-window finder-animate-in">
+      <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-violet-500/[0.08] finder-window finder-animate-in">
 
         {/* ── Toolbar ── */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] select-none finder-toolbar">
@@ -705,7 +705,7 @@ export function FilesClient({ files, initialFolders, stats }: {
             ]).map(({ mode, Icon, title }, i) => (
               <button key={mode} onClick={() => setViewMode(mode)} title={title}
                 className={cn("px-2.5 py-1.5 transition-all", i > 0 && "border-l border-white/[0.08]",
-                  viewMode === mode ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" : "text-white/40 hover:text-white/70 hover:bg-white/[0.04]")}>
+                  viewMode === mode ? "bg-violet-500/[0.15] text-white shadow-[inset_0_1px_0_rgba(139,92,246,0.1)]" : "text-white/40 hover:text-white/70 hover:bg-white/[0.04]")}>
                 <Icon size={13} />
               </button>
             ))}
@@ -733,7 +733,7 @@ export function FilesClient({ files, initialFolders, stats }: {
           <div className="relative flex-shrink-0">
             <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search"
-              className="w-44 text-xs bg-white/[0.05] border border-white/[0.08] rounded-lg pl-7 pr-3 py-1.5 text-white/80 placeholder:text-white/25 outline-none focus:bg-white/[0.09] focus:border-white/20 focus:shadow-[0_0_0_3px_rgba(94,156,240,0.08)] transition-all" />
+              className="w-44 text-xs bg-white/[0.05] border border-white/[0.08] rounded-lg pl-7 pr-3 py-1.5 text-white/80 placeholder:text-white/25 outline-none focus:bg-white/[0.09] focus:border-violet-500/30 focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1)] transition-all" />
           </div>
         </div>
 
@@ -747,7 +747,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                 onClick={() => { setSidebarFilter(item.key); if (item.key !== "all") setCurrentFolderId(null); }}
                 className={cn("w-[calc(100%-10px)] mx-[5px] flex items-center gap-2 px-2.5 py-[5px] rounded-lg transition-all group text-left",
                   sidebarFilter === item.key && !currentFolderId
-                    ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]"
+                    ? "bg-gradient-to-r from-violet-500/[0.12] to-pink-500/[0.08] text-white shadow-[inset_0_1px_0_rgba(139,92,246,0.08),0_1px_2px_rgba(0,0,0,0.2)]"
                     : "text-white/50 hover:bg-white/[0.04] hover:text-white/75")}>
                 {item.icon}
                 <span className="text-[11px] font-medium flex-1 truncate">{item.label}</span>
@@ -763,9 +763,9 @@ export function FilesClient({ files, initialFolders, stats }: {
                     onClick={() => { setSidebarFilter("all"); navigateToFolder(folder.id); }}
                     className={cn("w-[calc(100%-10px)] mx-[5px] flex items-center gap-2 px-2.5 py-[5px] rounded-lg transition-all group text-left",
                       currentFolderId === folder.id
-                        ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]"
+                        ? "bg-gradient-to-r from-violet-500/[0.12] to-pink-500/[0.08] text-white shadow-[inset_0_1px_0_rgba(139,92,246,0.08),0_1px_2px_rgba(0,0,0,0.2)]"
                         : "text-white/50 hover:bg-white/[0.04] hover:text-white/75")}>
-                    <FolderClosed size={13} style={{ color: folder.color || "#5e9cf0" }} />
+                    <FolderClosed size={13} style={{ color: folder.color || "#8b5cf6" }} />
                     <span className="text-[11px] font-medium flex-1 truncate">{folder.name}</span>
                     <span className="text-[10px] text-white/20 group-hover:text-white/35 flex-shrink-0 tabular-nums">{folderFileCount(folder.id)}</span>
                   </button>
@@ -780,7 +780,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                 onClick={() => { setSidebarFilter(item.key); setCurrentFolderId(null); }}
                 className={cn("w-[calc(100%-10px)] mx-[5px] flex items-center gap-2 px-2.5 py-[5px] rounded-lg transition-all group text-left",
                   sidebarFilter === item.key
-                    ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.2)]"
+                    ? "bg-gradient-to-r from-violet-500/[0.12] to-pink-500/[0.08] text-white shadow-[inset_0_1px_0_rgba(139,92,246,0.08),0_1px_2px_rgba(0,0,0,0.2)]"
                     : "text-white/50 hover:bg-white/[0.04] hover:text-white/75")}>
                 {item.icon}
                 <span className="text-[11px] font-medium flex-1 truncate">{item.label}</span>
@@ -800,7 +800,7 @@ export function FilesClient({ files, initialFolders, stats }: {
               <div className="h-[3px] bg-white/[0.06] rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{
                   width: `${Math.min(100, ((stats?.totalSize || files.reduce((a, f) => a + f.size, 0)) / (500 * 1024 * 1024)) * 100)}%`,
-                  background: "linear-gradient(90deg, #5e9cf0, #818cf8)",
+                  background: "linear-gradient(90deg, #8b5cf6, #ec4899, #f97316)",
                 }} />
               </div>
               <p className="text-[10px] text-white/20 mt-1">{formatBytes(stats?.totalSize || files.reduce((a, f) => a + f.size, 0))} used</p>
@@ -856,11 +856,11 @@ export function FilesClient({ files, initialFolders, stats }: {
                 {creatingFolder && (
                   <div className="flex items-center gap-3 px-4 py-[7px] bg-white/[0.04] border-b border-white/[0.04]">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <FolderClosed size={14} className="text-[#5e9cf0] flex-shrink-0" />
+                      <FolderClosed size={14} className="text-[#8b5cf6] flex-shrink-0" />
                       <input ref={newFolderInputRef} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
                         onBlur={handleCreateFolder}
                         onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(); if (e.key === "Escape") setCreatingFolder(false); }}
-                        className="text-xs text-white/80 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 outline-none focus:border-[#5e9cf0] flex-1" />
+                        className="text-xs text-white/80 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 outline-none focus:border-[#8b5cf6] flex-1" />
                     </div>
                     <div className="flex items-center gap-1">
                       <button onClick={handleCreateFolder} className="p-1 rounded text-green-400 hover:bg-white/10"><Check size={12} /></button>
@@ -915,11 +915,11 @@ export function FilesClient({ files, initialFolders, stats }: {
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4">
                     {creatingFolder && (
                       <div className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-white/[0.04] text-center">
-                        <FolderClosed size={30} className="text-[#5e9cf0] mt-3 mb-1" />
+                        <FolderClosed size={30} className="text-[#8b5cf6] mt-3 mb-1" />
                         <input ref={newFolderInputRef} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
                           onBlur={handleCreateFolder}
                           onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(); if (e.key === "Escape") setCreatingFolder(false); }}
-                          className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-[#5e9cf0]" />
+                          className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-[#8b5cf6]" />
                       </div>
                     )}
                     {currentSubFolders.map(renderFolderGallery)}
@@ -986,7 +986,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                     ) : selectedFolderId ? (
                       <>
                         <div className="p-4 border-b border-white/[0.06] flex flex-col items-center gap-3">
-                          <FolderClosed size={48} className="text-[#5e9cf0]" />
+                          <FolderClosed size={48} className="text-[#8b5cf6]" />
                           <p className="text-xs font-semibold text-white/80 text-center break-all leading-snug px-2">
                             {folders.find(f => f.id === selectedFolderId)?.name}
                           </p>
@@ -1024,11 +1024,11 @@ export function FilesClient({ files, initialFolders, stats }: {
                 <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 lg:grid-cols-11 xl:grid-cols-13 gap-2">
                   {creatingFolder && (
                     <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-white/[0.04] text-center">
-                      <FolderClosed size={26} className="text-[#5e9cf0] mt-2 mb-1" />
+                      <FolderClosed size={26} className="text-[#8b5cf6] mt-2 mb-1" />
                       <input ref={newFolderInputRef} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
                         onBlur={handleCreateFolder}
                         onKeyDown={(e) => { if (e.key === "Enter") handleCreateFolder(); if (e.key === "Escape") setCreatingFolder(false); }}
-                        className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-[#5e9cf0]" />
+                        className="text-[10px] text-white/80 bg-white/10 border border-white/20 rounded px-1 py-0.5 w-full text-center outline-none focus:border-[#8b5cf6]" />
                     </div>
                   )}
                   {currentSubFolders.map(renderFolderIcon)}

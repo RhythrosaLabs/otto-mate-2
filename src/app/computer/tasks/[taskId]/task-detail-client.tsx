@@ -738,7 +738,7 @@ export function TaskDetailClient({ task: initialTask }: Props) {
                     )}
                   >
                     {msg.role === "assistant" && (
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pplx-accent to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Bot size={14} className="text-white" />
                       </div>
                     )}

@@ -320,7 +320,7 @@ function ComputerPageInner() {
       {/* Header */}
       <div className="text-center mb-12 animate-fade-in">
         <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pplx-accent to-blue-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center">
             <Monitor size={20} className="text-white" />
           </div>
         </div>
@@ -610,7 +610,7 @@ function ComputerPageInner() {
                     />
                   </div>
                 ) : (
-                  <div className="w-full h-24 bg-gradient-to-br from-pplx-accent/10 to-blue-500/10 flex items-center justify-center">
+                  <div className="w-full h-24 bg-gradient-to-br from-violet-500/10 via-pink-500/10 to-orange-500/10 flex items-center justify-center">
                     <span className="text-2xl opacity-30">🖼️</span>
                   </div>
                 )}

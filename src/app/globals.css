@@ -9,7 +9,7 @@
   --border: #2a2a2e;
   --text: #e8e8ea;
   --muted: #8b8b94;
-  --accent: #20b2aa;
+  --accent: #8b5cf6;
 }
 
 * {
@@ -59,7 +59,7 @@ body {
 
 /* Text selection */
 ::selection {
-  background: rgba(32, 178, 170, 0.25);
+  background: rgba(139, 92, 246, 0.25);
   color: #e8e8ea;
 }
 
@@ -90,7 +90,7 @@ body {
   border-radius: 0.25em;
   font-size: 0.9em;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  color: #20b2aa;
+  color: #a78bfa;
 }
 .prose pre {
   background: #141416;
@@ -115,7 +115,7 @@ body {
   line-height: 1.7;
 }
 .prose a {
-  color: #20b2aa;
+  color: #a78bfa;
   text-decoration: none;
 }
 .prose a:hover {
@@ -171,7 +171,7 @@ body {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #20b2aa, #3b82f6);
+  background: linear-gradient(135deg, #a78bfa, #f472b6, #fb923c);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -182,14 +182,14 @@ body {
   transition: all 0.15s ease;
 }
 .connector-card:hover {
-  border-color: rgba(32, 178, 170, 0.4);
-  background-color: rgba(32, 178, 170, 0.04);
+  border-color: rgba(139, 92, 246, 0.4);
+  background-color: rgba(139, 92, 246, 0.04);
 }
 
 /* Input focus */
 .search-input:focus {
-  border-color: rgba(32, 178, 170, 0.5);
-  box-shadow: 0 0 0 3px rgba(32, 178, 170, 0.1);
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 /* Task status badge */
@@ -236,50 +236,51 @@ body {
 /* ─── Finder / Files Menu ─── */
 
 .finder-toolbar {
-  background: linear-gradient(180deg, #333338 0%, #2a2a2f 50%, #262629 100%);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.3);
+  background: linear-gradient(180deg, #1e1e24 0%, #18181e 50%, #151519 100%);
+  border-bottom: 1px solid rgba(139,92,246,0.08);
+  box-shadow: inset 0 1px 0 rgba(139,92,246,0.06), 0 1px 3px rgba(0,0,0,0.4);
 }
 
 .finder-sidebar {
-  background: linear-gradient(180deg, rgba(30,30,34,0.92) 0%, rgba(26,26,30,0.95) 100%);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: linear-gradient(180deg, rgba(18,18,24,0.95) 0%, rgba(14,14,20,0.97) 100%);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
 
 .finder-window {
-  background: rgba(24,24,28,0.85);
-  backdrop-filter: blur(40px) saturate(1.4);
-  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+  background: rgba(14,14,20,0.92);
+  backdrop-filter: blur(40px) saturate(1.5);
+  -webkit-backdrop-filter: blur(40px) saturate(1.5);
   box-shadow:
-    0 0 0 0.5px rgba(255,255,255,0.08),
-    0 20px 60px rgba(0,0,0,0.55),
-    0 0 80px rgba(0,0,0,0.15);
+    0 0 0 0.5px rgba(139,92,246,0.12),
+    0 20px 60px rgba(0,0,0,0.6),
+    0 0 80px rgba(0,0,0,0.2),
+    0 0 120px rgba(139,92,246,0.03);
 }
 
 .finder-statusbar {
-  background: linear-gradient(180deg, #242428 0%, #222226 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  background: linear-gradient(180deg, #151519 0%, #131317 100%);
+  box-shadow: inset 0 1px 0 rgba(139,92,246,0.04);
 }
 
 .finder-list-header {
-  background: linear-gradient(180deg, #2a2a2f 0%, #252529 100%);
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.04);
+  background: linear-gradient(180deg, #1a1a22 0%, #161620 100%);
+  box-shadow: inset 0 -1px 0 rgba(139,92,246,0.04);
 }
 
 .finder-context-menu {
-  background: rgba(38,38,44,0.92);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  background: rgba(22,22,30,0.95);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow:
-    0 0 0 0.5px rgba(255,255,255,0.12),
-    0 12px 40px rgba(0,0,0,0.55),
-    0 0 1px rgba(255,255,255,0.05);
+    0 0 0 0.5px rgba(139,92,246,0.15),
+    0 12px 40px rgba(0,0,0,0.6),
+    0 0 1px rgba(139,92,246,0.08);
 }
 
 .finder-view-switcher {
-  background: linear-gradient(180deg, #3a3a40 0%, #333338 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.3);
+  background: linear-gradient(180deg, #222230 0%, #1c1c28 100%);
+  box-shadow: inset 0 1px 0 rgba(139,92,246,0.06), 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .finder-source-badge {
@@ -296,7 +297,15 @@ body {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.22);
+  background: linear-gradient(135deg, rgba(167,139,250,0.4), rgba(244,114,182,0.35));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.finder-sidebar button[class*="bg-white/[0.1]"] {
+  background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(244,114,182,0.08)) !important;
+  box-shadow: inset 0 1px 0 rgba(139,92,246,0.06), 0 1px 3px rgba(0,0,0,0.2) !important;
 }
 
 @keyframes finderFadeIn {

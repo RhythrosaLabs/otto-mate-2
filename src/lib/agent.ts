@@ -17,6 +17,13 @@ import path from "path";
 import * as cheerio from "cheerio";
 import type { AgentStep, ToolName, ModelId, Modality } from "./types";
 import { formatBytes } from "./utils";
+import { autoSelectSkills, buildSkillContext, getSkillsForTask } from "./structured-skills";
+import { semanticRecall, computeImportance, classifyMemoryType, compressMemories, identifyCompressible } from "./memory-engine";
+import { scopeToolsForRole, buildScopedSystemPrompt, SUBAGENT_ROLES } from "./subagent-roles";
+import { executeConnectorAction, listConnectorActions, EXECUTABLE_CONNECTORS } from "./executable-connectors";
+import { observePageElements, buildExtractionPrompt, processBrowseResult, formatBrowserResultForAgent, type ActAction, type ExtractAction, type ObserveAction } from "./stagehand-browser";
+import { executeSandboxed, validateCodeSecurity, formatSandboxResult } from "./sandbox-executor";
+import { computerUseAction, formatComputerUseResult, checkToolAvailability, COMPUTER_USE_TOOL_DESCRIPTION } from "./computer-use";
 import {
   addAgentStep,
   updateAgentStep,
@@ -817,6 +824,50 @@ Use when:
       required: ["query_type"],
     },
   },
+  // ─── New Tools (Research-Inspired) ────────────────────────────────────────
+  {
+    name: "computer_use",
+    description: "Control the computer screen, mouse, and keyboard for GUI automation. Take screenshots to see the screen, click at coordinates, type text, press keys, and use keyboard shortcuts. Supports macOS (screencapture + cliclick) and Linux (scrot + xdotool).",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          description: "The action to perform. Examples: 'screenshot', 'click at 500,300', 'type \"hello world\"', 'press return', 'hotkey cmd+v', 'double_click at 100,200'",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "execute_connector",
+    description: "Execute a real API call to a configured service (Slack, GitHub, Notion, Discord, Telegram, Linear, Stripe, Google Sheets). Unlike connector_call which describes integrations, this actually executes the API call live. Configure via environment variables (SLACK_BOT_TOKEN, GITHUB_TOKEN, etc.).",
+    input_schema: {
+      type: "object",
+      properties: {
+        connector_id: { type: "string", description: "Connector ID: slack, github, notion, discord, telegram, linear, stripe, google_sheets" },
+        action: { type: "string", description: "Action to perform (e.g., 'send_message', 'create_issue', 'create_page', 'search')" },
+        params: { type: "object", description: "Action-specific parameters (e.g., { channel: '#general', text: 'Hello' })" },
+        list_actions: { type: "boolean", description: "Set to true to list all available connector actions instead of executing" },
+      },
+      required: ["connector_id"],
+    },
+  },
+  {
+    name: "sandbox_execute",
+    description: "Execute code in an isolated sandbox environment with resource limits. Uses Docker containers when available (strongest isolation), Node.js VM for JavaScript, or restricted subprocesses. Safer than execute_code for untrusted or experimental code.",
+    input_schema: {
+      type: "object",
+      properties: {
+        language: { type: "string", enum: ["python", "javascript", "bash"], description: "Programming language" },
+        code: { type: "string", description: "Code to execute in the sandbox" },
+        timeout_ms: { type: "number", description: "Execution timeout in milliseconds (default: 30000)" },
+        allow_network: { type: "boolean", description: "Allow network access (default: false)" },
+        packages: { type: "array", items: { type: "string" }, description: "Packages to install before execution" },
+      },
+      required: ["language", "code"],
+    },
+  },
 ];
 
 // ─── Gemini schema sanitizer ──────────────────────────────────────────────────
@@ -1005,6 +1056,16 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
     if (!matchedSkill && !skillInstructions) {
       const allInstructions = activeSkills.map(s => s.instructions).filter(Boolean).join("\n");
       if (allInstructions) skillInstructions = allInstructions;
+    }
+
+    // Feature 1: Auto-select relevant marketplace skills (Superpowers-inspired)
+    if (!matchedSkill) {
+      const autoSkillContext = getSkillsForTask(userMessage);
+      if (autoSkillContext) {
+        skillInstructions = skillInstructions
+          ? `${skillInstructions}\n\n${autoSkillContext}`
+          : autoSkillContext;
+      }
     }
   } catch { /* best-effort */ }
 
@@ -2048,6 +2109,22 @@ const SENSITIVE_ACTIONS: Partial<Record<ToolName, (input: Record<string, unknown
     }
     return false;
   },
+  // New sensitive actions for research-inspired features
+  execute_connector: (input) => {
+    const action = String(input.action || "");
+    if (/send|create|delete|post|publish/i.test(action)) {
+      return `Execute live API: ${input.connector_id}/${action}`;
+    }
+    return false;
+  },
+  computer_use: (input) => {
+    const action = String(input.action || "");
+    // Screenshots are safe, but clicking/typing need approval
+    if (/click|type|press|hotkey|drag/i.test(action)) {
+      return `Computer use: ${action.slice(0, 80)}`;
+    }
+    return false;
+  },
 };
 
 async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: ToolContext): Promise<string> {
@@ -2171,6 +2248,39 @@ async function executeToolInner(name: ToolName, input: Record<string, unknown>, 
     case "social_media_post": return executeSocialMedia(input as Record<string, unknown>, ctx);
     case "request_user_input": return JSON.stringify({ waiting: true, question: input.question, options: input.options || [], context: input.context || "" });
     case "complete_task": return handleCompleteTask(input.summary as string, (input.files_created as string[]) || [], (input.add_to_gallery as boolean) || false, ctx);
+    // ─── New tools (Research-inspired) ────────────────────────────────────
+    case "computer_use": {
+      const result = await computerUseAction(input.action as string);
+      return formatComputerUseResult(result);
+    }
+    case "execute_connector": {
+      if (input.list_actions) {
+        return listConnectorActions(input.connector_id as string | undefined);
+      }
+      const result = await executeConnectorAction(
+        input.connector_id as string,
+        input.action as string || "",
+        (input.params as Record<string, unknown>) || {},
+      );
+      if (result.success) {
+        return `${input.connector_id}/${input.action} succeeded:\n${JSON.stringify(result.data, null, 2).slice(0, 5000)}`;
+      }
+      return `${input.connector_id}/${input.action} failed: ${result.error}`;
+    }
+    case "sandbox_execute": {
+      const secCheck = validateCodeSecurity(input.code as string, input.language as string);
+      if (!secCheck.safe) {
+        return `Code blocked by security check: ${secCheck.blocked_patterns.join(", ")}`;
+      }
+      const result = await executeSandboxed({
+        language: input.language as "python" | "javascript" | "bash",
+        code: input.code as string,
+        timeout_ms: input.timeout_ms as number | undefined,
+        allow_network: input.allow_network as boolean | undefined,
+        packages: input.packages as string[] | undefined,
+      });
+      return formatSandboxResult(result);
+    }
     default: return `Unknown tool: ${name}`;
   }
 }
@@ -3063,6 +3173,18 @@ async function executeBrowseWeb(
           results.push(`\nPage content:\n${bodyText}`);
         }
 
+        // Feature 2: Stagehand-style page observation — auto-detect interactive elements
+        try {
+          const pageHtml = await page.content();
+          const observed = observePageElements(pageHtml);
+          if (observed.length > 0) {
+            results.push(`\n**Interactive Elements Detected (Stagehand):**`);
+            for (const elem of observed.slice(0, 15)) {
+              results.push(`- [${elem.type}] ${elem.description} → \`${elem.selector}\``);
+            }
+          }
+        } catch { /* best-effort stagehand observation */ }
+
         return results.join("\n");
       } finally {
         // Release Steel session (saves profile + context) or close local browser
@@ -3134,11 +3256,31 @@ async function executeBrowseWeb(
 // ─── Memory ───────────────────────────────────────────────────────────────────
 
 async function executeMemoryStore(key: string, value: string, tags: string[], ctx: ToolContext): Promise<string> {
-  memoryStore({ id: uuidv4(), key, value, source_task_id: ctx.taskId, tags, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-  return `Memory stored: "${key}" = "${value.slice(0, 100)}${value.length > 100 ? "..." : ""}" [tags: ${tags.join(", ") || "none"}]`;
+  const memoryType = classifyMemoryType(key, value);
+  memoryStore({ id: uuidv4(), key, value, source_task_id: ctx.taskId, tags: [...tags, memoryType], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
+  // Check for memory compression opportunity
+  const allMemories = listMemory(500);
+  if (allMemories.length > 200) {
+    const compressible = identifyCompressible(allMemories as any);
+    if (compressible.length > 10) {
+      console.log(`[memory] ${allMemories.length} memories — ${compressible.length} candidates for compression`);
+    }
+  }
+
+  return `Memory stored: "${key}" = "${value.slice(0, 100)}${value.length > 100 ? "..." : ""}" [type: ${memoryType}, tags: ${tags.join(", ") || "none"}]`;
 }
 
 async function executeMemoryRecall(query: string, limit: number): Promise<string> {
+  // Feature 3: Try semantic recall first (embedding-based), fall back to DB text search
+  const allMemories = listMemory(500);
+  const semanticResults = semanticRecall(query, allMemories as any, limit);
+
+  if (semanticResults.length > 0) {
+    return `Found ${semanticResults.length} memories (semantic search):\n\n${semanticResults.map((m, i) => `${i + 1}. **${m.entry.key}**: ${m.entry.value}\n   Tags: [${(m.entry.tags || []).join(", ")}]\n   ID: ${m.entry.id}\n   Updated: ${m.entry.updated_at}\n   Score: ${m.combinedScore.toFixed(3)}`).join("\n\n")}`;
+  }
+
+  // Fallback to basic DB search
   const results = memoryRecall(query, limit);
   if (results.length === 0) return `No memories found for "${query}".`;
   return `Found ${results.length} memories:\n\n${results.map((m, i) => `${i + 1}. **${m.key}**: ${m.value}\n   Tags: [${(m.tags || []).join(", ")}]\n   ID: ${m.id}\n   Updated: ${m.updated_at}`).join("\n\n")}`;
@@ -4060,11 +4202,19 @@ async function createSubAgent(
 ): Promise<string> {
   const subTaskId = uuidv4();
   addSubTask({ id: subTaskId, parent_task_id: ctx.taskId, title, status: "running", agent_type: agentType, created_at: new Date().toISOString() });
-  const subSystemPrompt = getSubAgentSystemPrompt(agentType);
+
+  // Use typed subagent roles with tool scoping (Feature 4)
+  const roleConfig = SUBAGENT_ROLES[agentType as keyof typeof SUBAGENT_ROLES];
+  const subSystemPrompt = roleConfig
+    ? buildScopedSystemPrompt(agentType, title, instructions, context)
+    : getSubAgentSystemPrompt(agentType);
   const subModel = selectSubAgentModel(agentType, model);
 
-  // Sub-agents get access to most tools (excluding recursive sub-agent creation beyond depth 1, and task-lifecycle tools)
-  const subTools = TOOLS.filter((t) => !["complete_task", "request_user_input", "dream_machine"].includes(t.name));
+  // Scope tools based on role (Feature 4) — only give sub-agents tools they need
+  const baseSubTools = TOOLS.filter((t) => !["complete_task", "request_user_input", "dream_machine"].includes(t.name));
+  const subTools = roleConfig
+    ? scopeToolsForRole(baseSubTools, agentType).map(t => TOOLS.find(tool => tool.name === t.name)!).filter(Boolean)
+    : baseSubTools;
   const MAX_SUB_ITERATIONS = 15;
   const fullPrompt = `${context ? `Context:\n${context}\n\n` : ""}Task: ${instructions}`;
 
@@ -7495,6 +7645,9 @@ function toolUseTypeToStepType(toolName: ToolName): AgentStep["type"] {
     send_email: "connector_call",
     deep_research: "search", finance_data: "search",
     social_media_post: "connector_call",
+    computer_use: "reasoning",
+    execute_connector: "connector_call",
+    sandbox_execute: "code_execution",
   };
   return map[toolName] || "reasoning";
 }
@@ -7524,6 +7677,9 @@ function toolUseToTitle(name: string, input: Record<string, unknown>): string {
     deep_research: () => `Deep Research: "${((input.topic as string) || "").slice(0, 50)}"`,
     finance_data: () => `Finance: ${input.query_type} ${input.symbol || ""}`,
     social_media_post: () => `Social: ${input.platform} → ${input.action}${input.content ? " — " + ((input.content as string) || "").slice(0, 40) + "..." : ""}`,
+    computer_use: () => `Computer: ${((input.action as string) || "").slice(0, 50)}`,
+    execute_connector: () => `Connector: ${input.connector_id}/${input.action || "list"}`,
+    sandbox_execute: () => `Sandbox ${input.language}: ${((input.code as string) || "").slice(0, 40)}...`,
   };
   return titles[name]?.() ?? name;
 }

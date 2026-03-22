@@ -94,7 +94,7 @@ export function OnboardingClient() {
         <div className="rounded-2xl border border-pplx-border bg-pplx-card p-8">
           {step === 0 && (
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-pplx-accent to-indigo-500 flex items-center justify-center mb-5">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center mb-5">
                 <Sparkles size={28} className="text-white" />
               </div>
               <h2 className="text-xl font-semibold text-pplx-text mb-2">Welcome to Ottomate</h2>
@@ -273,7 +273,7 @@ export function OnboardingClient() {
             <button
               onClick={completeOnboarding}
               disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pplx-accent to-indigo-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
               Get Started

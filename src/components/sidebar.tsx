@@ -83,7 +83,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 mb-6">
         <Link href="/computer" className="flex items-center gap-2.5 group">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pplx-accent to-blue-500 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center">
             <Monitor size={14} className="text-white" />
           </div>
           <span className="text-sm font-semibold text-pplx-text">Ottomate</span>

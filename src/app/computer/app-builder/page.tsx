@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { AppBuilderClient } from "./app-builder-client-legacy";
+import { AppBuilderEmbed } from "./app-builder-client";
 
 export const metadata: Metadata = { title: "App Builder — Ottomate" };
 
 /**
- * App Builder page — built-in AI-powered web app generator.
- * Uses streaming LLM code generation with srcDoc preview (no WebContainers).
+ * App Builder page — the actual Forge iframe is managed by
+ * BoltPersistentIframe in the Computer layout for state persistence.
  */
 export default function AppBuilderPage() {
-  return <AppBuilderClient />;
+  return <AppBuilderEmbed />;
 }

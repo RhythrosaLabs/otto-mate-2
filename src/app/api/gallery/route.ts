@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listGallery, addGalleryItem } from "@/lib/db";
+import { listGallery, addGalleryItem, deleteGalleryItem } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 
 export const dynamic = "force-dynamic";
@@ -43,4 +43,13 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+}
+
+// DELETE /api/gallery?id=xxx
+export async function DELETE(req: NextRequest) {
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const deleted = deleteGalleryItem(id);
+  if (!deleted) return NextResponse.json({ error: "not found" }, { status: 404 });
+  return NextResponse.json({ success: true });
 }

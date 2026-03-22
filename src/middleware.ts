@@ -27,6 +27,16 @@ function isPublicPath(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── Cross-Origin Isolation for App Builder ────────────────────────────
+  // bolt.diy WebContainers require SharedArrayBuffer, which needs both
+  // COEP and COOP headers on the parent frame.
+  if (pathname === "/computer/app-builder") {
+    const response = NextResponse.next();
+    response.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+    response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    return response;
+  }
+
   // Only protect API routes
   if (!pathname.startsWith("/api/")) {
     return NextResponse.next();
@@ -62,5 +72,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/api/:path*", "/computer/app-builder"],
 };

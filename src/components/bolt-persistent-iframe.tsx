@@ -9,6 +9,7 @@ import {
   Maximize2,
   ExternalLink,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -114,7 +115,14 @@ export function BoltPersistentIframe() {
             : undefined
         }
       >
-        {boltStatus === "running" ? (
+        {boltStatus === "checking" && isActive ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+              <p className="text-zinc-400 text-sm">Connecting to Forge...</p>
+            </div>
+          </div>
+        ) : boltStatus === "running" ? (
           <>
             {/* Toolbar – only rendered when on the app-builder page */}
             {isActive && (
