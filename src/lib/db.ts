@@ -1909,3 +1909,72 @@ export function deletePipeline(id: string): void {
   const db = getDb();
   db.prepare("DELETE FROM pipelines WHERE id = ?").run(id);
 }
+
+// ─── Documents (Docs & Spreadsheets) ─────────────────────────────────────────
+
+function ensureDocumentsTable(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT 'Untitled',
+      type TEXT NOT NULL DEFAULT 'document',
+      content TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+}
+
+export interface DocumentRow {
+  id: string;
+  title: string;
+  type: "document" | "spreadsheet";
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function createDocument(doc: { title: string; type: "document" | "spreadsheet"; content?: string }): DocumentRow {
+  ensureDocumentsTable();
+  const db = getDb();
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  const content = doc.content || (doc.type === "spreadsheet" ? JSON.stringify({ cells: {}, colWidths: {}, rowHeights: {} }) : "");
+  db.prepare("INSERT INTO documents (id, title, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(id, doc.title, doc.type, content, now, now);
+  return { id, title: doc.title, type: doc.type, content, created_at: now, updated_at: now };
+}
+
+export function getDocument(id: string): DocumentRow | null {
+  ensureDocumentsTable();
+  const db = getDb();
+  return (db.prepare("SELECT * FROM documents WHERE id = ?").get(id) as DocumentRow | undefined) || null;
+}
+
+export function listDocuments(type?: "document" | "spreadsheet"): DocumentRow[] {
+  ensureDocumentsTable();
+  const db = getDb();
+  if (type) {
+    return db.prepare("SELECT * FROM documents WHERE type = ? ORDER BY updated_at DESC").all(type) as DocumentRow[];
+  }
+  return db.prepare("SELECT * FROM documents ORDER BY updated_at DESC").all() as DocumentRow[];
+}
+
+export function updateDocument(id: string, updates: { title?: string; content?: string }): void {
+  ensureDocumentsTable();
+  const db = getDb();
+  const now = new Date().toISOString();
+  if (updates.title !== undefined) {
+    db.prepare("UPDATE documents SET title = ?, updated_at = ? WHERE id = ?").run(updates.title, now, id);
+  }
+  if (updates.content !== undefined) {
+    db.prepare("UPDATE documents SET content = ?, updated_at = ? WHERE id = ?").run(updates.content, now, id);
+  }
+}
+
+export function deleteDocument(id: string): void {
+  ensureDocumentsTable();
+  const db = getDb();
+  db.prepare("DELETE FROM documents WHERE id = ?").run(id);
+}

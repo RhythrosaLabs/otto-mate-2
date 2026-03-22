@@ -49,7 +49,15 @@ export function BoltPersistentIframe() {
   const checkBolt = useCallback(async () => {
     setRetrying(true);
     try {
-      await fetch(BOLT_DIY_URL, { mode: "no-cors" });
+      // Use a timeout to avoid indefinite hangs — Safari can stall
+      // cross-origin fetches when COEP is active.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      await fetch(BOLT_DIY_URL, {
+        mode: "no-cors",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       setBoltStatus("running");
       setFrozen(false);
     } catch {
@@ -180,6 +188,13 @@ export function BoltPersistentIframe() {
               src={BOLT_DIY_URL}
               style={{ flex: 1, width: "100%", border: "none" }}
               allow="cross-origin-isolated; clipboard-read; clipboard-write"
+              onLoad={() => {
+                console.log("[Forge] iframe loaded");
+              }}
+              onError={() => {
+                console.error("[Forge] iframe failed to load");
+                setBoltStatus("stopped");
+              }}
             />
           </>
         ) : boltStatus === "stopped" && isActive ? (

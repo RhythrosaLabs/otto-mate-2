@@ -23,6 +23,10 @@ import {
   Code2,
   Clapperboard,
   Flame,
+  Bot,
+  FileEdit,
+  Music,
+  Box,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -42,8 +46,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/connectors", label: "Connectors", icon: Plug },
   { href: "/computer/skills", label: "Skills", icon: Zap },
   { href: "/computer/gallery", label: "Gallery", icon: ImageIcon },
+  { href: "/computer/documents", label: "Documents", icon: FileEdit },
   { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
   { href: "/computer/app-builder", label: "App Builder", icon: Code2 },
+  { href: "/computer/coding-companion", label: "Coding Companion", icon: Bot },
+  { href: "/computer/audio-studio", label: "Audio Studio", icon: Music },
+  { href: "/computer/3d-studio", label: "3D Studio", icon: Box },
   { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
   { href: "/computer/channels", label: "Channels", icon: Globe },
   { href: "/computer/memory", label: "Memory", icon: Brain },

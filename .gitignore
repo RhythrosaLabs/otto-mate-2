@@ -78,6 +78,11 @@ src/app/api/test-reddit-post/
 useful.txt
 STEEL_RESEARCH.md
 bolt-diy/
+kilocode/
+
+# cloned app repos
+opendaw/
+blockbench/
 
 # test artifacts
 test-results/

@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
         source: "/bolt/:path*",
         destination: "http://localhost:5173/:path*",
       },
+      {
+        source: "/kilocode/:path*",
+        destination: "http://localhost:3100/:path*",
+      },
     ];
   },
   // Enable cross-origin isolation on the Computer UI so bolt.diy WebContainers
@@ -34,7 +38,7 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/computer/:path*",
+        source: "/computer/:path((?!coding-companion).*)",
         headers: [
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
@@ -42,6 +46,14 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/bolt/:path*",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+          { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+        ],
+      },
+      {
+        source: "/kilocode/:path*",
         headers: [
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },

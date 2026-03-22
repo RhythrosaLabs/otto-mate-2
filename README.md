@@ -1,11 +1,21 @@
 <p align="center">
   <h1 align="center">Ottomate</h1>
   <p align="center">
-    <strong>Your self-hosted AI agent workbench.</strong><br/>
-    Give it a goal. It plans, codes, browses, connects, and delivers — autonomously.
+    <strong>Self-hosted multi-model AI agent platform.</strong><br/>
+    Describe a goal — Ottomate plans, codes, browses, generates media, builds apps, and orchestrates 190+ services autonomously.
+  </p>
+  <p align="center">
+    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Blockbench 3D · openDAW Audio · bolt.diy App Builder
   </p>
   <p align="center">
     Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>
+  </p>
+  <p align="center">
+    <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-black?logo=next.js"/>
+    <img alt="Claude" src="https://img.shields.io/badge/Claude-Anthropic-orange"/>
+    <img alt="GPT-4.1" src="https://img.shields.io/badge/GPT--4.1-OpenAI-74aa9c?logo=openai"/>
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue"/>
+    <img alt="self-hosted" src="https://img.shields.io/badge/self--hosted-✓-green"/>
   </p>
 </p>
 
@@ -75,6 +85,34 @@ npm run dev
 Open **http://localhost:3000** — the onboarding wizard will walk you through first-time setup.
 
 > **Optional keys** unlock more models and features. See [Environment Variables](#environment-variables) below.
+
+### Running all services (Next.js + Blockbench + openDAW + bolt.diy)
+
+Ottomate embeds three live apps as iframes. Use [pm2](https://pm2.keymetrics.io/) to keep them all running reliably — it auto-restarts crashed processes and survives terminal sessions:
+
+```bash
+# Install pm2 once
+npm install -g pm2
+
+# Start everything
+npm run services:start
+
+# Keep services alive across reboots (run once)
+pm2 save && pm2 startup
+
+# Useful commands
+npm run services:status   # see all process health
+npm run services:logs     # live log tail
+npm run services:restart  # restart after code changes
+npm run services:stop     # stop everything
+```
+
+| Service | Port | Command |
+|---|---|---|
+| Next.js (Ottomate) | 3000 | `npm run dev` |
+| Blockbench 3D Studio | 3001 | `npm run dev:blockbench` |
+| openDAW Audio Studio | varies | `npm run dev:opendaw` |
+| bolt.diy App Builder | 5173 | `npm run dev:bolt` |
 
 ---
 
@@ -167,20 +205,10 @@ AI-powered creative hub — generate images, video, soundtracks, speech, and edi
 
 ![Nova](docs/screenshots/nova.png)
 
-### Forge — App Builder
-Full-stack visual app builder powered by bolt.diy with persistent WebContainers.
-
-![App Builder](docs/screenshots/app-builder.png)
-
 ### Skills Marketplace
 270+ pre-built skills across 10 categories — or create your own.
 
 ![Skills](docs/screenshots/skills.png)
-
-### Gallery
-Community example tasks — browse, filter by category, one-click run.
-
-![Gallery](docs/screenshots/gallery.png)
 
 <details>
 <summary><strong>More screenshots</strong></summary>
@@ -700,6 +728,12 @@ src/
 
 - GitHub: [@RhythrosaLabs](https://github.com/RhythrosaLabs)
 - Portfolio: [danielsheils.myportfolio.com](https://danielsheils.myportfolio.com)
+
+---
+
+## Topics
+
+`ai-agent` `autonomous-agent` `multi-model` `next-js` `self-hosted` `anthropic` `claude` `gpt-4` `gemini` `openai` `perplexity` `openrouter` `ai-tools` `task-automation` `code-generation` `web-scraping` `image-generation` `video-generation` `text-to-speech` `blockbench` `3d-modeling` `opendaw` `audio` `bolt-diy` `app-builder` `webcontainers` `sqlite` `typescript` `tailwindcss` `playwright`
 
 ---
 
