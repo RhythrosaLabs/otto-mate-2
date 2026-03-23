@@ -685,13 +685,24 @@ src/
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 15 (App Router) |
+| Framework | Next.js 15.1 (App Router) |
 | Language | TypeScript |
-| UI | Tailwind CSS + Radix UI + Framer Motion |
-| Database | SQLite (better-sqlite3) |
-| AI SDKs | @anthropic-ai/sdk, openai, @google/generative-ai |
-| Browser | Playwright |
+| UI | Tailwind CSS · Radix UI · Framer Motion · Lucide React |
+| Database | SQLite (`better-sqlite3`) |
+| Validation | Zod |
+| AI SDKs | `@anthropic-ai/sdk` · `openai` · `@google/generative-ai` |
+| AI Providers | Anthropic · OpenAI · Google · Perplexity · OpenRouter |
+| Image Generation | Replicate · Adobe Firefly · DALL-E 3 |
+| Video Generation | Luma Dream Machine (Ray 3, Ray Flash 2, Photon 1) · Replicate |
+| Audio Generation | MusicGen via Replicate · OpenAI TTS · ElevenLabs |
+| Speech-to-Text | OpenAI Whisper · Web Speech API |
+| Web Scraping | Playwright · Cheerio · node-fetch |
+| Auth | Custom OAuth 2.0 (Google · Microsoft · GitHub · Notion · Dropbox) |
+| Scheduling | Node.js cron (custom scheduler in `lib/scheduler.ts`) |
+| State | React 19 hooks · `uuid` for IDs |
 | Markdown | react-markdown + remark-gfm |
+| Testing | Playwright E2E |
+| Process management | pm2 (`pm2.config.cjs`) |
 
 ---
 
