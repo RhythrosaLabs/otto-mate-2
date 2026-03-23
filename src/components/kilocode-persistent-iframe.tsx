@@ -41,19 +41,18 @@ export function CodeServerPersistentIframe() {
     }
   }, [isActive, hasVisited]);
 
-  // Check if code-server is reachable
+  // Check if code-server is reachable via server-side API (avoids no-cors opacity)
   const checkServer = useCallback(async () => {
     setRetrying(true);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
-      await fetch("http://localhost:3100/healthz", {
-        mode: "no-cors",
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      setStatus("running");
-      setFrozen(false);
+      const res = await fetch("/api/health/code-server", { cache: "no-store" });
+      const data = await res.json() as { ok: boolean };
+      if (data.ok) {
+        setStatus("running");
+        setFrozen(false);
+      } else {
+        setStatus("stopped");
+      }
     } catch {
       setStatus("stopped");
     } finally {
@@ -75,6 +74,15 @@ export function CodeServerPersistentIframe() {
     }
     prevActiveRef.current = isActive;
   }, [isActive, hasVisited, status, checkServer]);
+
+  // Periodic health check every 30s while the page is active, to detect crashes
+  useEffect(() => {
+    if (!isActive || !hasVisited) return;
+    const interval = setInterval(() => {
+      checkServer();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [isActive, hasVisited, checkServer]);
 
   // Force-reload: destroy and recreate the iframe
   const handleForceReload = useCallback(() => {
