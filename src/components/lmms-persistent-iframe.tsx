@@ -32,6 +32,7 @@ export function LmmsPersistentIframe() {
   const [retrying, setRetrying] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const prevActiveRef = useRef(false);
 
   // Activate on first visit
   useEffect(() => {
@@ -66,6 +67,14 @@ export function LmmsPersistentIframe() {
       checkServer();
     }
   }, [hasVisited, status, checkServer]);
+
+  // Auto-retry when user navigates back to the page and service was stopped
+  useEffect(() => {
+    if (isActive && !prevActiveRef.current && hasVisited && status === "stopped") {
+      checkServer();
+    }
+    prevActiveRef.current = isActive;
+  }, [isActive, hasVisited, status, checkServer]);
 
   // Force-reload: destroy and recreate the iframe
   const handleForceReload = useCallback(() => {
@@ -109,6 +118,7 @@ export function LmmsPersistentIframe() {
               }
             : undefined
         }
+        {...(!isActive ? { inert: true } : {})}
       >
         {status === "checking" && isActive ? (
           <div className="flex items-center justify-center h-full bg-[#1a1a2e]">

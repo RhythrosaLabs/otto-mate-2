@@ -33,6 +33,19 @@ setTimeout(() => {
       (proxyRes) => {
         const headers = { ...proxyRes.headers };
         headers["cross-origin-resource-policy"] = "cross-origin";
+
+        // Strip headers that prevent iframe embedding.
+        // code-server sets X-Frame-Options: SAMEORIGIN which blocks our iframe.
+        delete headers["x-frame-options"];
+
+        // Strip frame-ancestors from CSP if present (newer code-server versions)
+        if (headers["content-security-policy"]) {
+          headers["content-security-policy"] = headers["content-security-policy"]
+            .split(";")
+            .filter((d) => !d.trim().toLowerCase().startsWith("frame-ancestors"))
+            .join(";");
+        }
+
         res.writeHead(proxyRes.statusCode, headers);
         proxyRes.pipe(res);
       }
