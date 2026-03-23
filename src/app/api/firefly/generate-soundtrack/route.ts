@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     // Replicate's Prefer: wait header must be 1–60. We submit with wait=60
     // then poll for up to 4 minutes for longer generations.
     const modelVersion = body.model_version || "stereo-melody-large";
-    const res = await fetch("https://api.replicate.com/v1/predictions", {
+    const res = await fetch("https://api.replicate.com/v1/models/meta/musicgen/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -119,7 +119,6 @@ export async function POST(req: NextRequest) {
         Prefer: "wait=60",
       },
       body: JSON.stringify({
-        model: "meta/musicgen",
         input: {
           prompt: musicPrompt,
           duration,
