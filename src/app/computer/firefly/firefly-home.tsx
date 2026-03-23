@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { loadGallery, type GalleryItem } from "./lib/gallery-store";
 import { usePageVisible } from "@/components/persistent-layout";
+import { NovaSmartBar } from "./components/nova-smart-bar";
 
 /* ─── Feature Cards ──────────────────────────────────────────────── */
 
@@ -246,79 +247,7 @@ function ShowcaseCard({
   );
 }
 
-/* ─── Prompt Bar ────────────────────────────────────────────────── */
-
-function PromptBar() {
-  const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<"image" | "video">("image");
-  const router = useRouter();
-
-  function handleGenerate() {
-    if (!prompt.trim()) return;
-    const encoded = encodeURIComponent(prompt);
-    if (mode === "video") {
-      router.push(`/computer/firefly/generate/video?prompt=${encoded}`);
-    } else {
-      router.push(`/computer/firefly/generate/image?prompt=${encoded}`);
-    }
-  }
-
-  return (
-    <div className="relative max-w-3xl mx-auto">
-      <div className="flex items-center bg-zinc-900/80 border border-zinc-700/50 rounded-2xl px-4 py-3 backdrop-blur-sm shadow-2xl shadow-black/20">
-        <div className="flex items-center gap-1 mr-3 shrink-0">
-          <button
-            onClick={() => setMode("image")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-              mode === "image"
-                ? "bg-violet-600/20 text-violet-300 border border-violet-500/30"
-                : "text-zinc-500 hover:text-zinc-300"
-            )}
-          >
-            <ImageIcon className="w-3.5 h-3.5 inline mr-1" />
-            Image
-          </button>
-          <button
-            onClick={() => setMode("video")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-              mode === "video"
-                ? "bg-cyan-600/20 text-cyan-300 border border-cyan-500/30"
-                : "text-zinc-500 hover:text-zinc-300"
-            )}
-          >
-            <Video className="w-3.5 h-3.5 inline mr-1" />
-            Video
-          </button>
-        </div>
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-            placeholder="Describe what you want to generate..."
-            className="w-full bg-transparent text-white placeholder:text-zinc-500 text-sm outline-none"
-          />
-        </div>
-        <button
-          onClick={handleGenerate}
-          disabled={!prompt.trim()}
-          className={cn(
-            "ml-3 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 shrink-0",
-            prompt.trim()
-              ? "bg-gradient-to-r from-violet-600 to-blue-600 text-white hover:from-violet-500 hover:to-blue-500 shadow-lg shadow-violet-500/20"
-              : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-          )}
-        >
-          <Sparkles className="w-4 h-4" />
-          Generate
-        </button>
-      </div>
-    </div>
-  );
-}
+/* ─── Prompt Bar (replaced by NovaSmartBar below) ─────────────── */
 
 /* ─── Main Home Component ────────────────────────────────────────── */
 
@@ -390,8 +319,8 @@ export function FireflyHome() {
             Your AI-powered creative space. Generate images, video, audio, and designs using top AI models.
           </p>
 
-          {/* Prompt Bar */}
-          <PromptBar />
+          {/* Smart universal generate bar */}
+          <NovaSmartBar />
         </div>
       </div>
 
