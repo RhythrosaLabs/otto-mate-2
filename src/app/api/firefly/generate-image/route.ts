@@ -17,6 +17,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import fs from "fs";
+import path from "path";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -154,12 +156,45 @@ function buildEnhancedPrompt(req: GenerateImageRequest): string {
   return parts.filter(Boolean).join(", ");
 }
 
+/**
+ * Download a list of external image URLs and store them under /api/files/<taskId>/.
+ * Returns permanent local paths like /api/files/<taskId>/image-0.png .
+ * Falls back to the original URL if download fails.
+ */
+async function downloadExternalImages(externalUrls: string[], taskId: string, prefix: string): Promise<string[]> {
+  const { ensureFilesDir } = await import("@/lib/db");
+  const taskDir = path.join(ensureFilesDir(), taskId);
+  if (!fs.existsSync(taskDir)) fs.mkdirSync(taskDir, { recursive: true });
+
+  const local: string[] = [];
+  for (let i = 0; i < externalUrls.length; i++) {
+    const url = externalUrls[i];
+    try {
+      const res = await fetch(url);
+      if (!res.ok) { local.push(url); continue; }
+      const buf = Buffer.from(await res.arrayBuffer());
+      // Detect ext from content-type header
+      const ct = res.headers.get("content-type") || "image/png";
+      const ext = ct.includes("jpeg") || ct.includes("jpg") ? "jpg"
+        : ct.includes("webp") ? "webp"
+        : "png";
+      const filename = `${prefix}-${i}.${ext}`;
+      fs.writeFileSync(path.join(taskDir, filename), buf);
+      local.push(`/api/files/${taskId}/${filename}`);
+    } catch {
+      local.push(url); // best-effort fallback
+    }
+  }
+  return local;
+}
+
 async function generateWithOpenAI(
   prompt: string,
   negativePrompt: string | undefined,
   size: { width: number; height: number },
   quality: string,
   numImages: number,
+  taskId: string,
 ): Promise<{ urls: string[]; model: string }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
@@ -205,7 +240,9 @@ async function generateWithOpenAI(
     }
   }
 
-  return { urls: results, model: "dall-e-3" };
+  // Download external URLs to local storage so they persist
+  const localUrls = await downloadExternalImages(results, taskId, "dalle");
+  return { urls: localUrls, model: "dall-e-3" };
 }
 
 async function generateWithReplicate(
@@ -214,6 +251,7 @@ async function generateWithReplicate(
   size: { width: number; height: number },
   modelName: string,
   numImages: number,
+  taskId: string,
   seed?: number,
   structureImageUrl?: string,
   styleImageUrl?: string,
@@ -331,7 +369,9 @@ async function generateWithReplicate(
     }
   }
 
-  return { urls, model: replicateModel };
+  // Download external Replicate CDN URLs to local storage so they persist
+  const localUrls = await downloadExternalImages(urls, taskId, "replicate");
+  return { urls: localUrls, model: replicateModel };
 }
 
 /**
@@ -406,6 +446,7 @@ export async function POST(req: NextRequest) {
 
     const size = ASPECT_TO_SIZE[aspectRatio] || ASPECT_TO_SIZE["1:1"];
     const enhancedPrompt = buildEnhancedPrompt(body);
+    // One ID used both for the generation record and the file-storage folder
     const generationId = `ff-img-${Date.now()}-${uuidv4().slice(0, 8)}`;
 
     let result: { urls: string[]; model: string };
@@ -416,14 +457,14 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (model === "dall-e-3") {
-      result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages);
+      result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages, generationId);
     } else if (knownModels.has(model)) {
       try {
-        result = await generateWithReplicate(enhancedPrompt, negativePrompt, size, model, numImages, seed, body.structureImageUrl, body.styleImageUrl);
+        result = await generateWithReplicate(enhancedPrompt, negativePrompt, size, model, numImages, generationId, seed, body.structureImageUrl, body.styleImageUrl);
       } catch (replicateErr) {
         console.warn("Replicate failed, falling back to OpenAI:", replicateErr);
         try {
-          result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages);
+          result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages, generationId);
         } catch (openaiErr) {
           throw new Error(`All providers failed. Last error: ${(openaiErr as Error).message}`);
         }
