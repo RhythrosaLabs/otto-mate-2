@@ -14,14 +14,22 @@ export const maxDuration = 120;
 
 interface GenerateSoundtrackRequest {
   prompt?: string;
-  duration?: number;      // seconds (5-30)
+  duration?: number;      // seconds (5-60)
   videoUrl?: string;      // Optional video to score
   genre?: string;
   mood?: string;
-  tempo?: string;         // "slow" | "moderate" | "fast"  
+  tempo?: string;         // "slow" | "moderate" | "fast"
   energy?: string;        // "low" | "medium" | "high"
   instruments?: string[];
   model?: string;         // Dynamic model ID from search
+  model_version?: string; // MusicGen version: stereo-melody-large | stereo-large | melody-large | large
+  bpm?: number;
+  key?: string;
+  temperature?: number;
+  top_k?: number;
+  top_p?: number;
+  classifier_free_guidance?: number;
+  continuation?: boolean;
 }
 
 function buildMusicPrompt(body: GenerateSoundtrackRequest): string {
@@ -32,6 +40,8 @@ function buildMusicPrompt(body: GenerateSoundtrackRequest): string {
   if (body.mood) parts.push(`${body.mood} mood`);
   if (body.tempo) parts.push(`${body.tempo} tempo`);
   if (body.energy) parts.push(`${body.energy} energy`);
+  if (body.bpm) parts.push(`${body.bpm} BPM`);
+  if (body.key) parts.push(`key of ${body.key}`);
   if (body.instruments?.length) parts.push(`featuring ${body.instruments.join(", ")}`);
   
   if (parts.length === 0) parts.push("ambient background music");
@@ -76,7 +86,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as GenerateSoundtrackRequest;
     const genId = `ff-mus-${Date.now()}-${uuidv4().slice(0, 8)}`;
     const musicPrompt = buildMusicPrompt(body);
-    const duration = Math.min(Math.max(body.duration || 10, 5), 30);
+    const duration = Math.min(Math.max(body.duration || 10, 5), 60);
 
     const apiKey = process.env.REPLICATE_API_TOKEN;
     if (!apiKey) {
@@ -97,22 +107,30 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Use MusicGen for soundtrack generation
+    // Use MusicGen for soundtrack generation.
+    // Replicate's Prefer: wait header must be 1–60. We submit with wait=60
+    // then poll for up to 4 minutes for longer generations.
+    const modelVersion = body.model_version || "stereo-melody-large";
     const res = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        Prefer: "wait=120",
+        Prefer: "wait=60",
       },
       body: JSON.stringify({
         model: "meta/musicgen",
         input: {
           prompt: musicPrompt,
           duration,
-          model_version: "stereo-melody-large",
+          model_version: modelVersion,
           output_format: "wav",
           normalization_strategy: "peak",
+          ...(body.temperature !== undefined && { temperature: body.temperature }),
+          ...(body.top_k !== undefined && { top_k: body.top_k }),
+          ...(body.top_p !== undefined && { top_p: body.top_p }),
+          ...(body.classifier_free_guidance !== undefined && { classifier_free_guidance: body.classifier_free_guidance }),
+          ...(body.continuation !== undefined && { continuation: body.continuation }),
         },
       }),
     });
@@ -131,9 +149,9 @@ export async function POST(req: NextRequest) {
       audioUrl = data.output[0];
     }
 
-    // Poll if needed
+    // Poll for up to 4 minutes (120 × 2s) if not immediately complete
     if (!audioUrl && data.urls?.get) {
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 120; i++) {
         await new Promise(r => setTimeout(r, 2000));
         const pollRes = await fetch(data.urls.get, {
           headers: { Authorization: `Bearer ${apiKey}` },
