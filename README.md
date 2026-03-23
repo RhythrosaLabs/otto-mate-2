@@ -5,7 +5,7 @@
     Describe a goal — Ottomate plans, codes, browses, generates media, builds apps, and orchestrates 190+ services autonomously.
   </p>
   <p align="center">
-    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Blockbench 3D · openDAW Audio · bolt.diy App Builder
+    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Replicate · Luma Dream Machine · Adobe Firefly
   </p>
   <p align="center">
     Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>
@@ -34,7 +34,7 @@
 ## What is Ottomate?
 
 Ottomate is a **self-hosted, multi-model AI agent platform** built with Next.js 15.  
-Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 190+ external services, generates images and video, and saves every artifact it produces.
+Describe a goal in plain English — the agent plans multi-step workflows, writes and executes code, searches the web, talks to 190+ external services, generates images, video, and audio, and saves every artifact it produces.
 
 It ships as a single `npm install` with zero external infrastructure. A SQLite database is created on first launch.
 
@@ -47,7 +47,8 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 - **190+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
 - **Nova AI creative suite** — generate images, video, soundtracks, speech, and edit images with AI — all from one unified hub
 - **Dreamscape Video Studio** — 17-mode AI creative studio built around Luma Dream Machine with storyboards, camera presets, and an AI Director
-- **Forge App Builder** — full-stack visual app builder powered by bolt.diy, embedded as a persistent iframe that survives route changes
+- **AI Audio Studio** — generate music (MusicGen), professional voiceovers (OpenAI TTS / ElevenLabs), and record audio — all from one interface
+- **Image Studio** — standalone AI image generation and editing powered by Replicate and Adobe Firefly
 - **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), DALL-E 3, ElevenLabs (voice)
 - **Sub-agents** — spawns specialized child agents for parallel work
 - **Persistent memory** — key-value store the agent reads/writes across tasks
@@ -85,34 +86,6 @@ npm run dev
 Open **http://localhost:3000** — the onboarding wizard will walk you through first-time setup.
 
 > **Optional keys** unlock more models and features. See [Environment Variables](#environment-variables) below.
-
-### Running all services (Next.js + Blockbench + openDAW + bolt.diy)
-
-Ottomate embeds three live apps as iframes. Use [pm2](https://pm2.keymetrics.io/) to keep them all running reliably — it auto-restarts crashed processes and survives terminal sessions:
-
-```bash
-# Install pm2 once
-npm install -g pm2
-
-# Start everything
-npm run services:start
-
-# Keep services alive across reboots (run once)
-pm2 save && pm2 startup
-
-# Useful commands
-npm run services:status   # see all process health
-npm run services:logs     # live log tail
-npm run services:restart  # restart after code changes
-npm run services:stop     # stop everything
-```
-
-| Service | Port | Command |
-|---|---|---|
-| Next.js (Ottomate) | 3000 | `npm run dev` |
-| Blockbench 3D Studio | 3001 | `npm run dev:blockbench` |
-| openDAW Audio Studio | varies | `npm run dev:opendaw` |
-| bolt.diy App Builder | 5173 | `npm run dev:bolt` |
 
 ---
 
@@ -152,8 +125,19 @@ A full-featured **AI media generation hub** with six creation modes accessible f
 
 **Gallery:** Browse, filter, and manage all generated creations (images, videos, soundtracks, speech) in a unified media gallery with type filtering and quick actions.
 
-### Forge — App Builder
-A **full-stack visual app builder** powered by [bolt.diy](https://github.com/stackblitz-labs/bolt.diy), embedded as a persistent iframe within the Ottomate shell. The iframe survives route changes without losing state (WebContainers stay alive in the background). Includes connection health monitoring, force-reload capability for frozen sessions, and a fallback screen with setup instructions when the builder isn't running.
+### Audio Studio
+An AI-powered audio production studio with three modes:
+
+**Compose:** Generate music tracks from text prompts using MusicGen (via Replicate). Control genre, mood, BPM, key, duration (up to 60s), tempo, energy, instruments, and model variant (stereo-melody-large, stereo-large, melody, etc.). Advanced parameters include temperature and CFG scale. Progress tracked in real time.
+
+**Speech:** Generate professional AI voiceovers from text. Supports multiple voice profiles (Alloy, Echo, Fable, Onyx, Nova, Shimmer) via OpenAI TTS. Configure speed and download instantly.
+
+**Record:** Record audio directly in the browser with real-time waveform visualization. Preview and download recordings.
+
+All generated audio is saved to Files with full playback support.
+
+### Image Studio
+A dedicated AI image generation and editing workspace powered by **Replicate** and **Adobe Firefly**. Generate from text prompts, upload images for inpainting or editing, and save results directly to the gallery. Supports multiple models and aspect ratios.
 
 ### Pipelines
 A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency edges on a canvas, and run the entire pipeline — nodes execute in topological (dependency) order with per-node status tracking. Supports connecting any node to any other as a dependency.
@@ -233,25 +217,25 @@ AI-powered creative hub — generate images, video, soundtracks, speech, and edi
 | **Home** | Centered prompt input with slash commands, voice input, file attachments, and prompt gallery |
 | **Tasks** | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
 | **Task Detail** | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
-| **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane |
+| **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
+| **Documents** | Create and manage text documents with AI writing assistance |
 | **Connectors** | Integration marketplace — connect 190+ services via OAuth or API key |
 | **Skills** | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
 | **Gallery** | Browse community example tasks, filter by category, one-click run |
-| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat that turns natural language into multi-step command chains |
-| **Generate (Nova)** | AI creative hub — generate images (6 models), video, soundtracks, speech, edit images (remove/replace BG, upscale, expand, generative fill), and browse creations in a unified gallery. Features a prompt bar, tabbed navigation, and quick actions |
-| **App Builder (Forge)** | Full-stack visual app builder powered by bolt.diy embedded as a persistent iframe. WebContainers survive route changes. Includes health monitoring, force-reload for frozen sessions, and fallback setup instructions |
-| **Dreamscape** | Storyboard-based creative workspace for organizing Dream Machine generations into boards with shots |
+| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat |
+| **Audio Studio** | AI music generation (MusicGen via Replicate), AI voiceover (OpenAI TTS / ElevenLabs), and in-browser recording with waveform visualization |
+| **Image Studio** | AI image generation and editing — Replicate models, Adobe Firefly, DALL-E 3, inpainting, and gallery saving |
+| **Creative Suite (Nova)** | AI creative hub — generate images (6 models), video, soundtracks, speech, edit images (remove/replace BG, upscale, expand, generative fill), and browse all creations in a unified gallery |
+| **Channels** | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
 | **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
 | **Templates** | Reusable one-click task presets by category |
 | **Scheduled** | Cron-based task scheduler with interval, daily, weekly, and cron modes |
 | **Sessions** | Group related tasks into conversation sessions with shared context |
-| **Channels** | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
 | **Memory** | View, search, add, and delete agent memory entries |
 | **Analytics** | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
 | **Audit Trail** | Paginated log of every agent action with filters and metadata |
 | **Settings** | Default model, token/cost budgets, themes, verbose mode, health check |
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
-| **Dream Machine** | Dedicated Luma Dream Machine interface for video and image generation |
 
 ---
 
@@ -624,8 +608,7 @@ src/
 │   │   ├── luma/                   # Luma Dream Machine API
 │   │   ├── firefly/                # Nova creative suite APIs (image/video/audio/speech/models)
 │   │   ├── generate/               # Generic model generation
-│   │   ├── app-builder/            # Forge app builder API
-│   │   ├── health/                 # Health check endpoint
+│   │   ├── health/                 # Health check + service health (code-server, etc.)
 │   │   ├── context/                # Context management
 │   │   ├── usage/                  # Usage tracking
 │   │   ├── hooks/                  # Webhook handlers
@@ -636,9 +619,10 @@ src/
 │   │   └── voice/                  # Whisper transcription
 │   └── computer/                   # All UI pages (25+ routes)
 │       ├── firefly/                # Nova creative suite (generate, edit, gallery)
-│       ├── app-builder/            # Forge app builder (bolt.diy embed)
 │       ├── dreamscape/             # Dreamscape + Video Studio
-│       └── ...                     # Tasks, Files, Connectors, Skills, etc.
+│       ├── audio-studio/           # AI Audio Studio (MusicGen, TTS, recording)
+│       ├── image-studio/           # AI Image Studio (Replicate, Firefly)
+│       └── ...                     # Tasks, Files, Documents, Connectors, Skills, etc.
 ├── lib/
 │   ├── agent.ts                    # Core AI agent (~7,500 lines)
 │   ├── db.ts                       # SQLite via better-sqlite3
@@ -653,22 +637,24 @@ src/
 │   ├── personas.ts                 # Agent personality presets
 │   ├── models.ts                   # Model configurations & free model list
 │   ├── schemas.ts                  # Zod validation schemas
-│   ├── constants.ts                # App-wide constants
+│   ├── constants.ts                # App-wide constants (NAV_ITEMS, API helpers)
 │   ├── background-ops.ts           # Background task operations
 │   ├── steel-client.ts             # Steel browser client
 │   ├── whatsapp.ts                 # WhatsApp Cloud API client
 │   ├── running-tasks.ts            # Global AbortController map for live tasks
 │   ├── skill-converters.ts         # Skill format converters
 │   ├── themes.ts                   # UI theme definitions
-│   ├── app-builder/                # Forge app builder utilities (action runner, system prompt, streaming parser)
 │   └── utils.ts                    # Shared utilities
 ├── components/
 │   ├── sidebar.tsx                  # Navigation sidebar
-│   ├── bolt-persistent-iframe.tsx   # Persistent Forge/bolt.diy iframe (survives route changes)
+│   ├── persistent-layout.tsx        # LRU keep-alive panel manager (up to 20 pages)
+│   ├── bolt-persistent-iframe.tsx   # Persistent bolt.diy iframe (App Builder, port 5173)
+│   ├── kilocode-persistent-iframe.tsx # Persistent code-server iframe (Coding Companion, port 3100)
+│   ├── blender-persistent-iframe.tsx  # Persistent Blockbench iframe (3D Studio, port 3001)
+│   ├── lmms-persistent-iframe.tsx     # Persistent openDAW iframe (port 8080)
 │   ├── command-palette.tsx          # ⌘K command palette
 │   ├── keyboard-shortcuts.tsx       # Global keyboard shortcuts
-│   ├── background-status.tsx        # Background task status indicator
-│   └── persistent-layout.tsx        # Persistent layout wrapper
+│   └── background-status.tsx        # Floating background task status indicator
 └── tests/                           # Playwright E2E tests
 ```
 
@@ -733,7 +719,7 @@ src/
 
 ## Topics
 
-`ai-agent` `autonomous-agent` `multi-model` `next-js` `self-hosted` `anthropic` `claude` `gpt-4` `gemini` `openai` `perplexity` `openrouter` `ai-tools` `task-automation` `code-generation` `web-scraping` `image-generation` `video-generation` `text-to-speech` `blockbench` `3d-modeling` `opendaw` `audio` `bolt-diy` `app-builder` `webcontainers` `sqlite` `typescript` `tailwindcss` `playwright`
+`ai-agent` `autonomous-agent` `multi-model` `next-js` `self-hosted` `anthropic` `claude` `gpt-4` `gemini` `openai` `perplexity` `openrouter` `ai-tools` `task-automation` `code-generation` `web-scraping` `image-generation` `video-generation` `audio-generation` `text-to-speech` `musicgen` `replicate` `luma-dream-machine` `adobe-firefly` `sqlite` `typescript` `tailwindcss` `playwright`
 
 ---
 

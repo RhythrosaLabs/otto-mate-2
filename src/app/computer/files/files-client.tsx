@@ -26,7 +26,7 @@ type SortKey   = "name" | "date" | "size" | "kind";
 type SortDir   = "asc" | "desc";
 type SidebarFilter = "all" | "images" | "video" | "audio" | "documents" | "webpages" | "code" | "data" | "models" | "archives" | "fonts" | "folder" | "browser" | "generated"
   | "src-playground" | "src-dreamscape" | "src-app-builder" | "src-agent" | "src-upload" | "src-chat" | "src-gallery" | "src-api" | "src-unknown";
-type FileSource = "chat" | "browser" | "skill" | "generate" | "code" | "social" | "upload" | "playground" | "dreamscape" | "app-builder" | "agent" | "unknown";
+type FileSource = "chat" | "browser" | "skill" | "generate" | "code" | "social" | "upload" | "playground" | "dreamscape" | "app-builder" | "agent" | "gallery" | "api" | "unknown";
 
 // ─── mime helpers ─────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ const isText    = (m: string, n: string) =>
   /\.(md|txt|json|csv|js|ts|py|sh|yaml|yml|toml|xml|rs|go|java|c|cpp|h|cs|rb|php|sql|swift|kt|r|lua|pl|ex|exs|hs|ml|scala|dart|v|zig|nim|cr|jl)$/i.test(n);
 
 const isBrowserScreenshot = (n: string) => /^screenshot[_-]/i.test(n) || /browser[_-]screenshot/i.test(n);
-const isGenerated = (n: string) => /^(generated|dall-?e|replicate|dream)/i.test(n);
+const isGenerated = (n: string) => /^(generated|dall-?e|replicate|dream|nova[-_])/i.test(n);
 
 const canPreview = (m: string, n: string) =>
   isImage(m) || isVideo(m, n) || isAudio(m, n) || is3D(m, n) ||
@@ -54,7 +54,7 @@ function getFileSource(name: string, taskTitle?: string, dbSource?: string): Fil
   // Prefer DB-stored source
   if (dbSource && dbSource !== "unknown") return dbSource as FileSource;
   if (isBrowserScreenshot(name)) return "browser";
-  if (/^(generated|dall-?e)/i.test(name)) return "generate";
+  if (/^(generated|dall-?e|nova[-_])/i.test(name)) return "generate";
   if (/^replicate/i.test(name) || /^dream/i.test(name)) return "generate";
   if (/social[_-]?media|confirmation/i.test(name)) return "social";
   if (/^(output|result|plot|chart|figure)/i.test(name)) return "code";
@@ -63,18 +63,20 @@ function getFileSource(name: string, taskTitle?: string, dbSource?: string): Fil
 }
 
 const SOURCE_META: Record<FileSource, { label: string; color: string; icon: typeof Monitor }> = {
-  browser:      { label: "Browser",       color: "#60a5fa", icon: Monitor },
-  chat:         { label: "Chat",          color: "#34d399", icon: MessageSquare },
-  skill:        { label: "Skill",         color: "#a78bfa", icon: Sparkles },
-  generate:     { label: "Generated",     color: "#f472b6", icon: Palette },
-  code:         { label: "Code",          color: "#fbbf24", icon: Cpu },
-  social:       { label: "Social",        color: "#fb923c", icon: Link2 },
-  upload:       { label: "Upload",        color: "#6b7280", icon: Upload },
-  playground:   { label: "Playground",    color: "#c084fc", icon: Palette },
-  dreamscape:   { label: "Video Studio",  color: "#a78bfa", icon: Film },
-  "app-builder": { label: "App Builder", color: "#34d399", icon: AppWindow },
-  agent:        { label: "Agent",         color: "#60a5fa", icon: Zap },
-  unknown:      { label: "Task",          color: "#6b7280", icon: File },
+  browser:      { label: "Browser",         color: "#60a5fa", icon: Monitor },
+  chat:         { label: "Chat",            color: "#34d399", icon: MessageSquare },
+  skill:        { label: "Skill",           color: "#a78bfa", icon: Sparkles },
+  generate:     { label: "Image / Nova",    color: "#f472b6", icon: Wand2 },
+  code:         { label: "Coding Companion",color: "#fbbf24", icon: Cpu },
+  social:       { label: "Social",          color: "#fb923c", icon: Link2 },
+  upload:       { label: "Upload",          color: "#6b7280", icon: Upload },
+  playground:   { label: "Playground",      color: "#c084fc", icon: Palette },
+  dreamscape:   { label: "Video Studio",    color: "#a78bfa", icon: Film },
+  "app-builder":{ label: "App Builder",     color: "#34d399", icon: AppWindow },
+  agent:        { label: "Agent",           color: "#60a5fa", icon: Zap },
+  gallery:      { label: "Gallery",         color: "#f27a54", icon: Camera },
+  api:          { label: "API",             color: "#fbbf24", icon: Database },
+  unknown:      { label: "Task",            color: "#6b7280", icon: File },
 };
 
 function getFileCategory(m: string, n: string): SidebarFilter {
