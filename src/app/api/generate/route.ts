@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
         const result = await runWithProvider(provider, {
           prompt: body.prompt,
           model: body.model,
+          taskType: body.taskType,
           params,
           filesDir,
           taskId,
@@ -220,6 +221,7 @@ async function runWithProvider(
   options: {
     prompt: string;
     model?: string;
+    taskType?: string;
     params?: Record<string, unknown>;
     filesDir: string;
     taskId: string;
@@ -244,6 +246,7 @@ async function runWithProvider(
     const result = await runReplicateTask({
       prompt: options.prompt,
       model: options.model,
+      taskType: options.taskType,
       params: options.params,
       filesDir: options.filesDir,
     });
@@ -261,6 +264,7 @@ async function runWithProvider(
     const result = await runHFTask({
       prompt: options.prompt,
       model: options.model,
+      taskType: options.taskType,
       params: options.params,
       filesDir: options.filesDir,
     });

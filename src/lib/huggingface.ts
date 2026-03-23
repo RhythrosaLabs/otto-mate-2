@@ -575,6 +575,7 @@ export async function selectBestHFModel(
 export async function runHFTask(options: {
   prompt: string;
   model?: string;
+  taskType?: string;     // Optional: pre-detected task type hint
   params?: Record<string, unknown>;
   filesDir: string;
   onProgress?: (status: string) => void;
@@ -588,12 +589,14 @@ export async function runHFTask(options: {
   files: Array<{ filename: string; filePath: string; size: number; mimeType: string }>;
   textOutput?: string;
 }> {
-  const { prompt, model, params, filesDir, onProgress, token } = options;
+  const { prompt, model, taskType: taskTypeHint, params, filesDir, onProgress, token } = options;
   const t = token || getHFToken();
   if (!t) throw new Error("Hugging Face API token not configured. Set HUGGINGFACE_API_TOKEN or HF_TOKEN env var, or connect Hugging Face in the Connectors page.");
 
-  // 1. Detect task type
-  const { type: taskType, searchFilter, defaultModel } = detectHFTaskType(prompt);
+  // 1. Detect task type (or use the hint from caller)
+  const detected = detectHFTaskType(prompt);
+  const taskType: HFTaskType = (taskTypeHint as HFTaskType) || detected.type;
+  const { searchFilter, defaultModel } = detected;
   onProgress?.(`Detected HF task type: ${taskType}`);
 
   // 2. Select the best model

@@ -678,6 +678,7 @@ export async function downloadPredictionOutputs(
 export async function runReplicateTask(options: {
   prompt: string;
   model?: string;        // Optional: explicit "owner/name" to skip model selection
+  taskType?: string;     // Optional: pre-detected task type (e.g. "image_generation")
   params?: Record<string, unknown>;  // Extra input params (image URLs, settings, etc.)
   filesDir: string;
   onProgress?: (status: string) => void;
@@ -690,12 +691,15 @@ export async function runReplicateTask(options: {
   files: Array<{ filename: string; filePath: string; size: number; mimeType: string }>;
   textOutput?: string;
 }> {
-  const { prompt, model, params, filesDir, onProgress, token } = options;
+  const { prompt, model, taskType: taskTypeHint, params, filesDir, onProgress, token } = options;
   const t = token || getApiToken();
   if (!t) throw new Error("Replicate API token not configured. Set REPLICATE_API_TOKEN env var or connect Replicate in the Connectors page.");
 
-  // 1. Detect task type
-  const { type: taskType, searchTerms, defaultModel } = detectReplicateTaskType(prompt);
+  // 1. Detect task type (or use the hint from caller)
+  const detected = detectReplicateTaskType(prompt);
+  const taskType: ReplicateTaskType = (taskTypeHint as ReplicateTaskType) || detected.type;
+  const searchTerms = detected.searchTerms;
+  const defaultModel = detected.defaultModel;
   onProgress?.(`Detected task type: ${taskType}`);
 
   // 2. Select the best model
@@ -707,28 +711,11 @@ export async function runReplicateTask(options: {
     reason = `User-specified model: ${model}`;
     onProgress?.(`Using specified model: ${model}`);
   } else if (defaultModel && !model) {
-    // Use well-known default for this task type, but still verify it exists
+    // Use the well-known curated default for this task type — don't override with
+    // random search results that may be unmaintained community models (frequent 404s).
     [owner, name] = defaultModel.split("/", 2);
     reason = `Default model for ${taskType}: ${defaultModel}`;
     onProgress?.(`Using best-known model for ${taskType}: ${defaultModel}`);
-
-    // Search in parallel to potentially find something better with more runs
-    try {
-      const selected = await selectBestModel(prompt, taskType, searchTerms, undefined, t);
-      // Only override if the search found something significantly more popular
-      const defaultModelData = await getModel(owner, name, t).catch(() => null);
-      if (defaultModelData && selected.owner !== owner) {
-        const searchedModel = await getModel(selected.owner, selected.name, t).catch(() => null);
-        if (searchedModel && (searchedModel.run_count || 0) > (defaultModelData.run_count || 0) * 2) {
-          owner = selected.owner;
-          name = selected.name;
-          reason = selected.reason;
-          onProgress?.(`Found better model: ${owner}/${name}`);
-        }
-      }
-    } catch {
-      // Stick with default
-    }
   } else {
     // Dynamic discovery
     onProgress?.(`Searching Replicate for best ${taskType} model...`);

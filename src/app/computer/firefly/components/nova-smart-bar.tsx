@@ -675,12 +675,12 @@ export function NovaSmartBar() {
       if (model?.fullName) body.model = model.fullName;
       if (model?.provider === "huggingface") body.provider = "huggingface";
 
-      // Map type to taskType hint
+      // Map type to the ReplicateTaskType strings used in replicate.ts
       const taskTypeMap: Partial<Record<OutputType, string>> = {
-        image: "text_to_image",
-        video: "text_to_video",
+        image: "image_generation",
+        video: "video_generation",
         audio: "music_generation",
-        "3d": "image_to_3d",
+        "3d": "3d_generation",
         text: "text_generation",
       };
       if (effectiveType !== "auto") body.taskType = taskTypeMap[effectiveType];
