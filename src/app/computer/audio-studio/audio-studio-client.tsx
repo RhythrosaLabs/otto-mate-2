@@ -31,6 +31,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ModelSearchSelector } from "@/app/computer/firefly/components/model-search-selector";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Types
@@ -198,6 +199,7 @@ export function AudioStudioEmbed() {
   const [energy, setEnergy] = useState("medium");
   const [temperature, setTemperature] = useState(1.0);
   const [cfgScale, setCfgScale] = useState(3);
+  const [replicateModel, setReplicateModel] = useState("meta/musicgen");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingDuration, setGeneratingDuration] = useState(15);
@@ -289,7 +291,8 @@ export function AudioStudioEmbed() {
           tempo, energy,
           bpm: bpm || undefined,
           key: key || undefined,
-          model_version: modelVersion,
+          model_version: replicateModel === "meta/musicgen" ? modelVersion : undefined,
+          model: replicateModel !== "meta/musicgen" ? replicateModel : undefined,
           instruments: selectedInstruments.length ? selectedInstruments : undefined,
           temperature,
           classifier_free_guidance: cfgScale,
@@ -315,7 +318,7 @@ export function AudioStudioEmbed() {
       setGenerating(false);
       setPrompt("");
     }
-  }, [prompt, genre, mood, duration, tempo, energy, bpm, key, modelVersion, selectedInstruments, temperature, cfgScale, tracks.length]);
+  }, [prompt, genre, mood, duration, tempo, energy, bpm, key, modelVersion, replicateModel, selectedInstruments, temperature, cfgScale, tracks.length]);
 
   /* ── Generate Speech ── */
   const generateSpeech = useCallback(async () => {
@@ -708,23 +711,33 @@ export function AudioStudioEmbed() {
                 {/* Model */}
                 <div>
                   <label className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1 block">Model</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {MODEL_VERSIONS.map((mv) => (
-                      <button
-                        key={mv.id}
-                        onClick={() => setModelVersion(mv.id)}
-                        className={cn(
-                          "p-2 rounded-lg text-left transition-colors border text-[11px]",
-                          modelVersion === mv.id
-                            ? "bg-violet-600/20 border-violet-500/60 text-violet-300"
-                            : "bg-zinc-900/60 border-zinc-700/30 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600/40"
-                        )}
-                      >
-                        <div className="font-medium">{mv.label}</div>
-                        <div className="text-[10px] opacity-60 mt-0.5">{mv.desc}</div>
-                      </button>
-                    ))}
-                  </div>
+                  <ModelSearchSelector
+                    category="music-generation"
+                    value={replicateModel}
+                    onChange={(id) => setReplicateModel(id || "meta/musicgen")}
+                    accent="violet"
+                    compact
+                  />
+                  {/* MusicGen variant selector — only shown when MusicGen is selected */}
+                  {replicateModel === "meta/musicgen" && (
+                    <div className="grid grid-cols-2 gap-1.5 mt-2">
+                      {MODEL_VERSIONS.map((mv) => (
+                        <button
+                          key={mv.id}
+                          onClick={() => setModelVersion(mv.id)}
+                          className={cn(
+                            "p-2 rounded-lg text-left transition-colors border text-[11px]",
+                            modelVersion === mv.id
+                              ? "bg-violet-600/20 border-violet-500/60 text-violet-300"
+                              : "bg-zinc-900/60 border-zinc-700/30 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600/40"
+                          )}
+                        >
+                          <div className="font-medium">{mv.label}</div>
+                          <div className="text-[10px] opacity-60 mt-0.5">{mv.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Advanced */}
