@@ -110,60 +110,29 @@ export async function POST(req: NextRequest) {
     // Use MusicGen for soundtrack generation.
     // Replicate's Prefer: wait header must be 1–60. We submit with wait=60
     // then poll for up to 4 minutes for longer generations.
+    const { createPrediction, waitForPrediction } = await import("@/lib/replicate");
+
     const modelVersion = body.model_version || "stereo-melody-large";
-    const res = await fetch("https://api.replicate.com/v1/models/meta/musicgen/predictions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        Prefer: "wait=60",
-      },
-      body: JSON.stringify({
-        input: {
-          prompt: musicPrompt,
-          duration,
-          model_version: modelVersion,
-          output_format: "wav",
-          normalization_strategy: "peak",
-          ...(body.temperature !== undefined && { temperature: body.temperature }),
-          ...(body.top_k !== undefined && { top_k: body.top_k }),
-          ...(body.top_p !== undefined && { top_p: body.top_p }),
-          ...(body.classifier_free_guidance !== undefined && { classifier_free_guidance: body.classifier_free_guidance }),
-          ...(body.continuation !== undefined && { continuation: body.continuation }),
-        },
-      }),
-    });
+    const prediction = await createPrediction("meta", "musicgen", {
+      prompt: musicPrompt,
+      duration,
+      model_version: modelVersion,
+      output_format: "wav",
+      normalization_strategy: "peak",
+      ...(body.temperature !== undefined && { temperature: body.temperature }),
+      ...(body.top_k !== undefined && { top_k: body.top_k }),
+      ...(body.top_p !== undefined && { top_p: body.top_p }),
+      ...(body.classifier_free_guidance !== undefined && { classifier_free_guidance: body.classifier_free_guidance }),
+      ...(body.continuation !== undefined && { continuation: body.continuation }),
+    }, apiKey);
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`MusicGen error: ${err}`);
-    }
+    const completed = await waitForPrediction(prediction.id, apiKey, 300_000);
 
-    const data = await res.json();
     let audioUrl = "";
-
-    if (typeof data.output === "string") {
-      audioUrl = data.output;
-    } else if (Array.isArray(data.output)) {
-      audioUrl = data.output[0];
-    }
-
-    // Poll for up to 4 minutes (120 × 2s) if not immediately complete
-    if (!audioUrl && data.urls?.get) {
-      for (let i = 0; i < 120; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const pollRes = await fetch(data.urls.get, {
-          headers: { Authorization: `Bearer ${apiKey}` },
-        });
-        const pollData = await pollRes.json();
-        if (pollData.status === "succeeded") {
-          audioUrl = typeof pollData.output === "string" ? pollData.output : pollData.output?.[0];
-          break;
-        }
-        if (pollData.status === "failed" || pollData.status === "canceled") {
-          throw new Error(`Music generation ${pollData.status}: ${pollData.error || "unknown"}`);
-        }
-      }
+    if (typeof completed.output === "string") {
+      audioUrl = completed.output;
+    } else if (Array.isArray(completed.output)) {
+      audioUrl = completed.output[0] as string;
     }
 
     return NextResponse.json({
