@@ -683,26 +683,111 @@ src/
 
 ### Tech Stack
 
+#### Core
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 15.1 (App Router) |
-| Language | TypeScript |
-| UI | Tailwind CSS · Radix UI · Framer Motion · Lucide React |
-| Database | SQLite (`better-sqlite3`) |
-| Validation | Zod |
-| AI SDKs | `@anthropic-ai/sdk` · `openai` · `@google/generative-ai` |
-| AI Providers | Anthropic · OpenAI · Google · Perplexity · OpenRouter |
-| Image Generation | Replicate · Adobe Firefly · DALL-E 3 |
-| Video Generation | Luma Dream Machine (Ray 3, Ray Flash 2, Photon 1) · Replicate |
-| Audio Generation | MusicGen via Replicate · OpenAI TTS · ElevenLabs |
-| Speech-to-Text | OpenAI Whisper · Web Speech API |
-| Web Scraping | Playwright · Cheerio · node-fetch |
-| Auth | Custom OAuth 2.0 (Google · Microsoft · GitHub · Notion · Dropbox) |
-| Scheduling | Node.js cron (custom scheduler in `lib/scheduler.ts`) |
-| State | React 19 hooks · `uuid` for IDs |
+| Framework | Next.js 15.1.4 (App Router) |
+| Runtime | Node.js 20+ |
+| Language | TypeScript 5 |
+| UI Library | React 19 |
+| CSS | Tailwind CSS 3.4 (custom `pplx-*` color palette) |
+| Components | Radix UI (Dialog, Dropdown, ScrollArea, Select, Tabs, Tooltip) |
+| Animation | Framer Motion 11 |
+| Icons | Lucide React |
+| Class utilities | clsx + tailwind-merge + class-variance-authority |
 | Markdown | react-markdown + remark-gfm |
-| Testing | Playwright E2E |
-| Process management | pm2 (`pm2.config.cjs`) |
+| Validation | Zod |
+| IDs | uuid |
+| Database | SQLite via `better-sqlite3` (WAL mode) |
+| File storage | Local filesystem (`./task-files/{taskId}/`) |
+| Testing | Playwright E2E (`@playwright/test`) |
+| Linting | ESLint 8 + `eslint-config-next` |
+| Process management | pm2 |
+
+#### AI Providers & Models
+| Provider | Models | SDK |
+|---|---|---|
+| **Anthropic** | Claude Opus 4.6, Claude Sonnet 4.6, Claude 3.5 Haiku | `@anthropic-ai/sdk` |
+| **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano | `openai` |
+| **Google** | Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash | `@google/generative-ai` |
+| **Perplexity** | Sonar, Sonar Pro, Sonar Reasoning Pro | `openai` (baseURL override) |
+| **OpenRouter** | 200+ models incl. DeepSeek, Llama 3.3, Qwen, Gemma, Mistral, free-tier models | `openai` (baseURL override) |
+
+Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity** (exponential backoff: 2s, 5s, 15s)
+
+#### Image Generation
+| Service | Models / Notes |
+|---|---|
+| Replicate | FLUX Schnell (default), FLUX 1.1 Pro, SD Inpainting, recraft-crisp-upscale, recraft-remove-background, BLIP captioning, face swap |
+| OpenAI | DALL-E 3 |
+| Adobe Firefly | Nova Image 4, Nova Image 4 Ultra, Nova Image 5 (via custom Firefly API) |
+
+#### Video Generation
+| Service | Models / Notes |
+|---|---|
+| Luma Dream Machine | Ray 3, Ray Flash 2, Photon 1, Photon Flash 1 — text-to-video, image-to-video, extend, interpolate, reframe, modify |
+| Runway ML | Gen-3 Alpha Turbo (image-to-video) |
+| Kling AI | Text-to-video, image-to-video |
+| Replicate | Minimax Video-01-Live, Wan 2.1 (T2V + I2V 480p), Seedance 1 Lite, Stable Video Diffusion, Kling via fofr |
+
+#### Audio Generation
+| Service | Notes |
+|---|---|
+| Replicate (MusicGen) | Music generation — stereo-melody-large, stereo-large, melody variants |
+| OpenAI TTS | Voices: alloy, echo, fable, onyx, nova, shimmer |
+| ElevenLabs | `eleven_multilingual_v2` — multilingual TTS, voice listing API |
+| OpenAI Whisper (`whisper-1`) | Speech-to-text transcription |
+
+#### Browser Automation & Computer Use
+| Tool | Notes |
+|---|---|
+| Steel (steel.dev) | Cloud Chrome sessions, CAPTCHA solving, anti-bot detection. Modes: `STEEL_API_KEY` (cloud) or `STEEL_BASE_URL` (self-hosted) |
+| Playwright | Local Chrome automation — web scraping, social media posting, form fill |
+| Computer Use (macOS) | `screencapture` + `cliclick` + AppleScript for desktop control |
+| Cheerio | Server-side HTML parsing |
+
+#### Messaging Integrations
+| Service | API |
+|---|---|
+| WhatsApp | Meta Business Cloud API (`graph.facebook.com/v21.0`) |
+| Telegram | Bot API (`api.telegram.org`) |
+| Slack | Web API (`slack.com/api`) |
+| Discord | REST API v10 |
+
+#### Next.js Configuration Highlights
+| Setting | Value |
+|---|---|
+| `serverExternalPackages` | `better-sqlite3`, `playwright` (prevents bundling native modules) |
+| Proxy rewrite `/bolt/*` | → `localhost:5173` (bolt-diy App Builder) |
+| Proxy rewrite `/kilocode/*` | → `localhost:3100` (code-server proxy) |
+| COOP + COEP headers on `/computer/*` | `same-origin` + `credentialless` — enables SharedArrayBuffer for WebContainers |
+| Image remote patterns | All HTTPS origins allowed |
+
+#### Architectural Patterns
+| Pattern | Description |
+|---|---|
+| SSE Streaming | Tasks, app-builder, and document AI all stream via `text/event-stream` |
+| Tool calling | All providers use JSON-schema function calling; tools defined in `agent.ts` |
+| Parallel tool execution | Parallelizable tool calls batched with `Promise.all` |
+| Persistent iframes | 4 embedded apps (bolt-diy, code-server, Blockbench, openDAW) stay mounted off-screen via `position:fixed; top:-200vh` + `inert` to preserve state across route changes |
+| LRU page cache | `PersistentLayout` caches up to 20 React page trees so state survives navigation |
+| Multi-provider failover | Exponential backoff across 5 providers with automatic model switching |
+| Context compaction | Keeps first 2 + last 8 messages, summarizes the middle to stay within token budget |
+| Semantic memory engine | Importance scoring, memory classification, and compression across tasks |
+| OAuth 2.0 | Google, Microsoft, GitHub, Notion, Dropbox — tokens stored in SQLite |
+| Bearer token middleware | Optional `OTTOMATE_AUTH_TOKEN` on all `/api/*` routes |
+| Sub-agents | Spawns tool-scoped child agents for research, coding, creativity, data, etc. |
+| Code sandboxing | `child_process.exec` with security validation in `sandbox-executor.ts` |
+| `useSyncExternalStore` | Cross-page background operation state (no Redux) |
+
+#### Embedded Sub-Applications
+| App | Port | Tech | Purpose |
+|---|---|---|---|
+| **Next.js** (main) | 3000 | Next.js 15, React 19 | Main UI + all API routes |
+| **bolt-diy** | 5173 | Remix + Vite + pnpm | Full-stack AI app builder (WebContainers) |
+| **Blockbench** | 3001 | Custom JS/Vite | 3D model editor |
+| **openDAW** | 8080 | npm/Vite | Browser-based DAW / audio studio |
+| **code-server proxy** | 3100→3101 | Node.js MJS | VS Code in browser (Coding Companion) |
 
 ---
 
