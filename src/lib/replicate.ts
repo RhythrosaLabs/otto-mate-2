@@ -542,22 +542,38 @@ export async function createPrediction(
     body: JSON.stringify({ input }),
   });
 
-  // Some models (e.g. community models) only support version-based predictions.
-  // Fall back to /v1/predictions with the model's latest version.
+  // Some models (e.g. community/older models) only support version-based predictions.
+  // Fall back to /v1/predictions with an explicit version hash.
   if (resp.status === 404) {
+    let version: string | undefined;
+
+    // 1. Try the model summary endpoint — often has latest_version.id
     const modelResp = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
       headers: apiHeaders(t),
     });
     if (modelResp.ok) {
       const modelData = await modelResp.json() as { latest_version?: { id?: string } };
-      const version = modelData.latest_version?.id;
-      if (version) {
-        resp = await fetch(`https://api.replicate.com/v1/predictions`, {
-          method: "POST",
-          headers: apiHeaders(t),
-          body: JSON.stringify({ version, input }),
-        });
+      version = modelData.latest_version?.id;
+    }
+
+    // 2. If still not found, fetch the versions list and take the newest entry
+    if (!version) {
+      const versionsResp = await fetch(
+        `https://api.replicate.com/v1/models/${owner}/${name}/versions`,
+        { headers: apiHeaders(t) }
+      );
+      if (versionsResp.ok) {
+        const versionsData = await versionsResp.json() as { results?: Array<{ id: string }> };
+        version = versionsData.results?.[0]?.id;
       }
+    }
+
+    if (version) {
+      resp = await fetch(`https://api.replicate.com/v1/predictions`, {
+        method: "POST",
+        headers: apiHeaders(t),
+        body: JSON.stringify({ version, input }),
+      });
     }
   }
 
