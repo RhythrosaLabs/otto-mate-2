@@ -408,26 +408,45 @@ function ModelPicker({
   const colors = ACCENT_COLORS[accent] || ACCENT_COLORS.violet;
   const featured = FEATURED_BY_CATEGORY[category] || FEATURED_BY_CATEGORY.general;
 
-  // Close on outside click
+  // Clear stale search state whenever the category changes (e.g. user switches Image → Audio)
+  useEffect(() => {
+    setQuery("");
+    setLiveResults([]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, [category]);
+
+  // Close on outside click and clear stale search state
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setQuery("");
+        setLiveResults([]);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Map category → keyword to append so Replicate collection search works correctly
+  const CATEGORY_HINT: Record<string, string> = {
+    "music-generation": "music",
+    "video-generation": "video",
+    "3d-generation": "3d",
+  };
+
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setLiveResults([]); setSearching(false); return; }
     setSearching(true);
+    // Bias results toward the current category when the query doesn't already contain the keyword
+    const hint = CATEGORY_HINT[category];
+    const searchQ = hint && !q.toLowerCase().includes(hint) ? `${q} ${hint}` : q;
     try {
       const [repRes, hfRes] = await Promise.all([
-        fetch("/api/replicate?action=search&q=" + encodeURIComponent(q))
+        fetch("/api/replicate?action=search&q=" + encodeURIComponent(searchQ))
           .then(r => r.ok ? r.json() : { models: [] })
           .catch(() => ({ models: [] })),
-        fetch("/api/huggingface?action=search&q=" + encodeURIComponent(q))
+        fetch("/api/huggingface?action=search&q=" + encodeURIComponent(searchQ))
           .then(r => r.ok ? r.json() : { models: [] })
           .catch(() => ({ models: [] })),
       ]);
@@ -462,7 +481,7 @@ function ModelPicker({
       // silently ignore search errors
     }
     setSearching(false);
-  }, []);
+  }, [category]);
 
   const handleInput = (q: string) => {
     setQuery(q);
