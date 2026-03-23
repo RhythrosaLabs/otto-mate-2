@@ -10,9 +10,45 @@ import {
   Expand, Globe, Flame, Play, Heart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadGallery, type GalleryItem } from "./lib/gallery-store";
+import { loadGallery, removeFromGallery, type GalleryItem } from "./lib/gallery-store";
 import { usePageVisible } from "@/components/persistent-layout";
 import { NovaSmartBar } from "./components/nova-smart-bar";
+
+/* ─── Gallery Thumbnail (graceful broken-image fallback) ─────────── */
+
+function GalleryThumb({ item }: { item: GalleryItem }) {
+  const [broken, setBroken] = useState(false);
+  if (item.type === "video") {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-blue-900/30 flex items-center justify-center">
+        <Play className="w-8 h-8 text-cyan-400" />
+      </div>
+    );
+  }
+  if (item.type === "audio" || item.type === "speech") {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-amber-900/30 to-orange-900/30 flex items-center justify-center">
+        <Music className="w-8 h-8 text-amber-400" />
+      </div>
+    );
+  }
+  if (broken) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-violet-900/20 to-zinc-900 flex flex-col items-center justify-center gap-2 p-3">
+        <ImageIcon className="w-6 h-6 text-zinc-600" />
+        <p className="text-[9px] text-zinc-600 text-center line-clamp-3 leading-relaxed">{item.prompt}</p>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={item.url}
+      alt={item.prompt}
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+      onError={() => setBroken(true)}
+    />
+  );
+}
 
 /* ─── Feature Cards ──────────────────────────────────────────────── */
 
@@ -258,9 +294,15 @@ export function FireflyHome() {
   const [recentItems, setRecentItems] = useState<GalleryItem[]>([]);
 
   useEffect(() => {
-    if (isVisible) {
-      setRecentItems(loadGallery().slice(0, 8));
-    }
+    if (!isVisible) return;
+    const all = loadGallery();
+    // Prune items whose URLs are external (expired Replicate/OpenAI CDN links)
+    const staleIds = all
+      .filter(item => item.url.startsWith("https://") || item.url.startsWith("http://"))
+      .map(item => item.id);
+    staleIds.forEach(id => removeFromGallery(id));
+    const fresh = staleIds.length > 0 ? loadGallery() : all;
+    setRecentItems(fresh.slice(0, 8));
   }, [isVisible]);
 
   const filteredFeatures = activeTab === "featured"
@@ -378,21 +420,7 @@ export function FireflyHome() {
                   href="/computer/firefly/gallery"
                   className="relative rounded-xl overflow-hidden aspect-square bg-zinc-900 border border-zinc-800/50 hover:border-zinc-700 transition-all group"
                 >
-                  {item.type === "image" ? (
-                    <img
-                      src={item.url}
-                      alt={item.prompt}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : item.type === "video" ? (
-                    <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-blue-900/30 flex items-center justify-center">
-                      <Play className="w-8 h-8 text-cyan-400" />
-                    </div>
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-amber-900/30 to-orange-900/30 flex items-center justify-center">
-                      <Music className="w-8 h-8 text-amber-400" />
-                    </div>
-                  )}
+                  <GalleryThumb item={item} />
                   <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <p className="text-xs text-white/80 line-clamp-1">{item.prompt}</p>
                     <p className="text-[10px] text-zinc-500 mt-0.5">{item.model}</p>
