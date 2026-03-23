@@ -10,7 +10,7 @@ import {
   Expand, Globe, Flame, Play, Heart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loadGallery, removeFromGallery, type GalleryItem } from "./lib/gallery-store";
+import { loadGallery, type GalleryItem } from "./lib/gallery-store";
 import { usePageVisible } from "@/components/persistent-layout";
 import { NovaSmartBar } from "./components/nova-smart-bar";
 
@@ -294,15 +294,9 @@ export function FireflyHome() {
   const [recentItems, setRecentItems] = useState<GalleryItem[]>([]);
 
   useEffect(() => {
-    if (!isVisible) return;
-    const all = loadGallery();
-    // Prune items whose URLs are external (expired Replicate/OpenAI CDN links)
-    const staleIds = all
-      .filter(item => item.url.startsWith("https://") || item.url.startsWith("http://"))
-      .map(item => item.id);
-    staleIds.forEach(id => removeFromGallery(id));
-    const fresh = staleIds.length > 0 ? loadGallery() : all;
-    setRecentItems(fresh.slice(0, 8));
+    if (isVisible) {
+      setRecentItems(loadGallery().slice(0, 8));
+    }
   }, [isVisible]);
 
   const filteredFeatures = activeTab === "featured"
