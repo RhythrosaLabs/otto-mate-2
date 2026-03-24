@@ -38,6 +38,9 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes, getMimeIcon, getStatusBgColor, formatDuration } from "@/lib/utils";
 import type { Task, AgentStep, TaskFile } from "@/lib/types";
+import { useHandoff, STUDIO_MAP, studiosForItem, type StudioId } from "@/components/handoff-context";
+import { inferMimeCategory, makeHandoffItem } from "@/lib/handoff-store";
+import { ArrowRight } from "lucide-react";
 
 interface Props {
   task: Task;
@@ -1356,6 +1359,7 @@ function StepCard({
 // ─── File Card ─────────────────────────────────────────────────────────────────
 
 function FileCard({ file, taskId, onPreview }: { file: TaskFile; taskId: string; onPreview?: (f: TaskFile) => void }) {
+  const { addToShelf, sendToStudio } = useHandoff();
   const isPreviewable = file.mime_type === "text/html" || file.mime_type.startsWith("image/") ||
     file.mime_type.startsWith("video/") || file.mime_type.startsWith("audio/") ||
     file.mime_type === "application/pdf" || file.name.endsWith(".md") ||
@@ -1406,6 +1410,26 @@ function FileCard({ file, taskId, onPreview }: { file: TaskFile; taskId: string;
         >
           <Download size={13} />
         </a>
+        {/* Open in Studio — handoff */}
+        {(() => {
+          const fileUrl = file.preview_url || `/api/files/${taskId}/${file.name}`;
+          const cat = inferMimeCategory(file.mime_type, file.name);
+          const dummy = makeHandoffItem({ url: fileUrl, name: file.name, mimeType: file.mime_type, mimeCategory: cat, source: "agent" });
+          const studios = studiosForItem(dummy);
+          return studios.map((sid: StudioId) => (
+            <button
+              key={sid}
+              onClick={() => {
+                const item = addToShelf({ url: fileUrl, name: file.name, mimeType: file.mime_type, mimeCategory: cat, source: "agent" });
+                sendToStudio(item, sid);
+              }}
+              className="p-1.5 rounded-lg text-pplx-muted hover:text-pplx-accent hover:bg-pplx-accent/10 transition-colors"
+              title={`Open in ${STUDIO_MAP[sid].label}`}
+            >
+              <ArrowRight size={13} />
+            </button>
+          ));
+        })()}
       </div>
     </div>
   );

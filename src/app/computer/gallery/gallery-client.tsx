@@ -145,11 +145,11 @@ function GalleryCard({
       onClick={onUse}
     >
       {item.preview_url && (
-        <div className="w-full h-28 rounded-lg bg-pplx-bg border border-pplx-border overflow-hidden">
+        <div className="w-full h-28 rounded-lg bg-gradient-to-br from-violet-500/10 via-pink-500/10 to-orange-500/10 border border-pplx-border overflow-hidden relative">
           <img
             src={item.preview_url || undefined}
             alt={item.title}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => (e.currentTarget.style.display = "none")}
           />
         </div>

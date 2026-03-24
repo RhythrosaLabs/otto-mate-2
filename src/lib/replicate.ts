@@ -530,7 +530,8 @@ export async function createPrediction(
   owner: string,
   name: string,
   input: Record<string, unknown>,
-  token?: string
+  token?: string,
+  _retries = 1
 ): Promise<ReplicatePrediction> {
   const t = token || getApiToken();
   if (!t) throw new Error("Replicate API token not configured.");
@@ -579,6 +580,15 @@ export async function createPrediction(
 
   if (!resp.ok) {
     const errBody = await resp.text();
+    if (resp.status === 429 && _retries > 0) {
+      let retryAfterSecs = 10;
+      try {
+        const parsed = JSON.parse(errBody) as { retry_after?: number };
+        if (typeof parsed.retry_after === "number") retryAfterSecs = parsed.retry_after;
+      } catch { /* ignore */ }
+      await new Promise(r => setTimeout(r, (retryAfterSecs + 1) * 1000));
+      return createPrediction(owner, name, input, token, _retries - 1);
+    }
     throw new Error(`Replicate prediction failed (HTTP ${resp.status}): ${errBody.slice(0, 300)}`);
   }
 

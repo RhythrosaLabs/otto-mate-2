@@ -86,6 +86,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useHandoff } from "@/components/handoff-context";
+import { inferMimeCategory } from "@/lib/handoff-store";
+import { useSearchParams } from "next/navigation";
 
 // ==========================================================================
 // Types
@@ -451,6 +454,8 @@ interface DreamscapeClientProps {
 }
 
 export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientProps = {}) {
+  const { addToShelf, consumeHandoff, sendToStudio } = useHandoff();
+  const searchParams = useSearchParams();
   // --------------- Board State ---------------
   // Initialize with a stable default for SSR — load persisted state from
   // localStorage in a useEffect after mount to avoid hydration mismatch.
@@ -489,6 +494,26 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
     void loadedBoards;
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Consume any pending handoff on mount (e.g., an image from Image Studio)
+  useEffect(() => {
+    if (searchParams.get("handoff") !== "1") return;
+    const h = consumeHandoff();
+    if (!h) return;
+    if (h.mimeCategory === "image") {
+      // Pre-populate image-to-video mode
+      setMode("image-to-video");
+      setImageUrl(h.url);
+    } else if (h.mimeCategory === "video") {
+      setMode("modify-video");
+      setMediaUrl(h.url);
+    } else if (h.mimeCategory === "audio") {
+      setMode("lip-sync");
+      setLipSyncAudioUrl(h.url);
+    }
+    if (h.prompt) setPrompt(h.prompt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [editingBoardName, setEditingBoardName] = useState(false);
@@ -864,6 +889,22 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
       }
       const mediaUrl = urls.videoUrl || urls.imageUrl || urls.audioUrl;
       if (!mediaUrl) return;
+
+      // Add to global media shelf for handoff
+      const mimeType = urls.videoUrl ? "video/mp4" : urls.audioUrl ? "audio/mpeg" : "image/png";
+      addToShelf({
+        url: mediaUrl,
+        name: urls.videoUrl
+          ? `dreamscape-video-${Date.now()}.mp4`
+          : urls.audioUrl
+            ? `dreamscape-audio-${Date.now()}.mp3`
+            : `dreamscape-image-${Date.now()}.png`,
+        mimeType,
+        mimeCategory: inferMimeCategory(mimeType),
+        source: "dreamscape",
+        prompt: shotPrompt || undefined,
+      });
+
       try {
         await fetch("/api/files/save-generation", {
           method: "POST",
@@ -877,7 +918,7 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
         });
       } catch { /* non-blocking */ }
     },
-    [boards],
+    [boards, addToShelf],
   );
 
   // =======================================================================
@@ -2612,6 +2653,24 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
                       <a href={selectedShot.videoUrl} download target="_blank" rel="noreferrer" className="text-white hover:text-violet-300">
                         <Download size={14} />
                       </a>
+                      {/* Handoff: send video to shelf / other studios */}
+                      <button
+                        onClick={() => {
+                          const item = addToShelf({
+                            url: selectedShot.videoUrl!,
+                            name: `dreamscape-video-${Date.now()}.mp4`,
+                            mimeType: "video/mp4",
+                            mimeCategory: "video",
+                            source: "dreamscape",
+                            prompt: selectedShot.prompt,
+                          });
+                          sendToStudio(item, "dreamscape");
+                        }}
+                        className="flex items-center gap-1 text-[10px] text-violet-300 hover:text-white bg-violet-500/20 hover:bg-violet-500/30 rounded-lg px-2 py-1 transition-colors"
+                        title="Send to shelf / handoff"
+                      >
+                        <ArrowRight size={11} /> Shelf
+                      </button>
                     </div>
                   </>
                 ) : selectedShot?.imageUrl ? (
@@ -2625,6 +2684,24 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
                       <a href={selectedShot.imageUrl} download target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 text-white text-xs hover:text-violet-300">
                         <Download size={13} /> Download
                       </a>
+                      {/* Handoff: edit generated image in Image Studio */}
+                      <button
+                        onClick={() => {
+                          const item = addToShelf({
+                            url: selectedShot.imageUrl!,
+                            name: `dreamscape-image-${Date.now()}.png`,
+                            mimeType: "image/png",
+                            mimeCategory: "image",
+                            source: "dreamscape",
+                            prompt: selectedShot.prompt,
+                          });
+                          sendToStudio(item, "image-studio");
+                        }}
+                        className="flex items-center gap-1.5 bg-pink-500/20 backdrop-blur-sm rounded-lg px-3 py-1.5 text-pink-300 text-xs hover:bg-pink-500/30 transition-colors"
+                        title="Edit in Image Studio"
+                      >
+                        <Sparkles size={12} /> Edit in Image Studio
+                      </button>
                     </div>
                   </>
                 ) : selectedShot?.audioUrl ? (

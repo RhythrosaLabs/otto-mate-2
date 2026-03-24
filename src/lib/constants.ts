@@ -28,6 +28,7 @@ import {
   Music,
   Box,
   Paintbrush,
+  MousePointer2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -60,6 +61,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/audit", label: "Audit Trail", icon: Shield },
   { href: "/computer/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/computer/sessions", label: "Sessions", icon: MessageSquare },
+  { href: "/computer/computer-control", label: "Computer Control", icon: MousePointer2 },
   { href: "/computer/settings", label: "Settings", icon: Settings },
 ];
 

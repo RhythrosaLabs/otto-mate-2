@@ -264,6 +264,7 @@ async function generateWithReplicate(
   let input: Record<string, unknown>;
 
   switch (modelName) {
+    case "dall-e-3":
     case "flux-schnell":
       replicateModel = "black-forest-labs/flux-schnell";
       input = {
@@ -323,27 +324,47 @@ async function generateWithReplicate(
     (input as Record<string, unknown>).negative_prompt = negativePrompt;
   }
 
-  // Create prediction
-  const res = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Prefer: "wait",
-    },
-    body: JSON.stringify({
-      model: replicateModel,
-      input,
-    }),
-  });
+  // Use the model-specific endpoint (no version needed, handles latest automatically)
+  const [rOwner, rName] = replicateModel.split("/");
+  const modelEndpoint = `https://api.replicate.com/v1/models/${rOwner}/${rName}/predictions`;
+  const authHeaders = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    Prefer: "wait",
+  };
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Replicate error: ${err}`);
+  async function postWithRetry(url: string, bodyObj: object): Promise<Response> {
+    let r = await fetch(url, { method: "POST", headers: authHeaders, body: JSON.stringify(bodyObj) });
+    if (r.status === 429) {
+      const text = await r.text();
+      let wait = 10;
+      try { const p = JSON.parse(text) as { retry_after?: number }; if (typeof p.retry_after === "number") wait = p.retry_after; } catch { /* ignore */ }
+      await new Promise(res => setTimeout(res, (wait + 1) * 1000));
+      r = await fetch(url, { method: "POST", headers: authHeaders, body: JSON.stringify(bodyObj) });
+    }
+    return r;
   }
 
-  const data = await res.json();
-  
+  async function callReplicate() {
+    let resp = await postWithRetry(modelEndpoint, { input });
+    // Fall back to version-based for older models
+    if (resp.status === 404) {
+      const apiH = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+      let version: string | undefined;
+      const mResp = await fetch(`https://api.replicate.com/v1/models/${rOwner}/${rName}`, { headers: apiH });
+      if (mResp.ok) { const md = await mResp.json() as { latest_version?: { id?: string } }; version = md.latest_version?.id; }
+      if (!version) {
+        const vResp = await fetch(`https://api.replicate.com/v1/models/${rOwner}/${rName}/versions`, { headers: apiH });
+        if (vResp.ok) { const vd = await vResp.json() as { results?: Array<{ id: string }> }; version = vd.results?.[0]?.id; }
+      }
+      if (version) resp = await postWithRetry(`https://api.replicate.com/v1/predictions`, { version, input });
+    }
+    if (!resp.ok) throw new Error(`Replicate error: ${await resp.text()}`);
+    return resp.json();
+  }
+
+  const data = await callReplicate() as Record<string, unknown>;
+
   // Handle both single output and array output
   let urls: string[] = [];
   if (Array.isArray(data.output)) {
@@ -456,19 +477,8 @@ export async function POST(req: NextRequest) {
       "firefly-image-4", "firefly-image-4-ultra", "firefly-image-5",
     ]);
 
-    if (model === "dall-e-3") {
-      result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages, generationId);
-    } else if (knownModels.has(model)) {
-      try {
-        result = await generateWithReplicate(enhancedPrompt, negativePrompt, size, model, numImages, generationId, seed, body.structureImageUrl, body.styleImageUrl);
-      } catch (replicateErr) {
-        console.warn("Replicate failed, falling back to OpenAI:", replicateErr);
-        try {
-          result = await generateWithOpenAI(enhancedPrompt, negativePrompt, size, quality, numImages, generationId);
-        } catch (openaiErr) {
-          throw new Error(`All providers failed. Last error: ${(openaiErr as Error).message}`);
-        }
-      }
+    if (knownModels.has(model)) {
+      result = await generateWithReplicate(enhancedPrompt, negativePrompt, size, model, numImages, generationId, seed, body.structureImageUrl, body.styleImageUrl);
     } else {
       // Dynamic model — use unified generate pipeline via internal API
       result = await generateWithDynamic(enhancedPrompt, model, size, numImages, seed);

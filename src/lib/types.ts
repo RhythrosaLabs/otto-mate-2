@@ -261,6 +261,9 @@ export type ToolName =
   | "finance_data"
   | "social_media_post"
   | "computer_use"
+  | "computer"
+  | "bash"
+  | "str_replace_based_edit_tool"
   | "execute_connector"
   | "sandbox_execute";
 

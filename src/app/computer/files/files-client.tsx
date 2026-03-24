@@ -9,11 +9,13 @@ import {
   Music, Video, Box, FileJson, FileCode, FileSpreadsheet, Loader2,
   FolderPlus, Pencil, Trash2, X, Check, FolderClosed, CornerDownRight,
   Monitor, MessageSquare, Sparkles, Cpu, Camera, Palette,
-  Wand2, Link2, Upload, Film, AppWindow, Zap, Database,
+  Wand2, Link2, Upload, Film, AppWindow, Zap, Database, ArrowRight,
 } from "lucide-react";
 import { formatBytes, formatRelativeTime } from "@/lib/utils";
 import type { TaskFile, FileFolder } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useHandoff, STUDIO_MAP, studiosForItem, type StudioId } from "@/components/handoff-context";
+import { inferMimeCategory, makeHandoffItem } from "@/lib/handoff-store";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -336,6 +338,7 @@ export function FilesClient({ files, initialFolders, stats }: {
   stats?: { total: number; bySource: Record<string, number>; byType: Record<string, number>; totalSize: number };
 }) {
   const router = useRouter();
+  const { addToShelf, sendToStudio } = useHandoff();
   const [search,           setSearch]           = useState("");
   const [previewFile,      setPreviewFile]      = useState<FilesWithTask | null>(null);
   const [viewMode,         setViewMode]         = useState<ViewMode>("icons");
@@ -1082,6 +1085,32 @@ export function FilesClient({ files, initialFolders, stats }: {
                   className="w-full flex items-center gap-2.5 px-3.5 py-[6px] text-xs text-white/70 hover:bg-white/[0.07] hover:text-white transition-all">
                   <Download size={12} /> Download
                 </a>
+                {/* Open in Studio — handoff */}
+                {(() => {
+                  const fileUrl = ctxFile.preview_url || `/api/files/${ctxFile.task_id}/${ctxFile.name}`;
+                  const cat = inferMimeCategory(ctxFile.mime_type, ctxFile.name);
+                  const dummyItem = makeHandoffItem({ url: fileUrl, name: ctxFile.name, mimeType: ctxFile.mime_type, mimeCategory: cat, source: "files" });
+                  const studios = studiosForItem(dummyItem);
+                  if (studios.length === 0) return null;
+                  return (
+                    <>
+                      <div className="border-t border-white/[0.06] my-1.5 mx-2" />
+                      <div className="px-3.5 py-1 text-[10px] text-white/25 uppercase font-semibold tracking-wider">Open in Studio</div>
+                      {studios.map((sid: StudioId) => (
+                        <button
+                          key={sid}
+                          onClick={() => {
+                            const item = addToShelf({ url: fileUrl, name: ctxFile.name, mimeType: ctxFile.mime_type, mimeCategory: cat, source: "files" });
+                            sendToStudio(item, sid);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-[6px] text-xs text-pplx-accent/80 hover:bg-pplx-accent/[0.08] hover:text-pplx-accent transition-all text-left"
+                        >
+                          <ArrowRight size={12} /> {STUDIO_MAP[sid].label}
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()}
                 {folders.length > 0 && (
                   <>
                     <div className="border-t border-white/[0.06] my-1.5 mx-2" />

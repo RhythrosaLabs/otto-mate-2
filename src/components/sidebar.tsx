@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS, type ModelId } from "@/lib/types";
 import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas";
 import { NAV_ITEMS } from "@/lib/constants";
+import { HandoffTrayTrigger } from "@/components/handoff-tray";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -162,6 +163,11 @@ export function Sidebar() {
           </div>
         </div>
       )}
+
+      {/* Media Shelf / Handoff trigger */}
+      <div className="px-3 mt-3">
+        <HandoffTrayTrigger />
+      </div>
 
       {/* Spacer */}
       <div className="flex-1" />

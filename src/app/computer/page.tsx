@@ -585,7 +585,7 @@ function ComputerPageInner() {
 
         {/* Gallery visual cards (when "From the gallery" or default) */}
         {(activeCategory === null || activeCategory === GALLERY_CATEGORY_INDEX) && galleryItems.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          <div className="grid gap-2">
             {(() => {
               const start = (shuffleIndex * 6) % galleryItems.length;
               const items = galleryItems.slice(start, start + 6).length >= 6
@@ -596,27 +596,13 @@ function ComputerPageInner() {
               <button
                 key={`gallery-${item.id}-${i}`}
                 onClick={() => setPrompt(item.prompt)}
-                className="text-left rounded-xl border border-pplx-border bg-pplx-card hover:border-pplx-muted/50 hover:bg-pplx-card/80 transition-all overflow-hidden group animate-fade-in"
+                className="text-left px-4 py-3 rounded-xl border border-pplx-border bg-pplx-card hover:border-pplx-muted/50 hover:bg-pplx-card/80 transition-all text-sm group animate-fade-in flex items-center gap-3"
                 style={{ animationDelay: `${i * 0.05}s` }}
               >
-                {item.preview_url ? (
-                  <div className="w-full h-24 bg-pplx-bg overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.preview_url || undefined}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full h-24 bg-gradient-to-br from-violet-500/10 via-pink-500/10 to-orange-500/10 flex items-center justify-center">
-                    <span className="text-2xl opacity-30">🖼️</span>
-                  </div>
-                )}
-                <div className="px-3 py-2">
-                  <p className="text-xs text-pplx-text font-medium truncate">{item.title}</p>
-                </div>
+                <span className="text-base shrink-0 opacity-70">
+                  {({ coding: "💻", research: "🔍", writing: "✍️", data_analysis: "📊", business: "💼", creative: "🎨" } as Record<string,string>)[item.category] ?? "✦"}
+                </span>
+                <span className="text-pplx-muted group-hover:text-pplx-text transition-colors line-clamp-1">{item.title}</span>
               </button>
             ))}
           </div>
