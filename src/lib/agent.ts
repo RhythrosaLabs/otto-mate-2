@@ -24,6 +24,7 @@ import { executeConnectorAction, listConnectorActions, EXECUTABLE_CONNECTORS } f
 import { observePageElements, buildExtractionPrompt, processBrowseResult, formatBrowserResultForAgent, type ActAction, type ExtractAction, type ObserveAction } from "./stagehand-browser";
 import { executeSandboxed, validateCodeSecurity, formatSandboxResult } from "./sandbox-executor";
 import { computerUseAction, formatComputerUseResult, checkToolAvailability, COMPUTER_USE_TOOL_DESCRIPTION } from "./computer-use";
+import { takeScreenshot, getScreenSize, getScalingTarget, executeAction, executeBash, executeTextEditor, filterOldScreenshots } from "./computer-use-native";
 import {
   addAgentStep,
   updateAgentStep,
@@ -151,7 +152,7 @@ function trackTokenUsage(taskId: string, usage: TokenUsage): void {
 // ─── Smart Context Compaction (OpenClaw-inspired) ──────────────────────────────
 // Instead of hard-coding "last 10 messages", intelligently manage context window
 
-const MAX_CONTEXT_TOKENS_ESTIMATE = 12000; // Reserve ~12k tokens for history (conservative)
+const MAX_CONTEXT_TOKENS_ESTIMATE = 400000; // 400k chars ≈ 100k tokens (generous for 200k-token context)
 const CHARS_PER_TOKEN_ESTIMATE = 4; // Rough estimate
 
 async function compactHistory(
@@ -209,7 +210,7 @@ async function compactHistory(
 
 const SOFT_TRIM_THRESHOLD = 0.30; // 30% of context budget
 const HARD_CLEAR_THRESHOLD = 0.50; // 50% of context budget
-const SOFT_TRIM_KEEP_CHARS = 1500; // chars to keep at head and tail during soft-trim
+const SOFT_TRIM_KEEP_CHARS = 4000; // chars to keep at head and tail during soft-trim
 
 function pruneToolResults(
   messages: Anthropic.MessageParam[],
@@ -371,6 +372,53 @@ async function runAfterHooks(ctx: ToolHookContext): Promise<void> {
       await hook(ctx);
     } catch (err) {
       console.error(`[hook:after] Hook error:`, err);
+    }
+  }
+}
+
+// ─── Tool Call Deduplication ──────────────────────────────────────────────────
+// Prevents Otto from re-executing the same deterministic tool call within one run.
+// Only applies to read-only, idempotent tools (search, scrape, memory, files).
+
+/** Tools that produce identical results for identical inputs — safe to cache within a run */
+const DEDUP_SAFE_TOOLS = new Set([
+  "web_search", "scrape_url", "memory_recall", "memory_list",
+  "list_skills", "finance_data", "read_file", "list_files",
+]);
+
+/** Tools that can run concurrently without side-effect conflicts */
+const PARALLELIZABLE_TOOLS = new Set([
+  "create_sub_agent", "web_search", "scrape_url",
+  "memory_recall", "memory_list", "list_skills",
+  "generate_image", "replicate_run", "finance_data",
+]);
+
+/**
+ * Per-run result cache for tool call deduplication.
+ * Created fresh for each agent run so distinct tasks never share cached data.
+ */
+class ToolCallCache {
+  private cache = new Map<string, string>();
+
+  private fingerprint(name: string, input: Record<string, unknown>): string {
+    // Deterministic serialisation: sort keys so {a:1,b:2} === {b:2,a:1}
+    const stable: Record<string, unknown> = {};
+    for (const k of Object.keys(input).sort()) stable[k] = input[k];
+    return `${name}:${JSON.stringify(stable)}`;
+  }
+
+  has(name: string, input: Record<string, unknown>): boolean {
+    if (!DEDUP_SAFE_TOOLS.has(name)) return false;
+    return this.cache.has(this.fingerprint(name, input));
+  }
+
+  get(name: string, input: Record<string, unknown>): string | undefined {
+    return this.cache.get(this.fingerprint(name, input));
+  }
+
+  set(name: string, input: Record<string, unknown>, result: string): void {
+    if (DEDUP_SAFE_TOOLS.has(name)) {
+      this.cache.set(this.fingerprint(name, input), result);
     }
   }
 }
@@ -1245,9 +1293,10 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       return await runWithAnthropic(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
     } catch (err) {
       lastError = err;
-      // If we've exhausted all fallbacks, throw
+      // If we've exhausted all fallbacks, handle the error and give up
       if (attempt === failoverChain.length - 1) {
-        throw err;
+        handleAgentError(err, taskId, onStep);
+        return;
       }
       // For any error (transient or not), try the next provider
       // This ensures maximum resilience — the goal is "always get a response"
@@ -1257,8 +1306,6 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       );
     }
   }
-  // Should not reach here, but just in case
-  throw lastError;
 }
 
 // ─── Anthropic Provider ───────────────────────────────────────────────────────
@@ -1275,12 +1322,14 @@ async function runWithAnthropic(
   history?: Array<{ role: string; content: string }>,
   maxSteps = 50
 ): Promise<void> {
+  // Per-run tool dedup cache — prevents re-executing identical tool calls
+  const toolCache = new ToolCallCache();
+
   // Build messages with conversation history
   const messages: Anthropic.MessageParam[] = [];
   if (history && history.length > 0) {
-    // Include previous conversation context (last 10 messages max for token efficiency)
-    const recentHistory = history.slice(-10);
-    for (const msg of recentHistory) {
+    // history is already compacted by compactHistory() — use it in full
+    for (const msg of history) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });
       }
@@ -1297,6 +1346,12 @@ async function runWithAnthropic(
   let iterations = 0;
   let liveSystemPrompt = systemPrompt; // mutable — refreshed with live context every few iterations
 
+  // Get screen size for native computer use tools (computer_20251124)
+  const cuScreen = await getScreenSize();
+  const cuTarget = getScalingTarget(cuScreen.width, cuScreen.height);
+  const cuApiW = cuTarget?.width ?? cuScreen.width;
+  const cuApiH = cuTarget?.height ?? cuScreen.height;
+
   try {
     while (continueLoop && iterations < maxSteps) {
       if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
@@ -1310,7 +1365,7 @@ async function runWithAnthropic(
       const thinkingId = uuidv4();
       const thinkingStep: AgentStep = {
         id: thinkingId, task_id: taskId, type: "reasoning",
-        title: iterations === 1 ? "Planning approach..." : "Continuing work...",
+        title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}"` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
       };
       addAgentStep(thinkingStep);
@@ -1320,13 +1375,25 @@ async function runWithAnthropic(
       let fullText = "";
       // Apply two-phase tool result pruning before each LLM call (OpenClaw-inspired)
       const prunedMessages = pruneToolResults(messages);
+      // Filter old screenshots to prevent context bloat (keep 3 most recent)
+      filterOldScreenshots(messages as unknown as Array<{ role: string; content: unknown }>, 3);
       // Force tool use on the first iteration so the agent can't just write a plan and stop
       const toolChoice: Anthropic.Messages.ToolChoiceAuto | Anthropic.Messages.ToolChoiceAny =
         iterations === 1 ? { type: "any" } : { type: "auto" };
+      // Native computer use tools (computer_20251124 + bash_20250124 + text_editor_20250728)
+      // combined with all existing Ottomate function tools (minus the legacy computer_use stub).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const betaTools: any[] = [
+        { type: "computer_20251124", name: "computer", display_width_px: cuApiW, display_height_px: cuApiH, enable_zoom: true },
+        { type: "bash_20250124", name: "bash" },
+        { type: "text_editor_20250728", name: "str_replace_based_edit_tool" },
+        ...TOOLS.filter(t => t.name !== "computer_use"),
+      ];
       const stream = anthropic.messages.stream({
-        model: modelName, max_tokens: 8192, system: liveSystemPrompt, tools: TOOLS, messages: prunedMessages,
+        model: modelName, max_tokens: 8192, system: liveSystemPrompt,
+        tools: betaTools, messages: prunedMessages,
         tool_choice: toolChoice,
-      });
+      }, { headers: { "anthropic-beta": "computer-use-2025-11-24" } });
 
       let response: Anthropic.Message;
       try {
@@ -1375,9 +1442,8 @@ async function runWithAnthropic(
       }
 
       // Separate parallelizable tools (sub-agents, web searches) from sequential ones
-      const parallelizable = new Set(["create_sub_agent", "web_search", "scrape_url", "memory_recall", "memory_list", "list_skills"]);
-      const parallelTools = toolUses.filter(t => parallelizable.has(t.name));
-      const sequentialTools = toolUses.filter(t => !parallelizable.has(t.name));
+      const parallelTools = toolUses.filter(t => PARALLELIZABLE_TOOLS.has(t.name));
+      const sequentialTools = toolUses.filter(t => !PARALLELIZABLE_TOOLS.has(t.name));
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
@@ -1399,7 +1465,7 @@ async function runWithAnthropic(
           const ts = Date.now();
           let result = ""; let toolError = false;
           try {
-            result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep });
+            result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep, toolCache });
           } catch (err) {
             result = `Error: ${err instanceof Error ? err.message : String(err)}`;
             toolError = true;
@@ -1428,7 +1494,7 @@ async function runWithAnthropic(
           const ts = Date.now();
           let result = ""; let toolError = false;
           try {
-            result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep });
+            result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep, toolCache });
           } catch (err) {
             result = `Error: ${err instanceof Error ? err.message : String(err)}`;
             toolError = true;
@@ -1456,16 +1522,45 @@ async function runWithAnthropic(
         onStep?.(toolStep);
         const ts = Date.now();
         let result = ""; let toolError = false;
+        // Content for the tool_result block — string for most tools, image array for computer
+        let toolResultContent: string | Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = "";
         try {
-          result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep });
+          const nativeToolNames = ["computer", "bash", "str_replace_based_edit_tool"];
+          if (nativeToolNames.includes(toolUse.name)) {
+            // Native Anthropic computer use tools — execute via shared lib and return image if any
+            const tInput = toolUse.input as Record<string, unknown>;
+            let nativeResult: { output?: string; base64_image?: string; error?: string };
+            if (toolUse.name === "computer") {
+              nativeResult = await executeAction(
+                tInput.action as string, tInput, taskId,
+                cuScreen.width, cuScreen.height, cuApiW, cuApiH, []
+              );
+            } else if (toolUse.name === "bash") {
+              nativeResult = await executeBash((tInput.command as string) ?? "");
+            } else {
+              nativeResult = executeTextEditor(tInput.command as string, tInput);
+            }
+            result = nativeResult.output ?? nativeResult.error ?? "OK";
+            const blocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
+            if (nativeResult.base64_image) {
+              blocks.push({ type: "image", source: { type: "base64", media_type: "image/png", data: nativeResult.base64_image } });
+            }
+            if (nativeResult.output) blocks.push({ type: "text", text: nativeResult.output });
+            if (nativeResult.error) blocks.push({ type: "text", text: `stderr: ${nativeResult.error}` });
+            toolResultContent = blocks.length > 0 ? blocks : "OK";
+          } else {
+            result = await executeTool(toolUse.name as ToolName, toolUse.input as Record<string, unknown>, { taskId, filesDir, onStep, toolCache });
+            toolResultContent = result;
+          }
         } catch (err) {
           result = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          toolResultContent = result;
           toolError = true;
         }
         const duration = Date.now() - ts;
         updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
-        toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: result });
+        toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: toolResultContent });
         if (toolUse.name === "complete_task") continueLoop = false;
         if (toolUse.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
@@ -1477,9 +1572,7 @@ async function runWithAnthropic(
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
-    // Re-throw transient errors (billing, rate limits) so the failover chain can try the next provider
-    if (isTransientError(err)) throw err;
-    handleAgentError(err, taskId, onStep);
+    throw err; // Let the outer failover loop handle this and try the next provider
   }
 }
 
@@ -1500,9 +1593,11 @@ async function runWithOpenAI(
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
   ];
-  // Add conversation history
+  // Per-run tool dedup cache
+  const toolCache = new ToolCallCache();
+  // Add conversation history (already compacted by compactHistory)
   if (history && history.length > 0) {
-    for (const msg of history.slice(-10)) {
+    for (const msg of history) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });
       }
@@ -1531,7 +1626,7 @@ async function runWithOpenAI(
       const thinkingId = uuidv4();
       addAgentStep({
         id: thinkingId, task_id: taskId, type: "reasoning",
-        title: iterations === 1 ? `Planning with ${modelName}...` : "Continuing work...",
+        title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
       });
       const startTime = Date.now(); let fullText = "";
@@ -1583,9 +1678,8 @@ async function runWithOpenAI(
         continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
-      const parallelizable = new Set(["create_sub_agent", "web_search", "scrape_url", "memory_recall", "memory_list", "list_skills"]);
-      const parallelTCs = toolCalls.filter(tc => parallelizable.has(tc.name));
-      const sequentialTCs = toolCalls.filter(tc => !parallelizable.has(tc.name));
+      const parallelTCs = toolCalls.filter(tc => PARALLELIZABLE_TOOLS.has(tc.name));
+      const sequentialTCs = toolCalls.filter(tc => !PARALLELIZABLE_TOOLS.has(tc.name));
 
       const execOAITool = async (tc: { id: string; name: string; arguments: string }) => {
         let input: Record<string, unknown> = {};
@@ -1598,7 +1692,7 @@ async function runWithOpenAI(
         };
         addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let result = ""; let toolError = false;
-        try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep }); }
+        try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { result = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         const duration = Date.now() - ts;
         updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
@@ -1638,8 +1732,7 @@ async function runWithOpenAI(
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
-    if (isTransientError(err)) throw err;
-    handleAgentError(err, taskId, onStep);
+    throw err; // Let the outer failover loop handle this and try the next provider
   }
 }
 
@@ -1667,13 +1760,14 @@ async function runWithGoogle(
   // Build initial history for Google chat
   const chatHistory: Array<{ role: string; parts: Array<{ text: string }> }> = [];
   if (history && history.length > 0) {
-    for (const msg of history.slice(-10)) {
+    for (const msg of history) {
       chatHistory.push({
         role: msg.role === "assistant" ? "model" : "user",
         parts: [{ text: msg.content }],
       });
     }
   }
+  const toolCache = new ToolCallCache();
   const chat = gmodel.startChat({ tools: googleTools as never, history: chatHistory as never });
   let continueLoop = true; let iterations = 0; let currentMessage = userMessage;
   try {
@@ -1681,7 +1775,7 @@ async function runWithGoogle(
       if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
       iterations++;
       const thinkingId = uuidv4();
-      addAgentStep({ id: thinkingId, task_id: taskId, type: "reasoning", title: iterations === 1 ? `Planning with ${modelName}...` : "Continuing...", content: "", status: "running", created_at: new Date().toISOString() });
+      addAgentStep({ id: thinkingId, task_id: taskId, type: "reasoning", title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "\u2026" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`, content: "", status: "running", created_at: new Date().toISOString() });
       const startTime = Date.now();
       // On the first iteration, hint to Google to prefer function calls
       const sendOpts = iterations === 1 ? { toolConfig: { functionCallingConfig: { mode: "ANY" as const } } } : {};
@@ -1696,9 +1790,8 @@ async function runWithGoogle(
         continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
-      const parallelizable = new Set(["create_sub_agent", "web_search", "scrape_url", "memory_recall", "memory_list", "list_skills"]);
-      const parallelFCs = functionCalls.filter((fc: { name: string }) => parallelizable.has(fc.name));
-      const sequentialFCs = functionCalls.filter((fc: { name: string }) => !parallelizable.has(fc.name));
+      const parallelFCs = functionCalls.filter((fc: { name: string }) => PARALLELIZABLE_TOOLS.has(fc.name));
+      const sequentialFCs = functionCalls.filter((fc: { name: string }) => !PARALLELIZABLE_TOOLS.has(fc.name));
       const funcResponses: Array<{ name: string; response: { result: string } }> = [];
 
       const execGoogleTool = async (fc: { name: string; args?: object }) => {
@@ -1711,7 +1804,7 @@ async function runWithGoogle(
         };
         addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let toolResult = ""; let toolError = false;
-        try { toolResult = await executeTool(fc.name as ToolName, input, { taskId, filesDir, onStep }); }
+        try { toolResult = await executeTool(fc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         updateAgentStep(stepId, { tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
         onStep?.({ ...toolStep, tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
@@ -1751,8 +1844,7 @@ async function runWithGoogle(
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
-    if (isTransientError(err)) throw err;
-    handleAgentError(err, taskId, onStep);
+    throw err; // Let the outer failover loop handle this and try the next provider
   }
 }
 
@@ -1782,8 +1874,10 @@ async function runWithOpenRouter(
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
   ];
+  // Per-run tool dedup cache
+  const toolCache = new ToolCallCache();
   if (history && history.length > 0) {
-    for (const msg of history.slice(-10)) {
+    for (const msg of history) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });
       }
@@ -1814,7 +1908,7 @@ async function runWithOpenRouter(
       const thinkingId = uuidv4();
       addAgentStep({
         id: thinkingId, task_id: taskId, type: "reasoning",
-        title: iterations === 1 ? `Planning with ${modelName} (OpenRouter)...` : "Continuing work...",
+        title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
       });
       const startTime = Date.now();
@@ -1866,9 +1960,8 @@ async function runWithOpenRouter(
         continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
-      const parallelizable = new Set(["create_sub_agent", "web_search", "scrape_url", "memory_recall", "memory_list", "list_skills"]);
-      const parallelTCs = toolCalls.filter(tc => parallelizable.has(tc.name));
-      const sequentialTCs = toolCalls.filter(tc => !parallelizable.has(tc.name));
+      const parallelTCs = toolCalls.filter(tc => PARALLELIZABLE_TOOLS.has(tc.name));
+      const sequentialTCs = toolCalls.filter(tc => !PARALLELIZABLE_TOOLS.has(tc.name));
 
       const execORTool = async (tc: { id: string; name: string; arguments: string }) => {
         let input: Record<string, unknown> = {};
@@ -1881,7 +1974,7 @@ async function runWithOpenRouter(
         };
         addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let result = ""; let toolError = false;
-        try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep }); }
+        try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { result = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         const duration = Date.now() - ts;
         updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
@@ -1921,8 +2014,7 @@ async function runWithOpenRouter(
     const t = getTask(taskId);
     if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
-    if (isTransientError(err)) throw err;
-    handleAgentError(err, taskId, onStep);
+    throw err; // Let the outer failover loop handle this and try the next provider
   }
 }
 
@@ -1951,7 +2043,7 @@ async function runWithPerplexity(
     { role: "system", content: systemPrompt },
   ];
   if (history && history.length > 0) {
-    for (const msg of history.slice(-10)) {
+    for (const msg of history) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });
       }
@@ -2084,7 +2176,7 @@ function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentSte
 
 // ─── Tool Executor ────────────────────────────────────────────────────────────
 
-interface ToolContext { taskId: string; filesDir: string; onStep?: (step: AgentStep) => void; }
+interface ToolContext { taskId: string; filesDir: string; onStep?: (step: AgentStep) => void; toolCache?: ToolCallCache; }
 
 /**
  * Tools that require human approval before execution (Perplexity Computer safety model).
@@ -2128,6 +2220,15 @@ const SENSITIVE_ACTIONS: Partial<Record<ToolName, (input: Record<string, unknown
 };
 
 async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+  // ── Tool-call deduplication ──────────────────────────────────────────────
+  // Short-circuit if we've already executed this exact call in the current run.
+  // Prevents the model from redundantly re-doing the same searches/reads.
+  if (ctx.toolCache?.has(name, input)) {
+    const cached = ctx.toolCache.get(name, input)!;
+    console.log(`[dedup] ${name} — returning cached result (${cached.length} chars, skipping re-execution)`);
+    return cached;
+  }
+
   // Check if this is a sensitive action requiring approval
   const sensitiveCheck = SENSITIVE_ACTIONS[name];
   if (sensitiveCheck) {
@@ -2211,6 +2312,8 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
     await runAfterHooks({ ...hookCtx, result: errMsg, error: true, duration_ms: Date.now() - hookStart });
     throw err;
   }
+  // Store result in dedup cache for this run
+  ctx.toolCache?.set(name, input, result);
   await runAfterHooks({ ...hookCtx, result, error: false, duration_ms: Date.now() - hookStart });
   return result;
 }
@@ -2252,6 +2355,28 @@ async function executeToolInner(name: ToolName, input: Record<string, unknown>, 
     case "computer_use": {
       const result = await computerUseAction(input.action as string);
       return formatComputerUseResult(result);
+    }
+    // ─── Native Anthropic computer use tools (handled inline in runWithAnthropic with image support)
+    // These fallback cases handle non-Anthropic providers or direct executeTool() calls.
+    case "computer": {
+      const cuS = await getScreenSize();
+      const cuT = getScalingTarget(cuS.width, cuS.height);
+      const r = await executeAction(
+        input.action as string, input, ctx.taskId,
+        cuS.width, cuS.height, cuT?.width ?? cuS.width, cuT?.height ?? cuS.height, []
+      );
+      return r.output ?? r.error ?? "OK";
+    }
+    case "bash": {
+      const r = await executeBash((input.command as string) ?? "");
+      const parts: string[] = [];
+      if (r.output) parts.push(r.output);
+      if (r.error) parts.push(`stderr: ${r.error}`);
+      return parts.join("\n") || "(no output)";
+    }
+    case "str_replace_based_edit_tool": {
+      const r = executeTextEditor(input.command as string, input);
+      return r.error ?? r.output ?? "OK";
     }
     case "execute_connector": {
       if (input.list_actions) {
@@ -7509,7 +7634,7 @@ When given a complex goal, plan your approach AND start executing in the same re
 4. **Coordinate results**: After sub-agents complete, synthesize their outputs into a cohesive deliverable
 5. **Iterate**: If a sub-agent fails or returns insufficient results, create a new one to fill the gap
 
-⚠️ CRITICAL: Every response MUST include at least one tool call. Think and plan in your text, but always pair it with action.
+⚠️ CRITICAL: Execute, don't just plan. Start with real work (search, code, write, create). Never open with administrative calls like memory_recall or list_skills — your context already contains pre-loaded memories and skills. **Never repeat a tool call with the same parameters you've already made in this task** — the system detects duplicates automatically and they waste steps. Never call web_search with a query you've already searched. Never scrape a URL you've already scraped. If a previous step gave you an answer, build on it — don't re-fetch the same data. Every tool call should advance the work toward completion.
 
 ## Multi-Agent Orchestration
 Delegate work to specialized sub-agents via create_sub_agent:
@@ -7554,14 +7679,50 @@ When tasks involve finance, data, or analytics:
 - **dream_machine**: Multi-shot video/image production — commercials, storyboards, brand films
 - **send_email**: Send emails via Resend or connected services (Gmail, Outlook)
 - **connector_call**: 40+ external services — Slack, GitHub, Notion, Stripe, Google Sheets, Linear, Jira, Salesforce, HubSpot, Airtable, and more
+- **execute_connector**: Execute live API calls to Slack, GitHub, Notion, Discord, Telegram, Linear, Stripe, Google Sheets directly (set tokens in .env)
 - **social_media_post**: Post to Twitter/X, LinkedIn, Instagram, Reddit, Facebook, Bluesky using real browser automation — no API keys needed. Also read feeds and search. Uses persistent browser sessions. Credentials from .env.local are used automatically for login — NEVER ask the user to manually log in if credentials are configured (see Configured Login Credentials section above).
-- **browse_web**: Full browser automation with AUTO-LOGIN — when navigating to any site that has credentials in .env.local, login forms are automatically detected and filled. No manual intervention needed.
+- **finance_data**: Live stock quotes, company financials, SEC filings, crypto, economic indicators — no API key needed
+- **deep_research**: Multi-step deep research — searches dozens of queries, reads hundreds of sources, synthesizes a comprehensive cited report
 - **memory_store / memory_recall / memory_list / memory_update / memory_delete**: Full persistent memory system — store, search, list, update, and delete memories. Self-evolving: update stale memories rather than creating duplicates. Delete incorrect memories to keep the bank clean.
 - **list_skills**: List all available skills with their triggers and status. Use to discover what specialized capabilities are configured.
 - **organize_files**: Manage the global file system — create folders, move files into folders, list all files across tasks. All changes are visible in the Files page.
+- **sandbox_execute**: Run code in an isolated sandbox (Docker when available, VM fallback) — for untrusted or experimental code
+- **computer_use / computer**: Screenshot the screen, click, type, press keys — full GUI automation
+- **bash**: Execute shell commands directly
+- **str_replace_based_edit_tool**: View and edit files on the filesystem by path — read, create, write, replace text in files
 - **create_sub_agent**: Spawn specialized sub-agents for parallel/sequential work
 - **request_user_input**: ONLY ask user when you genuinely cannot proceed without their input
 - **complete_task**: ALWAYS call this when fully done with comprehensive summary
+
+## Ottomate Built-in Studio Suite
+You run inside the Ottomate app at **http://localhost:3000**. Every section of the app is accessible to you. Use \`computer_use\` to navigate or mention these routes to users:
+
+| Studio | URL | Purpose |
+|---|---|---|
+| Dashboard | /computer | Main chat + task launcher |
+| Task Manager | /computer/tasks | Browse, filter, resume, delete tasks |
+| Files | /computer/files | Finder-style browser for all generated files |
+| Memory | /computer/memory | Browse + manage persistent memories |
+| Gallery | /computer/gallery | View generated images + media |
+| Documents | /computer/documents | Create and organize rich documents |
+| Image Studio | /computer/image-studio | Adobe Firefly + Replicate image generation |
+| Video Studio | /computer/dreamscape/studio | Luma Dream Machine video production |
+| Audio Studio | /computer/audio-studio | openDAW (localhost:8080) — music, mixing, DAW |
+| 3D Studio | /computer/3d-studio | Blockbench (localhost:3001) — 3D modelling |
+| App Builder | /computer/app-builder | bolt.diy (localhost:5173) — full-stack visual IDE |
+| Coding Companion | /computer/coding-companion | VS Code Server (localhost:3100) |
+| Connectors | /computer/connectors | Configure external service integrations |
+| Skills | /computer/skills | Add/edit specialized behavior skills |
+| Analytics | /computer/analytics | Task metrics + usage tracking |
+| Sessions | /computer/sessions | Browser sessions |
+| Settings | /computer/settings | Models, API keys, preferences |
+
+The internal REST API is available at \`/api/*\` — you can call it from \`execute_code\` fetch or \`bash\` curl:
+- \`GET /api/tasks\` — list all tasks; \`POST /api/tasks\` — create a task
+- \`GET /api/files/{taskId}/{filename}\` — download any generated file
+- \`GET /api/memory\` — list memories; \`GET /api/gallery\` — browse gallery
+- \`GET /api/connectors\` — list connectors and their status
+- \`GET /api/usage\` — token usage stats
 
 ## Code Execution Environment
 - Python with auto-install: if a package is missing, install it first with pip install
@@ -7574,7 +7735,7 @@ When tasks involve finance, data, or analytics:
 ## Execution Philosophy
 1. **Be autonomous**: Minimize clarification requests. Infer intent and proceed.
 2. **Decompose complexity**: Break hard problems into sub-tasks and delegate.
-3. **Use memory proactively**: At the start of every task, use memory_recall to check for relevant past context, user preferences, and project state.
+3. **Use memory proactively**: Relevant memories are auto-recalled and already injected into your context above — do NOT call memory_recall at task start, jump straight to work. Use memory_recall mid-task only for targeted lookups of information not already in your context.
 4. **Be thorough**: Don't stop until the task is truly complete. Validate outputs.
 5. **Produce polished deliverables**: Build impressive, production-quality outputs.
 6. **Store learnings**: Save important findings with memory_store for future tasks.
@@ -7597,7 +7758,7 @@ When tasks involve finance, data, or analytics:
 
 ## Memory System — Self-Evolving
 Your memory is a living, evolving knowledge base that grows smarter with every task:
-- At the START of complex tasks, ALWAYS use memory_recall to check for relevant context
+- Relevant memories are **auto-recalled and injected into your context** at task start — do NOT call memory_recall at task start, jump straight to work
 - **Store** user preferences, project details, and key findings with memory_store
 - **Update** existing memories with memory_update when you discover new/corrected information — NEVER leave stale data
 - **Delete** incorrect or outdated memories with memory_delete — clean memory = accurate memory
@@ -7609,7 +7770,7 @@ Your memory is a living, evolving knowledge base that grows smarter with every t
 - Memories are automatically refreshed during long tasks so you always have the latest state
 
 ## Skills & Capabilities
-- Use list_skills to discover all configured skills and their triggers
+- Active skills are pre-loaded in your context above. Use list_skills only if you need to inspect skill metadata mid-task — not at task start.
 - Skills provide specialized instructions and model routing for specific task types
 - Active skills automatically activate when their triggers match the user's request${skills ? `\n\n## Custom Skills\n${skills}` : ""}`;
 }
@@ -7646,6 +7807,9 @@ function toolUseTypeToStepType(toolName: ToolName): AgentStep["type"] {
     deep_research: "search", finance_data: "search",
     social_media_post: "connector_call",
     computer_use: "reasoning",
+    computer: "reasoning",
+    bash: "code_execution",
+    str_replace_based_edit_tool: "file_operation",
     execute_connector: "connector_call",
     sandbox_execute: "code_execution",
   };
@@ -7678,6 +7842,9 @@ function toolUseToTitle(name: string, input: Record<string, unknown>): string {
     finance_data: () => `Finance: ${input.query_type} ${input.symbol || ""}`,
     social_media_post: () => `Social: ${input.platform} → ${input.action}${input.content ? " — " + ((input.content as string) || "").slice(0, 40) + "..." : ""}`,
     computer_use: () => `Computer: ${((input.action as string) || "").slice(0, 50)}`,
+    computer: () => `Computer: ${((input.action as string) || "").slice(0, 50)}`,
+    bash: () => `Bash: ${((input.command as string) || "").slice(0, 60)}`,
+    str_replace_based_edit_tool: () => `Edit file: ${((input.path as string) || "").slice(0, 50)}`,
     execute_connector: () => `Connector: ${input.connector_id}/${input.action || "list"}`,
     sandbox_execute: () => `Sandbox ${input.language}: ${((input.code as string) || "").slice(0, 40)}...`,
   };
