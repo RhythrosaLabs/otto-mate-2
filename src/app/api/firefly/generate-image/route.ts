@@ -371,11 +371,12 @@ async function generateWithReplicate(
     urls = data.output.filter((u: unknown) => typeof u === "string");
   } else if (typeof data.output === "string") {
     urls = [data.output];
-  } else if (data.urls?.get) {
+  } else if ((data.urls as Record<string, unknown>)?.get) {
+    const getUrl = (data.urls as Record<string, unknown>).get as string;
     // Poll for result with proper loop
     for (let i = 0; i < 60; i++) {
       await new Promise(r => setTimeout(r, 2000));
-      const pollRes = await fetch(data.urls.get, {
+      const pollRes = await fetch(getUrl, {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       const pollData = await pollRes.json();

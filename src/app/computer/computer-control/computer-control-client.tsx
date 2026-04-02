@@ -115,6 +115,7 @@ function statusDot(state: SessionState) {
 export function ComputerControlClient() {
   const [task, setTask] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-6");
+  const [maxIterations, setMaxIterations] = useState(75);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [statusMsg, setStatusMsg] = useState("");
@@ -130,12 +131,26 @@ export function ComputerControlClient() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lastAction, setLastAction] = useState<{ x?: number; y?: number; action?: string } | null>(null);
   const [selectedLogEntry, setSelectedLogEntry] = useState<LogEntry | null>(null);
+  const [doneReason, setDoneReason] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const taskRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isRunning = sessionState === "running" || sessionState === "waiting_permission";
+
+  // Load saved max_iterations from settings
+  useEffect(() => {
+    fetch("/api/settings")
+      .then(r => r.json())
+      .then((s: Record<string, string>) => {
+        if (s.max_iterations) {
+          const v = parseInt(s.max_iterations, 10);
+          if (v > 0) setMaxIterations(v);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Auto-scroll log
   useEffect(() => {
@@ -197,12 +212,13 @@ export function ComputerControlClient() {
     setSessionState("running");
     setStatusMsg("Connecting…");
     setLastAction(null);
+    setDoneReason(null);
 
     try {
       const resp = await fetch("/api/computer-control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task: task.trim(), blockedApps, model }),
+        body: JSON.stringify({ task: task.trim(), blockedApps, model, maxIterations }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -277,6 +293,7 @@ export function ComputerControlClient() {
             break;
           case "done":
             setSessionState("done");
+            setDoneReason(evt.reason ?? null);
             setStatusMsg(
               evt.reason === "task_complete"
                 ? "Task complete"
@@ -601,6 +618,16 @@ export function ComputerControlClient() {
                     </>
                   ) : statusMsg}
                 </span>
+                {/* Continue button when max steps reached */}
+                {statusMsg === "Reached max steps" && (
+                  <button
+                    onClick={startSession}
+                    className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-pplx-accent/20 text-pplx-accent hover:bg-pplx-accent/30 border border-pplx-accent/30 transition-colors"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    Continue
+                  </button>
+                )}
               </div>
             )}
             <div className="flex gap-2 items-end">

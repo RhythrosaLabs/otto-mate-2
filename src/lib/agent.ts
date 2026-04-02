@@ -916,6 +916,18 @@ Use when:
       required: ["language", "code"],
     },
   },
+  {
+    name: "delegate_to_computer_control",
+    description: "Delegate a task that requires heavy GUI/desktop automation to the dedicated Computer Control system. This uses Anthropic's native computer use tools (screenshot + mouse + keyboard + bash + text editor) with full image feedback. Best for: interacting with desktop apps, browser-based workflows, visual verification, multi-step GUI tasks. The task runs asynchronously and returns a summary when done.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task: { type: "string", description: "Detailed description of what to accomplish on the computer. Be specific about which apps to use, what to click, what to type, etc." },
+        model: { type: "string", description: "Model to use (default: claude-sonnet-4-6). Options: claude-sonnet-4-6, claude-opus-4-6" },
+      },
+      required: ["task"],
+    },
+  },
 ];
 
 // ─── Gemini schema sanitizer ──────────────────────────────────────────────────
@@ -2405,6 +2417,12 @@ async function executeToolInner(name: ToolName, input: Record<string, unknown>, 
         packages: input.packages as string[] | undefined,
       });
       return formatSandboxResult(result);
+    }
+    case "delegate_to_computer_control": {
+      return await executeDelegateToComputerControl(
+        input.task as string,
+        (input.model as string) || "claude-sonnet-4-6"
+      );
     }
     default: return `Unknown tool: ${name}`;
   }
@@ -4013,6 +4031,96 @@ async function listFiles(ctx: ToolContext): Promise<string> {
   const files = fs.readdirSync(ctx.filesDir);
   if (files.length === 0) return "No files in working directory.";
   return files.map((f) => { const s = fs.statSync(path.join(ctx.filesDir, f)); return `- ${f} (${formatBytes(s.size)})`; }).join("\n");
+}
+
+// ─── Delegate to Computer Control ─────────────────────────────────────────────
+
+async function executeDelegateToComputerControl(task: string, model: string): Promise<string> {
+  // Call the Computer Control API internally (same server, localhost)
+  const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), 300_000); // 5-minute timeout
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/computer-control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task, model, maxIterations: 75 }),
+      signal: abortController.signal,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return `Computer Control error (HTTP ${resp.status}): ${errText}`;
+    }
+
+    if (!resp.body) return "Computer Control returned no response stream.";
+
+    // Read the SSE stream and collect results
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const textOutputs: string[] = [];
+    const actions: string[] = [];
+    let doneReason = "";
+    let errorMsg = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const raw = line.slice(6);
+        if (raw === "[DONE]") continue;
+
+        try {
+          const evt = JSON.parse(raw) as Record<string, unknown>;
+          switch (evt.type) {
+            case "text":
+              if (evt.content) textOutputs.push(evt.content as string);
+              break;
+            case "action":
+              if (evt.description) actions.push(evt.description as string);
+              break;
+            case "done":
+              doneReason = (evt.reason as string) || "completed";
+              break;
+            case "error":
+              errorMsg = (evt.message as string) || (evt.content as string) || "Unknown error";
+              break;
+          }
+        } catch { /* skip malformed event */ }
+      }
+    }
+
+    if (errorMsg) return `Computer Control failed: ${errorMsg}`;
+
+    const summary: string[] = [];
+    summary.push(`**Computer Control completed** (${doneReason})`);
+    if (actions.length > 0) {
+      summary.push(`\n**Actions performed** (${actions.length} steps):`);
+      // Show last 10 actions to keep summary concise
+      const shown = actions.slice(-10);
+      if (actions.length > 10) summary.push(`... (${actions.length - 10} earlier actions omitted)`);
+      for (const a of shown) summary.push(`- ${a}`);
+    }
+    if (textOutputs.length > 0) {
+      summary.push(`\n**Output:**\n${textOutputs.join("\n")}`);
+    }
+    return summary.join("\n");
+  } catch (err) {
+    if (abortController.signal.aborted) {
+      return "Computer Control timed out after 5 minutes.";
+    }
+    return `Computer Control delegation failed: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─── Deep Research (Perplexity Deep Research 2.0 inspired) ────────────────────
@@ -7688,6 +7796,7 @@ When tasks involve finance, data, or analytics:
 - **organize_files**: Manage the global file system — create folders, move files into folders, list all files across tasks. All changes are visible in the Files page.
 - **sandbox_execute**: Run code in an isolated sandbox (Docker when available, VM fallback) — for untrusted or experimental code
 - **computer_use / computer**: Screenshot the screen, click, type, press keys — full GUI automation
+- **delegate_to_computer_control**: Delegate heavy GUI tasks to the dedicated Computer Control system (uses Anthropic's native screen control with full image feedback — best for multi-step desktop automation)
 - **bash**: Execute shell commands directly
 - **str_replace_based_edit_tool**: View and edit files on the filesystem by path — read, create, write, replace text in files
 - **create_sub_agent**: Spawn specialized sub-agents for parallel/sequential work

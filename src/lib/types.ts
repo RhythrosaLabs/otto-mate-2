@@ -265,7 +265,8 @@ export type ToolName =
   | "bash"
   | "str_replace_based_edit_tool"
   | "execute_connector"
-  | "sandbox_execute";
+  | "sandbox_execute"
+  | "delegate_to_computer_control";
 
 // ─── Token Usage (OpenClaw-inspired) ──────────────────────────────────────────
 

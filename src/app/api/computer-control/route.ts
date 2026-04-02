@@ -5,6 +5,7 @@ import {
   takeScreenshot, getScreenSize,
   executeAction, executeBash, executeTextEditor, filterOldScreenshots,
 } from "@/lib/computer-use-native";
+import { getSetting } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -59,9 +60,10 @@ export async function POST(req: NextRequest) {
     task?: string;
     blockedApps?: string[];
     model?: string;
+    maxIterations?: number;
   };
 
-  const { task, blockedApps = [], model = "claude-sonnet-4-6" } = body;
+  const { task, blockedApps = [], model = "claude-sonnet-4-6", maxIterations: reqMaxIter } = body;
   if (!task?.trim()) {
     return new Response(JSON.stringify({ error: "task is required" }), { status: 400 });
   }
@@ -131,7 +133,11 @@ export async function POST(req: NextRequest) {
         },
       ];
 
-      const MAX_ITERATIONS = 40;
+      // Allow client to override; fall back to saved setting, then default of 75
+      const savedMaxIter = parseInt(getSetting("max_iterations") ?? "", 10);
+      const MAX_ITERATIONS = reqMaxIter && reqMaxIter > 0
+        ? Math.min(reqMaxIter, 200)
+        : (savedMaxIter > 0 ? savedMaxIter : 75);
       let iterations = 0;
 
       while (iterations < MAX_ITERATIONS) {
