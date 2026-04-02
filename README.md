@@ -41,6 +41,7 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 **Key capabilities:**
 
 - **Autonomous task execution** — plans, reasons, and iterates with tool use until the goal is met
+- **Computer Control** — full desktop automation via Anthropic's native computer use tools — screenshots, mouse, keyboard, bash, and file editing with visual feedback
 - **Multi-model orchestration** — Claude Opus/Sonnet, GPT-4o/4.1, Gemini 2.0, Perplexity Sonar, OpenRouter, with automatic failover
 - **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
 - **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
@@ -154,6 +155,15 @@ Schedule any task to run automatically. Supports one-time (with optional delete-
 ### Memory
 A persistent key-value store with tags that the agent reads and writes during task execution. Stored facts, preferences, and context carry over across tasks. You can search, add, tag, or delete entries manually.
 
+### Computer Control
+Full **desktop automation** powered by Anthropic's native computer use tools (`computer_20251124` + `bash_20250124` + `text_editor_20250728`). Give it a task in plain English and watch Claude take screenshots, move the mouse, type, click, run shell commands, and edit files — all with live visual feedback streamed to your browser.
+
+**Capabilities:** Screenshot capture with coordinate scaling, mouse control (click, double-click, right-click, drag, scroll), keyboard input (type, key press, hotkeys), bash shell execution, file viewing and editing, and zoom into screen regions.
+
+**Features:** Live screenshot viewer with action dot overlay, real-time activity log, configurable max steps (default 75, up to 200), app permission system (approve/deny access per app), blocked app list, model selection (Sonnet/Opus), prompt caching for cost efficiency, extended thinking for better reasoning, and a Continue button to resume when max steps are reached.
+
+**Cross-provider fallback:** Non-Anthropic models (GPT-4, Gemini, etc.) can delegate GUI tasks to Computer Control via the `delegate_to_computer_control` tool, giving every provider access to full desktop automation with image feedback.
+
 ### Analytics & Audit
 **Analytics** shows KPIs: total tasks, success rate, average duration, top tools (with per-tool success rates), model usage (with average cost per call), daily task volume (last 30 days), and recent errors. **Audit Trail** is a paginated log of every agent action — tool calls, model invocations, and task events — with duration, metadata, search, and filters (event type, tool, success status).
 
@@ -234,6 +244,7 @@ AI-powered creative hub — generate images, video, soundtracks, speech, and edi
 | **Memory** | View, search, add, and delete agent memory entries |
 | **Analytics** | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
 | **Audit Trail** | Paginated log of every agent action with filters and metadata |
+| **Computer Control** | Full desktop automation — give Claude a task and watch it control your screen with live screenshots, mouse, keyboard, bash, and file editing. Configurable max steps, app permissions, and Continue button |
 | **Settings** | Default model, token/cost budgets, themes, verbose mode, health check |
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
 
@@ -744,6 +755,7 @@ Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity*
 | Steel (steel.dev) | Cloud Chrome sessions, CAPTCHA solving, anti-bot detection. Modes: `STEEL_API_KEY` (cloud) or `STEEL_BASE_URL` (self-hosted) |
 | Playwright | Local Chrome automation — web scraping, social media posting, form fill |
 | Computer Use (macOS) | `screencapture` + `cliclick` + AppleScript for desktop control |
+| Anthropic Computer Use (native) | `computer_20251124` + `bash_20250124` + `text_editor_20250728` — native beta tools with image feedback, coordinate scaling, prompt caching |
 | Cheerio | Server-side HTML parsing |
 
 #### Messaging Integrations
@@ -816,6 +828,22 @@ Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity*
 ## Topics
 
 `ai-agent` `autonomous-agent` `multi-model` `next-js` `self-hosted` `anthropic` `claude` `gpt-4` `gemini` `openai` `perplexity` `openrouter` `ai-tools` `task-automation` `code-generation` `web-scraping` `image-generation` `video-generation` `audio-generation` `text-to-speech` `musicgen` `replicate` `luma-dream-machine` `adobe-firefly` `sqlite` `typescript` `tailwindcss` `playwright`
+
+---
+
+## Changelog
+
+### v2.1.0 — Computer Control & Cross-Provider Fallback (Apr 2, 2026)
+- **Computer Control** — full desktop automation page with live screenshot viewer, activity log, app permissions, and configurable max steps (75 default, up to 200)
+- **`delegate_to_computer_control` tool** — any model (GPT-4, Gemini, etc.) can now delegate GUI tasks to Anthropic's native computer use system with full image feedback
+- **Continue button** — when Computer Control hits max steps, one click resumes the session
+- **Settings integration** — Computer Control max iterations now respects the saved setting from the Settings page
+- **Build fixes** — excluded subproject type checking, fixed Firefly/Replicate route typing
+
+### v2.0.0 — Computer Control, Image Studio, Handoff System (Mar 2026)
+- Computer Control page (initial), Image Studio, Handoff system, Firefly/Replicate upgrades
+- Major agent improvements — tool dedup, context budget management, parallelism, app awareness
+- Comprehensive wiki documentation (24 pages)
 
 ---
 
