@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, CheckCircle2, Plus, X, ExternalLink, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePageVisible } from "@/components/persistent-layout";
 import type { Connector } from "@/lib/types";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -51,6 +52,19 @@ export function ConnectorsClient({
   const [apiKey, setApiKey] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [banner, setBanner] = useState<{ type: "error" | "success"; message: string } | null>(null);
+
+  // Refresh connected status when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) {
+      fetch("/api/connectors")
+        .then(r => r.ok ? r.json() as Promise<Array<{ id: string; connected: boolean }>> : Promise.reject(r.status))
+        .then(data => setConnected(new Set(data.filter(c => c.connected).map(c => c.id))))
+        .catch(console.error);
+    }
+    wasVisibleRef.current = isVisible;
+  }, [isVisible]);
 
   // Handle OAuth redirect-back (?connected=gmail or ?error=...)
   useEffect(() => {

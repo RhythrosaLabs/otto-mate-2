@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Shield,
   Search,
@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePageVisible } from "@/components/persistent-layout";
 
 interface AuditLog {
   id: string;
@@ -53,6 +54,10 @@ export function AuditClient() {
   useEffect(() => { setPage(0); }, [searchQuery]);
   const pageSize = 30;
 
+  // Refresh data when page becomes visible again (user navigated back)
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
@@ -77,6 +82,11 @@ export function AuditClient() {
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) fetchLogs();
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, fetchLogs]);
 
   useEffect(() => {
     fetch("/api/audit?section=tool_names")

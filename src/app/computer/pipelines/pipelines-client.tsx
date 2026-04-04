@@ -27,6 +27,7 @@ import {
   Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePageVisible } from "@/components/persistent-layout";
 import { naturalLanguageToDAG, validateDAG, NL_PIPELINE_EXAMPLES, type PipelineDAG } from "@/lib/nl-to-dag";
 
 interface PipelineNode {
@@ -252,6 +253,14 @@ export function PipelinesClient() {
   }, []);
 
   useEffect(() => { fetchPipelines(); }, [fetchPipelines]);
+
+  // Refresh when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) fetchPipelines();
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, fetchPipelines]);
 
   async function createPipeline() {
     if (!newName.trim()) return;

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, CalendarClock, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, MinusCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, formatRelativeTime, getStatusBgColor, truncate } from "@/lib/utils";
+import { usePageVisible } from "@/components/persistent-layout";
 import type { Task } from "@/lib/types";
 
 interface Props {
@@ -20,6 +21,19 @@ export function TasksClientPage({ initialTasks }: Props) {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Refresh tasks when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) {
+      fetch("/api/tasks?limit=200")
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then((data: Task[]) => setTasks(data))
+        .catch(console.error);
+    }
+    wasVisibleRef.current = isVisible;
+  }, [isVisible]);
 
   const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 } as const;
 

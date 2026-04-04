@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   MessageSquare,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERSONAS } from "@/lib/personas";
+import { usePageVisible } from "@/components/persistent-layout";
 
 interface Session {
   id: string;
@@ -53,6 +54,14 @@ export function SessionsClient() {
   }, []);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
+
+  // Refresh when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) fetchSessions();
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, fetchSessions]);
 
   // Fetch tasks for linking
   useEffect(() => {

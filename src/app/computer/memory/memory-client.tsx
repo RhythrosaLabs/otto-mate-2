@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Trash2 } from "lucide-react";
 import type { MemoryEntry } from "@/lib/types";
+import { usePageVisible } from "@/components/persistent-layout";
 
 export default function MemoryClient() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
@@ -30,6 +31,14 @@ export default function MemoryClient() {
   useEffect(() => {
     void fetchMemory();
   }, [fetchMemory]);
+
+  // Refresh data when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) void fetchMemory(query);
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, fetchMemory, query]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

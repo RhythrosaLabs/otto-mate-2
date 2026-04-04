@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ScheduledTask } from "@/lib/types";
+import { usePageVisible } from "@/components/persistent-layout";
 
 const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   once: "One-time",
@@ -39,6 +40,14 @@ export default function ScheduledTasksClient() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Refresh when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) fetchTasks();
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, fetchTasks]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

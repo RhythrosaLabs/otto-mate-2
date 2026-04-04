@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -12,6 +12,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
+import { usePageVisible } from "@/components/persistent-layout";
 import type { AnalyticsSummary } from "@/lib/types";
 
 export function AnalyticsClient() {
@@ -30,6 +31,14 @@ export function AnalyticsClient() {
   }
 
   useEffect(() => { fetchData(); }, []);
+
+  // Refresh when page becomes visible again
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    if (isVisible && !wasVisibleRef.current) fetchData();
+    wasVisibleRef.current = isVisible;
+  }, [isVisible]);
 
   if (loading) {
     return (
