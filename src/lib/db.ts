@@ -1134,6 +1134,19 @@ export function deleteMemory(id: string): void {
   db.prepare("DELETE FROM memory WHERE id = ?").run(id);
 }
 
+export function updateMemory(id: string, updates: { key?: string; value?: string; tags?: string[] }): void {
+  const db = getDb();
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (updates.key !== undefined) { sets.push("key = ?"); vals.push(updates.key); }
+  if (updates.value !== undefined) { sets.push("value = ?"); vals.push(updates.value); }
+  if (updates.tags !== undefined) { sets.push("tags = ?"); vals.push(JSON.stringify(updates.tags)); }
+  sets.push("updated_at = ?");
+  vals.push(new Date().toISOString());
+  vals.push(id);
+  db.prepare(`UPDATE memory SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+}
+
 // ─── Token Usage Tracking (OpenClaw-inspired) ─────────────────────────────────
 
 export interface TokenUsageRecord {

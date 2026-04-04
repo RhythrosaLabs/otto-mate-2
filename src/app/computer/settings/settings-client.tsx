@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   Save,
-  Command,
   Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -295,31 +294,7 @@ export function SettingsClient() {
         </div>
       </div>
 
-      {/* Keyboard Shortcuts Reference */}
-      <div className="rounded-xl border border-pplx-border bg-pplx-card p-5">
-        <h2 className="text-sm font-medium text-pplx-text mb-4 flex items-center gap-2">
-          <Command size={14} className="text-pplx-accent" />
-          Keyboard Shortcuts
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-2">
-          {[
-            { keys: "⌘ + J", desc: "Command palette" },
-            { keys: "⌘ + N", desc: "New task" },
-            { keys: "⌘ + ,", desc: "Settings" },
-            { keys: "/", desc: "Slash commands (in input)" },
-            { keys: "↑ ↓", desc: "Navigate menus" },
-            { keys: "Enter", desc: "Submit / Select" },
-            { keys: "Escape", desc: "Close modal / palette" },
-          ].map(s => (
-            <div key={s.keys} className="flex items-center justify-between py-1.5" >
-              <span className="text-xs text-pplx-muted">{s.desc}</span>
-              <kbd className="text-[10px] font-mono px-2 py-0.5 rounded bg-pplx-bg border border-pplx-border text-pplx-muted">
-                {s.keys}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      </div>
+
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { listMemory, memoryStore, memoryRecall, deleteMemory } from "@/lib/db";
+import { listMemory, memoryStore, memoryRecall, deleteMemory, updateMemory } from "@/lib/db";
 import { safeErrorMessage } from "@/lib/constants";
 import { StoreMemorySchema, parseBody } from "@/lib/schemas";
 import { v4 as uuidv4 } from "uuid";
@@ -46,6 +46,20 @@ export async function DELETE(req: NextRequest) {
   }
   try {
     deleteMemory(id);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return Response.json({ error: safeErrorMessage(err) }, { status: 500 });
+  }
+}
+
+// PATCH /api/memory — update an existing memory entry
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json() as { id?: string; key?: string; value?: string; tags?: string[] };
+    if (!body.id) {
+      return Response.json({ error: "id is required" }, { status: 400 });
+    }
+    updateMemory(body.id, { key: body.key, value: body.value, tags: body.tags });
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: safeErrorMessage(err) }, { status: 500 });

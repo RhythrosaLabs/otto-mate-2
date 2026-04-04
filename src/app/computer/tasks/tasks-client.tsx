@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, CalendarClock, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, MinusCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, CalendarClock, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, MinusCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
 import { cn, formatRelativeTime, getStatusBgColor, truncate } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
 import type { Task } from "@/lib/types";
@@ -20,6 +20,8 @@ export function TasksClientPage({ initialTasks }: Props) {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const router = useRouter();
 
   // Refresh tasks when page becomes visible again
@@ -63,6 +65,84 @@ export function TasksClientPage({ initialTasks }: Props) {
     setDeletingId(null);
   }
 
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} task${selectedIds.size > 1 ? "s" : ""}?`)) return;
+    setBulkDeleting(true);
+    const ids = [...selectedIds];
+    const deleted: string[] = [];
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+        if (res.ok) deleted.push(id);
+      } catch { /* skip */ }
+    }
+    setTasks(prev => prev.filter(t => !deleted.includes(t.id)));
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  }
+
+  async function retryTask(task: Task) {
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: task.prompt,
+          title: `Retry: ${task.title}`,
+          model: task.model,
+          priority: task.priority,
+          tags: task.tags,
+        }),
+      });
+      if (res.ok) {
+        const newTask = await res.json() as Task;
+        router.push(`/computer/tasks/${newTask.id}`);
+      }
+    } catch (err) {
+      console.error("Failed to retry task:", err);
+    }
+  }
+
+  async function cloneTask(task: Task) {
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: task.prompt,
+          title: `Copy of ${task.title}`,
+          model: task.model,
+          priority: task.priority,
+          tags: task.tags,
+        }),
+      });
+      if (res.ok) {
+        const newTask = await res.json() as Task;
+        setTasks(prev => [newTask, ...prev]);
+      }
+    } catch (err) {
+      console.error("Failed to clone task:", err);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(t => t.id)));
+    }
+  }
+
   const statusCounts = tasks.reduce(
     (acc, t) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
@@ -87,13 +167,15 @@ export function TasksClientPage({ initialTasks }: Props) {
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           {[
             { label: "All", value: tasks.length, key: "all" },
             { label: "Running", value: statusCounts["running"] || 0, key: "running" },
+            { label: "Pending", value: statusCounts["pending"] || 0, key: "pending" },
             { label: "Completed", value: statusCounts["completed"] || 0, key: "completed" },
             { label: "Failed", value: statusCounts["failed"] || 0, key: "failed" },
-          ].map((stat) => (
+            { label: "Queued", value: statusCounts["queued"] || 0, key: "queued" },
+          ].filter(s => s.key === "all" || s.value > 0).map((stat) => (
             <button
               key={stat.key}
               onClick={() => setFilter(stat.key)}
@@ -148,6 +230,39 @@ export function TasksClientPage({ initialTasks }: Props) {
             {viewMode === "calendar" ? "List View" : "Calendar"}
           </button>
         </div>
+
+        {/* Bulk action bar */}
+        {viewMode === "list" && (
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-pplx-muted hover:text-pplx-text transition-colors"
+            >
+              {selectedIds.size === filtered.length && filtered.length > 0
+                ? <CheckSquare size={13} className="text-pplx-accent" />
+                : <Square size={13} />}
+              {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+            </button>
+            {selectedIds.size > 0 && (
+              <>
+                <button
+                  onClick={() => void bulkDelete()}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-pplx-muted hover:text-pplx-text transition-colors"
+                >
+                  <XCircle size={12} /> Clear
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Task list / Calendar view */}
@@ -177,7 +292,11 @@ export function TasksClientPage({ initialTasks }: Props) {
               <TaskCard
                 key={task.id}
                 task={task}
+                selected={selectedIds.has(task.id)}
+                onToggleSelect={() => toggleSelect(task.id)}
                 onDelete={() => deleteTask(task.id)}
+                onRetry={() => void retryTask(task)}
+                onClone={() => void cloneTask(task)}
                 isDeleting={deletingId === task.id}
               />
             ))}
@@ -206,84 +325,127 @@ function StatusIcon({ status }: { status: string }) {
 
 function TaskCard({
   task,
+  selected,
+  onToggleSelect,
   onDelete,
+  onRetry,
+  onClone,
   isDeleting,
 }: {
   task: Task;
+  selected: boolean;
+  onToggleSelect: () => void;
   onDelete: () => void;
+  onRetry: () => void;
+  onClone: () => void;
   isDeleting: boolean;
 }) {
   return (
-    <div className="group relative task-card rounded-xl border border-pplx-border bg-pplx-card p-4 transition-all hover:border-pplx-border/80">
-      <Link href={`/computer/tasks/${task.id}`} className="block">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5">
-            <StatusIcon status={task.status} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-medium text-pplx-text truncate">{task.title}</h3>
-              <span
-                className={cn(
-                  "status-badge px-2 py-0.5 rounded-full flex-shrink-0",
-                  getStatusBgColor(task.status)
-                )}
-              >
-                {task.status.replace("_", " ")}
-              </span>
-              <PriorityBadge priority={task.priority} />
-            </div>
-            {task.description && (
-              <p className="text-xs text-pplx-muted line-clamp-1 mb-2">
-                {truncate(task.description, 120)}
-              </p>
-            )}
-            <div className="flex items-center gap-3 text-xs text-pplx-muted">
-              <span>{formatRelativeTime(task.created_at)}</span>
-              {task.depends_on && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 text-[10px] font-medium border border-purple-500/20">
-                  <Link2 size={9} /> depends on
-                </span>
-              )}
-              {(task.metadata as Record<string, unknown> | undefined)?.webhook_source ? (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 text-[10px] font-medium border border-orange-500/20">
-                  <Webhook size={9} /> webhook
-                </span>
-              ) : null}
-              {(task.metadata as Record<string, unknown> | undefined)?.template_id ? (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 text-[10px] font-medium border border-blue-500/20">
-                  <LayoutTemplate size={9} /> template
-                </span>
-              ) : null}
-              {task.steps.length > 0 && (
-                <span>{task.steps.length} steps</span>
-              )}
-              {task.files.length > 0 && (
-                <span>{task.files.length} file{task.files.length !== 1 ? "s" : ""}</span>
-              )}
-              {task.sub_tasks && task.sub_tasks.length > 0 && (
-                <span>{task.sub_tasks.length} sub-agent{task.sub_tasks.length !== 1 ? "s" : ""}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </Link>
+    <div className={cn(
+      "group relative task-card rounded-xl border bg-pplx-card p-4 transition-all hover:border-pplx-border/80",
+      selected ? "border-pplx-accent/50 bg-pplx-accent/5" : "border-pplx-border"
+    )}>
+      <div className="flex items-start gap-3">
+        {/* Selection checkbox */}
+        <button
+          onClick={(e) => { e.preventDefault(); onToggleSelect(); }}
+          className="mt-0.5 p-0.5 rounded text-pplx-muted hover:text-pplx-accent transition-colors"
+        >
+          {selected
+            ? <CheckSquare size={14} className="text-pplx-accent" />
+            : <Square size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+        </button>
 
-      {/* Delete button */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          onDelete();
-        }}
-        disabled={isDeleting}
-        className="absolute top-3 right-3 p-1.5 rounded-lg text-pplx-muted hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all"
-      >
-        {isDeleting ? (
-          <Loader2 size={13} className="animate-spin" />
-        ) : (
-          <Trash2 size={13} />
+        <Link href={`/computer/tasks/${task.id}`} className="block flex-1 min-w-0">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5">
+              <StatusIcon status={task.status} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-sm font-medium text-pplx-text truncate">{task.title}</h3>
+                <span
+                  className={cn(
+                    "status-badge px-2 py-0.5 rounded-full flex-shrink-0",
+                    getStatusBgColor(task.status)
+                  )}
+                >
+                  {task.status.replace("_", " ")}
+                </span>
+                <PriorityBadge priority={task.priority} />
+              </div>
+              {task.description && (
+                <p className="text-xs text-pplx-muted line-clamp-1 mb-2">
+                  {truncate(task.description, 120)}
+                </p>
+              )}
+              <div className="flex items-center gap-3 text-xs text-pplx-muted">
+                <span>{formatRelativeTime(task.created_at)}</span>
+                {task.depends_on && (
+                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 text-[10px] font-medium border border-purple-500/20">
+                    <Link2 size={9} /> depends on
+                  </span>
+                )}
+                {(task.metadata as Record<string, unknown> | undefined)?.webhook_source ? (
+                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 text-[10px] font-medium border border-orange-500/20">
+                    <Webhook size={9} /> webhook
+                  </span>
+                ) : null}
+                {(task.metadata as Record<string, unknown> | undefined)?.template_id ? (
+                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 text-[10px] font-medium border border-blue-500/20">
+                    <LayoutTemplate size={9} /> template
+                  </span>
+                ) : null}
+                {task.tags && task.tags.length > 0 && task.tags.map(tag => (
+                  <span key={tag} className="px-1.5 py-0.5 rounded bg-pplx-bg text-[10px] font-medium border border-pplx-border text-pplx-muted">
+                    {tag}
+                  </span>
+                ))}
+                {task.steps.length > 0 && (
+                  <span>{task.steps.length} steps</span>
+                )}
+                {task.files.length > 0 && (
+                  <span>{task.files.length} file{task.files.length !== 1 ? "s" : ""}</span>
+                )}
+                {task.sub_tasks && task.sub_tasks.length > 0 && (
+                  <span>{task.sub_tasks.length} sub-agent{task.sub_tasks.length !== 1 ? "s" : ""}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Action buttons */}
+      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+        {task.status === "failed" && (
+          <button
+            onClick={(e) => { e.preventDefault(); onRetry(); }}
+            title="Retry task"
+            className="p-1.5 rounded-lg text-pplx-muted hover:text-pplx-accent hover:bg-pplx-accent/10 transition-colors"
+          >
+            <RotateCcw size={13} />
+          </button>
         )}
-      </button>
+        <button
+          onClick={(e) => { e.preventDefault(); onClone(); }}
+          title="Clone task"
+          className="p-1.5 rounded-lg text-pplx-muted hover:text-pplx-text hover:bg-white/5 transition-colors"
+        >
+          <Copy size={13} />
+        </button>
+        <button
+          onClick={(e) => { e.preventDefault(); onDelete(); }}
+          disabled={isDeleting}
+          className="p-1.5 rounded-lg text-pplx-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+        >
+          {isDeleting ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Trash2 size={13} />
+          )}
+        </button>
+      </div>
     </div>
   );
 }
