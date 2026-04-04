@@ -96,29 +96,36 @@ export function ConnectorsClient({
   async function handleConnect(connector: Connector) {
     if (connected.has(connector.id)) {
       // Disconnect: remove from DB and clear env key
-      await fetch(`/api/connectors/${connector.id}`, { method: "DELETE" });
-      if (connector.env_key) {
-        await fetch("/api/connectors/env", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: connector.env_key }),
+      try {
+        const res = await fetch(`/api/connectors/${connector.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (connector.env_key) {
+          await fetch("/api/connectors/env", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: connector.env_key }),
+          });
+        }
+        setConnected((prev) => {
+          const next = new Set(prev);
+          next.delete(connector.id);
+          return next;
         });
+        setBanner({ type: "success", message: `Disconnected ${connector.name}` });
+      } catch (err) {
+        setBanner({ type: "error", message: `Failed to disconnect ${connector.name}` });
+        console.error(err);
       }
-      setConnected((prev) => {
-        const next = new Set(prev);
-        next.delete(connector.id);
-        return next;
-      });
-      setBanner({ type: "success", message: `Disconnected ${connector.name}` });
     } else if (connector.auth_type === "free") {
       // Free connectors (like Browser Use) — connect immediately, enable via env
       setIsConnecting(true);
       try {
-        await fetch("/api/connectors", {
+        const res = await fetch("/api/connectors", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: connector.id }),
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         if (connector.env_key) {
           await fetch("/api/connectors/env", {
             method: "POST",
@@ -128,6 +135,9 @@ export function ConnectorsClient({
         }
         setConnected((prev) => new Set([...prev, connector.id]));
         setBanner({ type: "success", message: `Connected ${connector.name}` });
+      } catch (err) {
+        setBanner({ type: "error", message: `Failed to connect ${connector.name}` });
+        console.error(err);
       } finally {
         setIsConnecting(false);
       }
@@ -147,11 +157,12 @@ export function ConnectorsClient({
     setIsConnecting(true);
     try {
       // Save to connector DB
-      await fetch("/api/connectors", {
+      const res = await fetch("/api/connectors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: modalConnector.id, api_key: apiKey }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       // Auto-save to .env.local if env_key is defined
       if (modalConnector.env_key && apiKey.trim()) {
@@ -165,6 +176,9 @@ export function ConnectorsClient({
       setConnected((prev) => new Set([...prev, modalConnector.id]));
       setBanner({ type: "success", message: `Connected ${modalConnector.name}${modalConnector.env_key ? " — API key saved to .env.local" : ""}` });
       setModalConnector(null);
+    } catch (err) {
+      setBanner({ type: "error", message: `Failed to connect ${modalConnector.name}` });
+      console.error(err);
     } finally {
       setIsConnecting(false);
     }

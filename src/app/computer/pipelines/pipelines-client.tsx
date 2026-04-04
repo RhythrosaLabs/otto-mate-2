@@ -245,6 +245,7 @@ export function PipelinesClient() {
   const fetchPipelines = useCallback(async () => {
     try {
       const res = await fetch("/api/pipelines");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { pipelines: Pipeline[] };
       setPipelines(data.pipelines || []);
     } catch (err) { console.error(err); }
@@ -260,6 +261,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName, description: newDesc }),
       });
+      if (!res.ok) throw new Error(`Create failed: ${res.status}`);
       const pipeline = await res.json() as Pipeline;
       setPipelines(prev => [pipeline, ...prev]);
       setActivePipeline(pipeline);
@@ -277,6 +279,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: template.name, description: template.description }),
       });
+      if (!res.ok) throw new Error(`Create failed: ${res.status}`);
       const pipeline = await res.json() as Pipeline;
       // Add template nodes
       const nodes: PipelineNode[] = template.nodes.map(n => ({ ...n, status: "pending" }));
@@ -285,6 +288,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: pipeline.id, nodes }),
       });
+      if (!res2.ok) throw new Error(`Update failed: ${res2.status}`);
       const updated = await res2.json() as Pipeline;
       setPipelines(prev => [updated, ...prev]);
       setActivePipeline(updated);
@@ -311,6 +315,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: activePipeline.id, nodes }),
       });
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
       const updated = await res.json() as Pipeline;
       setActivePipeline(updated);
       setPipelines(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -333,6 +338,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: activePipeline.id, nodes }),
       });
+      if (!res.ok) throw new Error(`Remove failed: ${res.status}`);
       const updated = await res.json() as Pipeline;
       setActivePipeline(updated);
       setPipelines(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -353,6 +359,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: activePipeline.id, nodes }),
       });
+      if (!res.ok) throw new Error(`Edge update failed: ${res.status}`);
       const updated = await res.json() as Pipeline;
       setActivePipeline(updated);
       setPipelines(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -362,9 +369,12 @@ export function PipelinesClient() {
 
   async function deletePipeline(id: string) {
     if (!confirm("Delete this pipeline?")) return;
-    await fetch(`/api/pipelines?id=${id}`, { method: "DELETE" });
-    setPipelines(prev => prev.filter(p => p.id !== id));
-    if (activePipeline?.id === id) setActivePipeline(null);
+    try {
+      const res = await fetch(`/api/pipelines?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      setPipelines(prev => prev.filter(p => p.id !== id));
+      if (activePipeline?.id === id) setActivePipeline(null);
+    } catch (err) { console.error(err); }
   }
 
   function generateFromNL() {
@@ -385,6 +395,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: generatedDAG.name, description: generatedDAG.description }),
       });
+      if (!res.ok) throw new Error(`Create failed: ${res.status}`);
       const pipeline = await res.json() as Pipeline;
       const nodes: PipelineNode[] = generatedDAG.nodes.map(n => ({
         id: n.id,
@@ -402,6 +413,7 @@ export function PipelinesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: pipeline.id, nodes }),
       });
+      if (!res2.ok) throw new Error(`Update failed: ${res2.status}`);
       const updated = await res2.json() as Pipeline;
       setPipelines(prev => [updated, ...prev]);
       setActivePipeline(updated);
@@ -430,6 +442,7 @@ export function PipelinesClient() {
             depends_on: depends[0] || undefined,
           }),
         });
+        if (!res.ok) throw new Error(`Task create failed: ${res.status}`);
         const task = await res.json() as { id: string };
         taskMap[node.id] = task.id;
       } catch (err) { console.error(err); }
@@ -440,11 +453,13 @@ export function PipelinesClient() {
       ...n,
       status: "queued",
     }));
-    await fetch("/api/pipelines", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: activePipeline.id, nodes }),
-    });
+    try {
+      await fetch("/api/pipelines", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: activePipeline.id, nodes }),
+      });
+    } catch (err) { console.error(err); }
 
     alert(`Pipeline launched! ${orderedNodes.length} tasks created.`);
     fetchPipelines();

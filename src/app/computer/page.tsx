@@ -216,7 +216,7 @@ function ComputerPageInner() {
   // Fetch gallery items for "From the gallery" category
   useEffect(() => {
     fetch("/api/gallery")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((items: GalleryItem[]) => {
         setGalleryItems(items);
       })
@@ -265,7 +265,8 @@ function ComputerPageInner() {
         const formData = new FormData();
         formData.append("taskId", data.id);
         attachments.forEach((f) => formData.append("files", f));
-        await fetch("/api/files", { method: "POST", body: formData });
+        const uploadRes = await fetch("/api/files", { method: "POST", body: formData });
+        if (!uploadRes.ok) console.error("File upload failed:", uploadRes.status);
       }
 
       router.push(`/computer/tasks/${data.id}`);

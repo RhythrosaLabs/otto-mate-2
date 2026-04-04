@@ -35,8 +35,8 @@ export function SettingsClient() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings").then(r => r.json()),
-      fetch("/api/settings?section=health").then(r => r.json()),
+      fetch("/api/settings").then(r => { if (!r.ok) throw new Error(`Settings ${r.status}`); return r.json(); }),
+      fetch("/api/settings?section=health").then(r => { if (!r.ok) throw new Error(`Health ${r.status}`); return r.json(); }),
     ]).then(([s, h]) => {
       setSettings(s as Record<string, string>);
       setHealth(h as HealthInfo);
@@ -54,7 +54,7 @@ export function SettingsClient() {
   async function handleSave() {
     setSaving(true);
     try {
-      await fetch("/api/settings", {
+      const saveRes = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -67,6 +67,7 @@ export function SettingsClient() {
           },
         }),
       });
+      if (!saveRes.ok) throw new Error("Save failed");
       // Also update local model preference
       localStorage.setItem("ottomate_model", defaultModel);
       setSaved(true);

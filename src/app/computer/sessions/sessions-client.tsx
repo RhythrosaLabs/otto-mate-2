@@ -46,6 +46,7 @@ export function SessionsClient() {
   const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch("/api/sessions");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { sessions: Session[] };
       setSessions(data.sessions || []);
     } catch (err) { console.error(err); }
@@ -64,11 +65,12 @@ export function SessionsClient() {
   async function createSession() {
     if (!form.name.trim()) return;
     try {
-      await fetch("/api/sessions", {
+      const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      if (!res.ok) throw new Error(`Create failed: ${res.status}`);
       await fetchSessions();
       setIsCreating(false);
       setForm({ name: "", description: "", persona_id: "" });
@@ -76,28 +78,37 @@ export function SessionsClient() {
   }
 
   async function togglePin(session: Session) {
-    await fetch("/api/sessions", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: session.id, pinned: !session.pinned }),
-    });
-    fetchSessions();
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: session.id, pinned: !session.pinned }),
+      });
+      if (!res.ok) console.error("Toggle pin failed:", res.status);
+      fetchSessions();
+    } catch (err) { console.error(err); }
   }
 
   async function deleteSession(id: string) {
     if (!confirm("Delete this session?")) return;
-    await fetch(`/api/sessions?id=${id}`, { method: "DELETE" });
-    fetchSessions();
+    try {
+      const res = await fetch(`/api/sessions?id=${id}`, { method: "DELETE" });
+      if (!res.ok) console.error("Delete failed:", res.status);
+      fetchSessions();
+    } catch (err) { console.error(err); }
   }
 
   async function addTaskToSession(sessionId: string, taskId: string) {
-    await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_task", session_id: sessionId, task_id: taskId }),
-    });
-    fetchSessions();
-    setAddingTaskToSession(null);
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add_task", session_id: sessionId, task_id: taskId }),
+      });
+      if (!res.ok) console.error("Add task failed:", res.status);
+      fetchSessions();
+      setAddingTaskToSession(null);
+    } catch (err) { console.error(err); }
   }
 
   const sortedSessions = [...sessions].sort((a, b) => {

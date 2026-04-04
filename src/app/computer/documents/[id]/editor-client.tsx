@@ -20,12 +20,15 @@ export function DocumentEditorClient({ initialDoc }: { initialDoc: DocumentRow }
     setTitle(newTitle);
     setSaving(true);
     try {
-      await fetch(`/api/documents/${doc.id}`, {
+      const res = await fetch(`/api/documents/${doc.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTitle }),
       });
+      if (!res.ok) throw new Error("Save failed");
       setLastSaved(new Date().toLocaleTimeString());
+    } catch {
+      setLastSaved("save failed!");
     } finally {
       setSaving(false);
     }
@@ -34,13 +37,16 @@ export function DocumentEditorClient({ initialDoc }: { initialDoc: DocumentRow }
   const saveContent = useCallback(async (content: string) => {
     setSaving(true);
     try {
-      await fetch(`/api/documents/${doc.id}`, {
+      const res = await fetch(`/api/documents/${doc.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
+      if (!res.ok) throw new Error("Save failed");
       setDoc((prev) => ({ ...prev, content }));
       setLastSaved(new Date().toLocaleTimeString());
+    } catch {
+      setLastSaved("save failed!");
     } finally {
       setSaving(false);
     }

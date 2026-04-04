@@ -394,9 +394,10 @@ export function FilesClient({ files, initialFolders, stats }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, parentId: currentFolderId }),
       });
+      if (!res.ok) throw new Error(`Create folder failed: ${res.status}`);
       const folder = await res.json();
       setFolders(prev => [...prev, folder]);
-    } catch { /* ignore */ }
+    } catch (err) { console.error(err); }
     setCreatingFolder(false);
     setNewFolderName("untitled folder");
   }, [newFolderName, currentFolderId]);
@@ -404,35 +405,38 @@ export function FilesClient({ files, initialFolders, stats }: {
   // ── Rename folder ──
   const handleRenameFolder = useCallback(async (id: string, name: string) => {
     try {
-      await fetch("/api/files?action=renameFolder", {
+      const res = await fetch("/api/files?action=renameFolder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, name }),
       });
+      if (!res.ok) throw new Error(`Rename failed: ${res.status}`);
       setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
-    } catch { /* ignore */ }
+    } catch (err) { console.error(err); }
     setRenamingFolderId(null);
   }, []);
 
   // ── Delete folder ──
   const handleDeleteFolder = useCallback(async (id: string) => {
     try {
-      await fetch(`/api/files?action=deleteFolder&id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/files?action=deleteFolder&id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete folder failed: ${res.status}`);
       setFolders(prev => prev.filter(f => f.id !== id));
       if (currentFolderId === id) navigateToFolder(null);
-    } catch { /* ignore */ }
+    } catch (err) { console.error(err); }
   }, [currentFolderId, navigateToFolder]);
 
   // ── Move file to folder ──
   const handleMoveToFolder = useCallback(async (fileIds: string[], folderId: string | null) => {
     try {
-      await fetch("/api/files?action=moveToFolder", {
+      const res = await fetch("/api/files?action=moveToFolder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileIds, folderId }),
       });
+      if (!res.ok) throw new Error(`Move failed: ${res.status}`);
       window.location.reload();
-    } catch { /* ignore */ }
+    } catch (err) { console.error(err); }
   }, []);
 
   // Focus inputs

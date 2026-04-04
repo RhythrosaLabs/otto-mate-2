@@ -19,6 +19,7 @@ export default function MemoryClient() {
     try {
       const url = q ? `/api/memory?q=${encodeURIComponent(q)}` : "/api/memory";
       const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { entries: MemoryEntry[] };
       setEntries(data.entries || []);
     } finally {
@@ -40,7 +41,7 @@ export default function MemoryClient() {
     if (!newKey.trim() || !newValue.trim()) return;
     setAdding(true);
     try {
-      await fetch("/api/memory", {
+      const res = await fetch("/api/memory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,6 +50,7 @@ export default function MemoryClient() {
           tags: newTags.split(",").map(t => t.trim()).filter(Boolean),
         }),
       });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       setNewKey("");
       setNewValue("");
       setNewTags("");

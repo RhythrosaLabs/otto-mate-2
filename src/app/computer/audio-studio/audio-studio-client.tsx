@@ -913,7 +913,7 @@ export function AudioStudioEmbed() {
                       </button>
                       <span className="flex-1 text-xs text-zinc-300 truncate">{r.name}</span>
                       <a href={r.url} download={`${r.name}.webm`} className="p-1 text-zinc-600 hover:text-zinc-300"><Download className="w-3.5 h-3.5" /></a>
-                      <button onClick={() => setAudioBlobs((prev) => prev.filter((b) => b.id !== r.id))} className="p-1 text-zinc-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { URL.revokeObjectURL(r.url); setAudioBlobs((prev) => prev.filter((b) => b.id !== r.id)); }} className="p-1 text-zinc-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   ))}
                   {audioBlobs.length === 0 && (

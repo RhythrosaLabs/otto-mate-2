@@ -36,7 +36,7 @@ export function OnboardingClient() {
 
   useEffect(() => {
     fetch("/api/settings?section=health")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((h) => setHealth(h as HealthInfo))
       .catch(console.error);
   }, []);

@@ -192,7 +192,8 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     formData.append("taskId", task.id);
     Array.from(files).forEach((f) => formData.append("files", f));
     try {
-      await fetch("/api/files", { method: "POST", body: formData });
+      const uploadRes = await fetch("/api/files", { method: "POST", body: formData });
+      if (!uploadRes.ok) console.error("File upload failed:", uploadRes.status);
       // Refresh task to get new files
       const res = await fetch(`/api/tasks/${task.id}`);
       if (res.ok) setTask(await res.json() as Task);

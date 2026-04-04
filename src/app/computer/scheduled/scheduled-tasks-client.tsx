@@ -64,16 +64,26 @@ export default function ScheduledTasksClient() {
   };
 
   const handleToggle = async (id: string, enabled: boolean) => {
-    await fetch("/api/scheduled-tasks", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggle", id, enabled }),
-    });
+    try {
+      const res = await fetch("/api/scheduled-tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle", id, enabled }),
+      });
+      if (!res.ok) console.error("Toggle failed:", res.status);
+    } catch (err) {
+      console.error("Toggle error:", err);
+    }
     fetchTasks();
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/scheduled-tasks?id=${id}`, { method: "DELETE" });
+    try {
+      const res = await fetch(`/api/scheduled-tasks?id=${id}`, { method: "DELETE" });
+      if (!res.ok) console.error("Delete failed:", res.status);
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
     fetchTasks();
   };
 

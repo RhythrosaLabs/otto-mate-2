@@ -48,6 +48,9 @@ export function AuditClient() {
   const [successFilter, setSuccessFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
+
+  // Reset to page 0 when search query changes
+  useEffect(() => { setPage(0); }, [searchQuery]);
   const pageSize = 30;
 
   const fetchLogs = useCallback(async () => {
@@ -61,6 +64,7 @@ export function AuditClient() {
       if (successFilter) params.set("success", successFilter);
 
       const res = await fetch(`/api/audit?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { logs: AuditLog[]; total: number };
       setLogs(data.logs || []);
       setTotal(data.total || 0);
@@ -68,7 +72,7 @@ export function AuditClient() {
       console.error("Failed to fetch audit logs:", err);
     }
     setLoading(false);
-  }, [page, eventType, toolFilter, successFilter]);
+  }, [page, eventType, toolFilter, successFilter, searchQuery]);
 
   useEffect(() => {
     fetchLogs();
