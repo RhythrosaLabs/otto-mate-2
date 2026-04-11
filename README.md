@@ -5,7 +5,7 @@
     Describe a goal — Ottomate plans, codes, browses, generates media, builds apps, and orchestrates 190+ services autonomously.
   </p>
   <p align="center">
-    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Replicate · Luma Dream Machine · Adobe Firefly
+    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Replicate · Luma Dream Machine · FLUX · HuggingFace
   </p>
   <p align="center">
     Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>
@@ -46,11 +46,11 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 - **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
 - **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
 - **190+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
-- **Nova AI creative suite** — generate images, video, soundtracks, speech, and edit images with AI — all from one unified hub
-- **Dreamscape Video Studio** — 17-mode AI creative studio built around Luma Dream Machine with storyboards, camera presets, and an AI Director
-- **AI Audio Studio** — generate music (MusicGen), professional voiceovers (OpenAI TTS / ElevenLabs), and record audio — all from one interface
-- **Image Studio** — standalone AI image generation and editing powered by Replicate and Adobe Firefly
-- **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), DALL-E 3, ElevenLabs (voice)
+- **Nova AI creative suite** — universal SmartBar that auto-detects output type (image, video, audio, 3D, text), searches Replicate + HuggingFace models live, generates media, and offers post-generation actions (animate, upscale, make 3D)
+- **Dreamscape Video Studio** — 17-mode AI creative studio built around Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) with storyboards, 20 camera presets, continuity library, and an AI Director with command chain orchestration
+- **AI Audio Studio** — generate music (MusicGen via Replicate), professional voiceovers (9 voices via OpenAI TTS), and record audio in-browser — with an AI Producer chat assistant
+- **Image Studio** — AI image generation and editing powered by Replicate (FLUX, SDXL, and dynamic model search) with 7 editing operations and a full brush-based mask canvas
+- **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), FLUX, DALL-E 3, ElevenLabs (voice), MusicGen (music)
 - **Sub-agents** — spawns specialized child agents for parallel work
 - **Persistent memory** — key-value store the agent reads/writes across tasks
 - **Scheduled tasks** — cron expressions, intervals, daily/weekly recurrence
@@ -99,46 +99,48 @@ The core loop: you describe a goal → the agent creates a plan → executes ste
 The agent picks the best model automatically or you choose manually. If a provider is down or rate-limited, it fails over through the chain: **Anthropic → OpenAI → Google → OpenRouter (DeepSeek) → Perplexity** with exponential backoff.
 
 ### Dreamscape Video Studio
-A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 3, Ray Flash 2, Photon 1, Photon Flash 1) with **Replicate** model support and **MusicGen/Bark** audio generation. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
+A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) with **Replicate** model support and **MusicGen/Bark** audio generation. Organize work into storyboards, artboards, and moodboards — each containing individual shots you can generate, extend, remix, and chain together.
 
 **Generation modes:** text-to-video, image-to-video, extend, reverse-extend, interpolate, text-to-image, image reference, character reference (persistent identity across shots), style reference, modify video, modify video with keyframes, modify image, reframe (change aspect ratio of existing media), music generation (MusicGen), sound effects (Bark), voiceover, and lip-sync.
 
-**Production controls:** 20 camera motion presets (pan, zoom, orbit, crane, dolly, tracking, handheld, static, arc, dutch tilt, whip pan — each with directional variants), 9 modify intensity levels (adhere → flex → reimagine), 4 resolutions (540p → 4K), 7 aspect ratios (1:1, 3:4, 4:3, 9:16, 16:9, 9:21, 21:9), 5s/9s durations, HDR output (EXR), loop toggle, batch generation (up to 4 variants), and a draft/hi-fi phase workflow with auto-upgrade from Flash to full models.
+**Production controls:** 20 camera motion presets (pan, zoom, orbit, crane, dolly, tracking, handheld, static, arc, dutch tilt, whip pan — each with directional variants), 9 modify intensity levels (adhere → flex → reimagine, each with 3 sub-levels), 4 resolutions (540p → 4K), 7 aspect ratios (1:1, 3:4, 4:3, 9:16, 16:9, 9:21, 21:9), 5s/9s/10s durations, HDR output (EXR), loop toggle, batch generation (up to 4 variants), and a draft/hi-fi phase workflow with auto-upgrade from Flash to full models.
 
-**Auto-model intelligence:** Recommends the optimal model per generation mode — e.g., Flash models for fast text-to-video drafts, full Ray 3 / Photon 1 for character consistency, style transfer, and modify operations.
+**Auto-model intelligence:** Recommends the optimal model per generation mode — e.g., Flash models for fast text-to-video drafts, full Ray 2 / Photon 1 for character consistency, style transfer, and modify operations.
 
-**AI Director:** A built-in chat agent (brainstorm, create, or brief modes) that interprets natural language into multi-step command chains with dependency ordering, continuity sheets (style anchors, character references, setting references), and concept pill word-swapping for rapid prompt iteration.
+**AI Director:** A built-in chat agent that interprets natural language into multi-step command chains with dependency ordering, continuity sheets (style anchors, character references, setting references), concept pill word-swapping for rapid prompt iteration, and creative query "Enhance" mode for prompt variations. Supports parallel step execution, smart retry with model downgrade on access errors, and progress tracking per step.
 
-**Additional features:** Shot tagging, likes, and bookmarks for organization. Annotation overlay system (arrows, rectangles, text) that feeds spatial context into prompts. Board export/import as JSON. Per-shot media preview with mute controls. Search and filter across all shots.
+**Additional features:** Shot tagging, likes, and bookmarks for organization. Annotation overlay system (arrows, rectangles, text labels) that feeds spatial context into prompts. Board export/import as JSON. Per-shot media preview with mute controls. Search and filter across all shots. Film Player for sequential playback of completed shots. Ideas Gallery for browsing all completed work across boards. Continuity library for persisting style, character, and setting references across boards. Handoff system for sending media between studios.
 
 ### Nova — AI Creative Suite
-A full-featured **AI media generation hub** with six creation modes accessible from a polished home page with a unified prompt bar. Generate from text, edit existing media, and browse community creations — all in one place.
+A full-featured **AI media generation hub** with a universal **SmartBar** on the home page that auto-detects output type (Image, Video, Audio, 3D, Text) from your prompt, searches **Replicate + HuggingFace** model libraries in real time, and renders results inline with quick actions (animate to video, upscale 4×, make 3D). Six dedicated creation tools are accessible from the home page.
 
-**Generate Image:** Text-to-image with Nova Image 4, Nova Image 4 Ultra, Nova Image 5 (Preview), FLUX Schnell, FLUX 1.1 Pro, and DALL-E 3. Supports 6 aspect ratios, negative prompts, style references, structure references with adjustable strength, seed control, and batch generation (1–4 images). Inline quick actions: edit, generative fill, animate to video, upscale, save to gallery.
+**Generate Image:** Text-to-image with FLUX Schnell (fast), FLUX 1.1 Pro, FLUX 2 Pro, DALL-E 3, plus live model search across Replicate and HuggingFace. Supports 8 aspect ratios, 25 style presets (cinematic, anime, watercolor, pixel art, etc.), 9 lighting presets, 8 camera angles, 4 content types, visual intensity slider, negative prompts, structure and style references with adjustable strength, seed control, and batch generation (1–4 images). Inline quick actions: edit, generative fill, animate to video, upscale, copy to clipboard, save to gallery.
 
-**Generate Video:** Text-to-video and image-to-video generation with multiple model options. Supports aspect ratio selection, duration control, and direct download.
+**Generate Video:** Text-to-video and image-to-video generation via Replicate models (Minimax Video-01-Live default, plus Kling, Wan 2.1, Seedance, and any searched model). Supports 3 aspect ratios (16:9, 9:16, 1:1), 3 durations (4s, 5s, 10s), 6 camera motions (pan, zoom, orbit), motion intensity slider, and optional first-frame image upload. Add Soundtrack button links directly to soundtrack generation.
 
-**Generate Soundtrack:** AI music generation for video content. Describe a mood, genre, or scene and generate studio-quality soundtracks — licensed to use anywhere.
+**Generate Soundtrack:** AI music generation via Replicate models (MusicGen default, plus searched models). 13 genres, 12 moods, 4 tempo ranges, 3 energy levels, 12 multi-select instruments, duration slider (5–30s), and optional video upload for scoring. Animated waveform visualizer with genre/mood/tempo/instrument tags on results.
 
-**Generate Speech:** Professional AI voiceovers and narration. Choose from multiple voice profiles with speed and style controls.
+**Generate Speech:** Professional AI voiceovers with 12 voices across 2 providers — OpenAI TTS (Alloy, Echo, Fable, Onyx, Nova, Shimmer) and ElevenLabs (Rachel, Drew, Clyde, Paul, Domi, Bella). Speed slider (0.5×–2.0×), 9 language options, character count with estimated duration, plus live model search for additional TTS models.
 
-**Edit Image:** Full image editing suite — remove backgrounds, replace backgrounds, upscale, expand, generative fill, and prompt-based editing. Upload or paste an image and apply AI transformations.
+**Edit Image:** Full image editing suite with 7 AI operations — generative fill, remove object, replace background, generative expand, upscale (2×/4×), remove background, and prompt-to-edit. Canvas-based brush masking with adjustable size and line interpolation. Expand supports directional control (all/left/right/up/down) and target ratios. Accept/discard workflow with undo history.
 
-**Gallery:** Browse, filter, and manage all generated creations (images, videos, soundtracks, speech) in a unified media gallery with type filtering and quick actions.
+**Gallery:** Browse, filter, and manage all generated creations (images, videos, music, speech) in a unified media gallery. 5 filter types with item count badges, 3 sort options (newest/oldest/favorites), text search, adjustable grid size, and detail modal with full-size media preview. Stored in localStorage (up to 200 items).
 
 ### Audio Studio
-An AI-powered audio production studio with three modes:
+An AI-powered audio production studio with three modes and a built-in **AI Producer** chat assistant:
 
-**Compose:** Generate music tracks from text prompts using MusicGen (via Replicate). Control genre, mood, BPM, key, duration (up to 60s), tempo, energy, instruments, and model variant (stereo-melody-large, stereo-large, melody, etc.). Advanced parameters include temperature and CFG scale. Progress tracked in real time.
+**Compose:** Generate music tracks from text prompts using MusicGen (via Replicate) with live model search for alternative music-generation models. 8 quick templates (Trailer, Coffee shop, Night drive, Boss fight, Meditation, Club banger, Sad piano, Summer pop). Control genre (18 options), mood (12 options), BPM (40–240), key (24 major/minor keys), duration (5–60s), and instruments (16 toggle options including Piano, Guitar, Synthesizer, Strings, 808, Choir, etc.). Advanced parameters include temperature (0.0–2.0) and prompt guidance/CFG scale (1–10). 6 MusicGen sub-variants when selected (stereo-melody-large, stereo-large, melody-large, large, medium, small). AI auto-fill button generates descriptive prompts from your settings.
 
-**Speech:** Generate professional AI voiceovers from text. Supports multiple voice profiles (Alloy, Echo, Fable, Onyx, Nova, Shimmer) via OpenAI TTS. Configure speed and download instantly.
+**Speech:** Generate professional AI voiceovers from text. 9 voice profiles (Alloy, Echo, Fable, Onyx, Nova, Shimmer, Aria, Roger, Sarah) via OpenAI TTS, displayed in a visual grid with descriptions.
 
-**Record:** Record audio directly in the browser with real-time waveform visualization. Preview and download recordings.
+**Record:** Record audio directly in the browser via MediaRecorder. Live recording timer with red pulsing indicator. Recorded tracks listed with play/download/delete controls.
 
-All generated audio is saved to Files with full playback support.
+**Track List:** Right-panel track manager with per-track playback, mute/unmute, loop toggle, volume slider, download (.wav), expand for full metadata (prompt, instruments, genre, BPM, key, duration). Animated waveform bars during playback. Color-coded badges for track type (music/speech/recording).
+
+**AI Producer:** A togglable chat panel that acts as your music production assistant. Sends full studio context (genre, mood, BPM, key, instruments, duration, model, track count) to Claude for intelligent suggestions and creative guidance.
 
 ### Image Studio
-A dedicated AI image generation and editing workspace powered by **Replicate** and **Adobe Firefly**. Generate from text prompts, upload images for inpainting or editing, and save results directly to the gallery. Supports multiple models and aspect ratios.
+A dedicated AI image generation and editing workspace with three tabs (Generate, Edit, Gallery) powered by **Replicate** with live model search across Replicate + HuggingFace. Generate tab supports 7 aspect ratios, 25 style presets, 9 lighting presets, 8 camera angles, negative prompts, seed control, and batch generation (1–4 images) with starter prompts for inspiration. Edit tab provides 7 AI operations (generative fill, remove object, replace background, generative expand, upscale 2×/4×, remove background, prompt-to-edit) with a canvas-based brush masking system, adjustable brush size, and accept/discard workflow with undo history. Cross-studio handoff: generated images can be sent directly to Video Studio for animation.
 
 ### Pipelines
 A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency edges on a canvas, and run the entire pipeline — nodes execute in topological (dependency) order with per-node status tracking. Supports connecting any node to any other as a dependency.
@@ -190,12 +192,12 @@ The main prompt interface — type a goal, use slash commands, attach files, or 
 ![Connectors](docs/screenshots/connectors.png)
 
 ### Dreamscape Video Studio
-17-mode AI creative studio with storyboards, camera presets, and the AI Director chat.
+17-mode AI creative studio with storyboards, 20 camera presets, continuity library, and the AI Director command chain system.
 
 ![Dreamscape](docs/screenshots/dreamscape.png)
 
 ### Nova — Generate
-AI-powered creative hub — generate images, video, soundtracks, speech, and edit images from one unified interface.
+AI-powered creative hub with SmartBar (auto-detect output type, dual-provider model search), image/video/audio/speech generation, image editing, and unified gallery.
 
 ![Nova](docs/screenshots/nova.png)
 
@@ -224,18 +226,24 @@ AI-powered creative hub — generate images, video, soundtracks, speech, and edi
 
 | Page | Description |
 |---|---|
-| **Home** | Centered prompt input with slash commands, voice input, file attachments, and prompt gallery |
+| **Home** | Centered prompt input with 12 slash commands, voice input (Whisper + browser speech), file attachments, gallery suggestions, and category chips |
 | **Tasks** | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
 | **Task Detail** | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
 | **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
-| **Documents** | Create and manage text documents with AI writing assistance |
+| **Documents** | Create and manage text documents and spreadsheets with AI writing assistance, search, and relative timestamps |
 | **Connectors** | Integration marketplace — connect 190+ services via OAuth or API key |
 | **Skills** | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
 | **Gallery** | Browse community example tasks, filter by category, one-click run |
-| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, and an AI Director chat |
-| **Audio Studio** | AI music generation (MusicGen via Replicate), AI voiceover (OpenAI TTS / ElevenLabs), and in-browser recording with waveform visualization |
-| **Image Studio** | AI image generation and editing — Replicate models, Adobe Firefly, DALL-E 3, inpainting, and gallery saving |
-| **Creative Suite (Nova)** | AI creative hub — generate images (6 models), video, soundtracks, speech, edit images (remove/replace BG, upscale, expand, generative fill), and browse all creations in a unified gallery |
+| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, AI Director with command chains, continuity library, annotations, and Film Player |
+| **Audio Studio** | AI music generation (MusicGen via Replicate with 6 sub-variants), 9-voice AI voiceover (OpenAI TTS), in-browser recording, per-track playback/mixing, and AI Producer chat assistant |
+| **Image Studio** | AI image generation (FLUX, SDXL, DALL-E 3 + live model search), 7 AI editing operations with canvas masking, and per-studio gallery with cross-studio handoff to Video Studio |
+| **Creative Suite (Nova)** | AI creative hub with SmartBar (auto-detects output type, dual-provider model search), generate images (FLUX, DALL-E 3 + 25 styles), video (Minimax, Kling, Wan, Seedance), soundtracks (13 genres, 12 instruments), speech (12 voices, 2 providers), edit images (7 operations), and unified gallery |
+| **Playground** | Power-user multimedia workbench — dual-provider model search (Replicate + HuggingFace), multi-column comparison, quick actions per result type, aspect ratio selector |
+| **Replicate** | Replicate-only model explorer with Smart Run (auto-selects best model), quick category buttons, inline or task-based execution |
+| **3D Studio** | Embedded Blockbench 3D model editor (persistent iframe, state preserved across navigation) |
+| **Coding Companion** | Embedded code-server (VS Code in browser) via persistent iframe |
+| **App Builder** | Embedded bolt-diy full-stack AI app builder (WebContainers) via persistent iframe |
+| **WhatsApp** | WhatsApp Business API integration dashboard — connection status, send messages, webhook URL display |
 | **Channels** | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
 | **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
 | **Templates** | Reusable one-click task presets by category |
@@ -617,7 +625,7 @@ src/
 │   │   ├── dreamscape/             # Luma Dream Machine
 │   │   ├── huggingface/            # HuggingFace inference
 │   │   ├── luma/                   # Luma Dream Machine API
-│   │   ├── firefly/                # Nova creative suite APIs (image/video/audio/speech/models)
+│   │   ├── firefly/                # Nova creative suite APIs (image/video/audio/speech/models via Replicate + HuggingFace)
 │   │   ├── generate/               # Generic model generation
 │   │   ├── health/                 # Health check + service health (code-server, etc.)
 │   │   ├── context/                # Context management
@@ -629,10 +637,16 @@ src/
 │   │   ├── whatsapp/               # WhatsApp Cloud API
 │   │   └── voice/                  # Whisper transcription
 │   └── computer/                   # All UI pages (25+ routes)
-│       ├── firefly/                # Nova creative suite (generate, edit, gallery)
-│       ├── dreamscape/             # Dreamscape + Video Studio
-│       ├── audio-studio/           # AI Audio Studio (MusicGen, TTS, recording)
-│       ├── image-studio/           # AI Image Studio (Replicate, Firefly)
+│       ├── firefly/                # Nova creative suite (generate image/video/soundtrack/speech, edit, gallery)
+│       ├── dreamscape/             # Dreamscape Video Studio (storyboards, AI Director, 17 modes)
+│       ├── audio-studio/           # AI Audio Studio (MusicGen, TTS, recording, AI Producer)
+│       ├── image-studio/           # AI Image Studio (generate, edit, gallery)
+│       ├── playground/             # Multimedia Playground (Replicate + HuggingFace model workbench)
+│       ├── replicate/              # Replicate model explorer (Smart Run)
+│       ├── 3d-studio/              # Embedded Blockbench 3D editor
+│       ├── coding-companion/       # Embedded code-server (VS Code)
+│       ├── app-builder/            # Embedded bolt-diy app builder
+│       ├── whatsapp/               # WhatsApp Business API dashboard
 │       └── ...                     # Tasks, Files, Documents, Connectors, Skills, etc.
 ├── lib/
 │   ├── agent.ts                    # Core AI agent (~7,500 lines)
@@ -729,24 +743,23 @@ Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity*
 #### Image Generation
 | Service | Models / Notes |
 |---|---|
-| Replicate | FLUX Schnell (default), FLUX 1.1 Pro, SD Inpainting, recraft-crisp-upscale, recraft-remove-background, BLIP captioning, face swap |
+| Replicate | FLUX Schnell (default), FLUX 1.1 Pro, FLUX 2 Pro, SDXL, Ideogram v2 Turbo, Recraft v3, SD Inpainting, recraft-crisp-upscale, recraft-remove-background, BLIP captioning, face swap |
 | OpenAI | DALL-E 3 |
-| Adobe Firefly | Nova Image 4, Nova Image 4 Ultra, Nova Image 5 (via custom Firefly API) |
+| HuggingFace | SDXL, Stable Diffusion v1.5, and 1000s of community models via live search |
 
 #### Video Generation
 | Service | Models / Notes |
 |---|---|
-| Luma Dream Machine | Ray 3, Ray Flash 2, Photon 1, Photon Flash 1 — text-to-video, image-to-video, extend, interpolate, reframe, modify |
-| Runway ML | Gen-3 Alpha Turbo (image-to-video) |
-| Kling AI | Text-to-video, image-to-video |
-| Replicate | Minimax Video-01-Live, Wan 2.1 (T2V + I2V 480p), Seedance 1 Lite, Stable Video Diffusion, Kling via fofr |
+| Luma Dream Machine | Ray 2, Ray Flash 2, Photon 1, Photon Flash 1 — text-to-video, image-to-video, extend, interpolate, reframe, modify (via Dreamscape) |
+| Replicate | Minimax Video-01-Live (default in Nova), Wan 2.1 (T2V + I2V 480p), Seedance 1 Lite, Kling via fofr, Hunyuan Video, Stable Video Diffusion |
+| Runway ML | Gen-3 Alpha Turbo (image-to-video, via agent tool — requires RUNWAY_API_KEY) |
 
 #### Audio Generation
 | Service | Notes |
 |---|---|
-| Replicate (MusicGen) | Music generation — stereo-melody-large, stereo-large, melody variants |
-| OpenAI TTS | Voices: alloy, echo, fable, onyx, nova, shimmer |
-| ElevenLabs | `eleven_multilingual_v2` — multilingual TTS, voice listing API |
+| Replicate (MusicGen) | Music generation — stereo-melody-large, stereo-large, melody-large, large, medium, small variants |
+| OpenAI TTS | 9 voices: alloy, echo, fable, onyx, nova, shimmer, aria, roger, sarah |
+| ElevenLabs | `eleven_multilingual_v2` — multilingual TTS with 6 voices (Rachel, Drew, Clyde, Paul, Domi, Bella), voice listing API |
 | OpenAI Whisper (`whisper-1`) | Speech-to-text transcription |
 
 #### Browser Automation & Computer Use
