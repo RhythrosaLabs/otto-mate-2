@@ -2327,7 +2327,7 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
     throw err;
   }
   // Store result in dedup cache for this run
-  ctx.toolCache?.set(name, input, result);
+  ctx.toolCache?.set(name, finalInput, result);
   await runAfterHooks({ ...hookCtx, result, error: false, duration_ms: Date.now() - hookStart });
   return result;
 }
@@ -2605,8 +2605,19 @@ async function fetchWithRetry(url: string, options: RequestInit, maxAttempts = 2
   throw lastErr;
 }
 
+function isUrlSafe(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const hostname = parsed.hostname;
+    if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|localhost$|\[?::1\]?)/.test(hostname)) return false;
+    return true;
+  } catch { return false; }
+}
+
 async function fetchViaJina(url: string): Promise<string | null> {
   // Jina AI Reader — free service that handles JS-rendered pages and returns clean markdown
+  if (!isUrlSafe(url)) return null;
   try {
     const jinaUrl = `https://r.jina.ai/${url}`;
     const headers: Record<string, string> = {
@@ -2625,6 +2636,7 @@ async function fetchViaJina(url: string): Promise<string | null> {
 }
 
 async function executeScrapeUrl(url: string, selector?: string): Promise<string> {
+  if (!isUrlSafe(url)) return `Blocked: URL is not allowed (private/internal network or unsupported protocol).`;
   try {
     // Try direct fetch first
     let html: string | null = null;
@@ -3893,6 +3905,10 @@ async function executeSendEmail(
 // ─── Code Execution ───────────────────────────────────────────────────────────
 
 async function executeCode(language: string, code: string, timeout: number, ctx: ToolContext): Promise<string> {
+  const secCheck = validateCodeSecurity(code, language);
+  if (!secCheck.safe) {
+    return `Code blocked by security check: ${secCheck.blocked_patterns.join(", ")}`;
+  }
   const ext = language === "python" ? "py" : language === "javascript" ? "js" : "sh";
   const filename = `script_${Date.now()}.${ext}`;
   const filepath = path.join(ctx.filesDir, filename);

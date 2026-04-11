@@ -172,6 +172,8 @@ export function takeScreenshot(options?: {
           // Use defaults
         }
       }
+
+      try { fs.unlinkSync(filepath); } catch { /* ignore */ }
     }
 
     return result;
@@ -287,7 +289,9 @@ function executeMacOSKeyboard(action: KeyboardAction): ComputerUseResult {
         .replace(/\\/g, "\\\\")
         .replace(/"/g, '\\"')
         .replace(/\$/g, "\\$")
-        .replace(/`/g, "\\`");
+        .replace(/`/g, "\\`")
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r");
       execSync(`cliclick t:"${safeText}"`, { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }
@@ -302,9 +306,9 @@ function executeMacOSKeyboard(action: KeyboardAction): ComputerUseResult {
       // Use AppleScript for hotkeys
       const modMap: Record<string, string> = { cmd: "command", ctrl: "control", alt: "option", shift: "shift" };
       const mods = action.modifiers.map(m => modMap[m] || m);
-      const keyCode = action.key.length === 1 ? `"${action.key}"` : action.key;
+      const keyCode = `"${action.key.replace(/"/g, '\\"')}"`;  
       const script = `tell application "System Events" to keystroke ${keyCode} using {${mods.map(m => `${m} down`).join(", ")}}`;
-      execSync(`osascript -e '${script}'`, { timeout: 5000 });
+      execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, { timeout: 5000 });
       return { success: true, action: "hotkey", details: `Hotkey: ${action.modifiers.join("+")}+${action.key}` };
     }
   }
@@ -320,7 +324,9 @@ function executeLinuxKeyboard(action: KeyboardAction): ComputerUseResult {
         .replace(/\\/g, "\\\\")
         .replace(/"/g, '\\"')
         .replace(/\$/g, "\\$")
-        .replace(/`/g, "\\`");
+        .replace(/`/g, "\\`")
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r");
       execSync(`xdotool type --delay 50 "${safeText}"`, { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }

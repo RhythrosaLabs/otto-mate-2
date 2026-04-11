@@ -104,7 +104,8 @@ async function executeInDocker(
     for (const [key, value] of Object.entries(options.env_vars)) {
       // Sanitize key to prevent injection
       if (/^[A-Z_][A-Z0-9_]*$/i.test(key)) {
-        dockerArgs.push("-e", `${key}=${value}`);
+        const safeValue = String(value).replace(/[\n\r\0]/g, '');
+        dockerArgs.push("-e", `${key}=${safeValue}`);
       }
     }
   }
@@ -296,11 +297,15 @@ function executeInSubprocess(
     const maxOutput = 100 * 1024;
 
     // Use restrictive env
+    const BLOCKED_ENVS = new Set(['PATH', 'HOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES', 'NODE_OPTIONS']);
+    const safeUserVars = Object.fromEntries(
+      Object.entries(options.env_vars || {}).filter(([k]) => !BLOCKED_ENVS.has(k))
+    );
     const env = {
+      ...safeUserVars,
       PATH: "/usr/local/bin:/usr/bin:/bin",
       HOME: "/tmp",
       LANG: "en_US.UTF-8",
-      ...(options.env_vars || {}),
     } as unknown as NodeJS.ProcessEnv;
 
     const proc = spawn("sh", ["-c", fullScript], {

@@ -241,6 +241,19 @@ export function AudioStudioEmbed() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Cleanup on unmount: stop audio, clear intervals, revoke blob URLs
+  const audioBlobsRef = useRef(audioBlobs);
+  audioBlobsRef.current = audioBlobs;
+  useEffect(() => {
+    return () => {
+      audioRefs.current.forEach(a => { a.pause(); a.src = ""; });
+      progressTimers.current.forEach(t => clearInterval(t));
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      audioBlobsRef.current.forEach(b => URL.revokeObjectURL(b.url));
+    };
+  }, []);
+
   // Consume any pending handoff on mount (e.g., audio from another studio)
   useEffect(() => {
     if (searchParams.get("handoff") !== "1") return;

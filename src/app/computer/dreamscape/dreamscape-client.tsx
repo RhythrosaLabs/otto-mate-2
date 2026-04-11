@@ -830,13 +830,12 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
   };
 
   const removeShot = (shotId: string) => {
+    const interval = pollingRef.current.get(shotId);
+    if (interval) { clearInterval(interval); pollingRef.current.delete(shotId); }
     updateBoard((b) => ({ ...b, shots: b.shots.filter((s) => s.id !== shotId) }));
     if (selectedShotId === shotId) {
-      setBoards((prev) => {
-        const currentBoard = prev.find((b) => b.id === activeBoardId);
-        setSelectedShotId(currentBoard?.shots.find((s) => s.id !== shotId)?.id ?? null);
-        return prev;
-      });
+      const next = board.shots.find((s) => s.id !== shotId);
+      setSelectedShotId(next?.id ?? null);
     }
   };
 

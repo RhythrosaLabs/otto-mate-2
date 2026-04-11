@@ -33,8 +33,11 @@ export function GalleryClient({ items }: { items: GalleryItem[] }) {
 
   const featured = filtered.filter((i) => i.is_featured);
   const rest = filtered.filter((i) => !i.is_featured);
+  const [creating, setCreating] = useState(false);
 
   async function usePrompt(prompt: string) {
+    if (creating) return;
+    setCreating(true);
     try {
       const model = typeof window !== "undefined" ? localStorage.getItem("ottomate_model") || "auto" : "auto";
       const res = await fetch("/api/tasks", {
@@ -48,6 +51,8 @@ export function GalleryClient({ items }: { items: GalleryItem[] }) {
       }
     } catch (err) {
       console.error("Failed to create task from gallery:", err);
+    } finally {
+      setCreating(false);
     }
   }
 

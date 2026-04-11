@@ -1183,10 +1183,13 @@ export function PlaygroundClient() {
       case "retry":
         void runAll();
         break;
-      case "different-model":
-        setColumns(prev => prev.map(c => ({ ...c, model: "", provider: "auto" as RunProvider })));
-        void runAll();
+      case "different-model": {
+        const cleared = columns.map(c => ({ ...c, model: "", provider: "auto" as RunProvider }));
+        setColumns(cleared);
+        if (!prompt.trim()) break;
+        for (const col of cleared) void runColumn(col.id);
         break;
+      }
       case "edit-text":
         setPrompt("Edit this image: [describe your edit]. Original: " + currentPrompt);
         if (fileUrl) setUploadedFile({ name: file.filename, size: file.size, type: file.mimeType, url: fileUrl });
@@ -1294,7 +1297,10 @@ export function PlaygroundClient() {
               <FileUploadZone
                 uploadedFile={uploadedFile}
                 onFileUploaded={setUploadedFile}
-                onClear={() => setUploadedFile(null)}
+                onClear={() => {
+                  if (uploadedFile?.preview) URL.revokeObjectURL(uploadedFile.preview);
+                  setUploadedFile(null);
+                }}
                 compact
               />
             </div>

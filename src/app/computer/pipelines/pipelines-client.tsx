@@ -448,7 +448,7 @@ export function PipelinesClient() {
             title: node.label,
             prompt: node.prompt || node.label,
             model: "auto",
-            depends_on: depends[0] || undefined,
+            depends_on: depends.length > 0 ? depends : undefined,
           }),
         });
         if (!res.ok) throw new Error(`Task create failed: ${res.status}`);

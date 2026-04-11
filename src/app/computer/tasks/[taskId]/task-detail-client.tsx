@@ -306,6 +306,7 @@ export function TaskDetailClient({ task: initialTask }: Props) {
   }, [task.id, task.status]);
 
   async function runTask(message: string) {
+    abortRef.current?.abort();
     setIsSubmitting(true);
     setStreamingText("");
     abortRef.current = new AbortController();
@@ -372,11 +373,13 @@ export function TaskDetailClient({ task: initialTask }: Props) {
       setIsSubmitting(false);
       setStreamingText("");
       // Final fetch to get latest task state
-      const res = await fetch(`/api/tasks/${task.id}`);
-      if (res.ok) {
-        const data = await res.json() as Task;
-        setTask(data);
-      }
+      try {
+        const res = await fetch(`/api/tasks/${task.id}`);
+        if (res.ok) {
+          const data = await res.json() as Task;
+          setTask(data);
+        }
+      } catch { /* ignore - UI already updated via stream */ }
     }
   }
 

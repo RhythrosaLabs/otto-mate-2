@@ -354,10 +354,13 @@ export async function executeAction(
         const keyStr = input.text as string;
         const duration = (input.duration as number) ?? 1;
         const parts = keyStr.toLowerCase().split("+");
-        const key = parts[parts.length - 1];
-        await execAsync(`osascript -e 'tell application "System Events" to key down "${key}"'`);
+        for (const p of parts) {
+          await execAsync(`osascript -e 'tell application "System Events" to key down "${p.replace(/'/g, "'\\''")}"'`);
+        }
         await new Promise((r) => setTimeout(r, duration * 1000));
-        await execAsync(`osascript -e 'tell application "System Events" to key up "${key}"'`);
+        for (const p of [...parts].reverse()) {
+          await execAsync(`osascript -e 'tell application "System Events" to key up "${p.replace(/'/g, "'\\''")}"'`);
+        }
         await new Promise((r) => setTimeout(r, 300));
         const ss = await takeScreenshot(sessionId);
         return { output: `Held key ${keyStr} for ${duration}s`, base64_image: ss.data };
