@@ -127,13 +127,14 @@ function computeNextRun(st: ScheduledTask): string | null {
       return new Date(now + intervalMs).toISOString();
     }
     case "daily": {
-      // Run at the same time tomorrow
-      const next = new Date(now + 24 * 60 * 60 * 1000);
+      const next = new Date(now);
       if (st.schedule_expr) {
         // schedule_expr is "HH:MM" format
         const [h, m] = st.schedule_expr.split(":").map(Number);
         next.setHours(h, m, 0, 0);
         if (next.getTime() <= now) next.setDate(next.getDate() + 1);
+      } else {
+        next.setTime(now + 24 * 60 * 60 * 1000);
       }
       return next.toISOString();
     }

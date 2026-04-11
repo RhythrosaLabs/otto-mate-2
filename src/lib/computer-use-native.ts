@@ -330,7 +330,7 @@ export async function executeAction(
       case "type": {
         const text = input.text as string;
         if (useCli) {
-          const escaped = text.replace(/"/g, '\\"').replace(/\\/g, "\\\\");
+          const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
           await execAsync(`cliclick type:"${escaped}"`);
         } else {
           const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');

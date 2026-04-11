@@ -385,13 +385,11 @@ function getInstallCommand(language: string, packages: string[]): string {
 }
 
 function getRunCommand(language: string, code: string): string {
-  // Escape single quotes in code for shell
-  const escaped = code.replace(/'/g, "'\\''");
   switch (language) {
-    case "python": return `python3 -c '${escaped}'`;
-    case "javascript": return `node -e '${escaped}'`;
-    case "bash": return escaped;
-    default: return escaped;
+    case "python": return `python3 -c '${code.replace(/'/g, "'\\''")}'`;
+    case "javascript": return `node -e '${code.replace(/'/g, "'\\''")}'`;
+    case "bash": return code;
+    default: return code;
   }
 }
 

@@ -135,6 +135,10 @@ async function generateVideo(body: GenerateVideoRequest): Promise<{ url: string;
     }
   }
 
+  if (!url) {
+    throw new Error("Video generation timed out — still processing after polling limit");
+  }
+
   return { url, model: replicateModel };
 }
 

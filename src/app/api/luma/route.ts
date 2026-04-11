@@ -160,13 +160,15 @@ function normalizeReplicateOutput(output: unknown): { video?: string; image?: st
     return { image: output };
   }
   if (Array.isArray(output)) {
+    const result: { video?: string; image?: string; audio?: string } = {};
     for (const item of output) {
       if (typeof item === "string") {
-        if (item.match(/\.(mp3|wav|flac|ogg|aac|m4a)/i)) return { audio: item };
-        if (item.match(/\.(mp4|webm|mov)/i)) return { video: item };
-        return { image: item };
+        if (!result.audio && item.match(/\.(mp3|wav|flac|ogg|aac|m4a)/i)) result.audio = item;
+        else if (!result.video && item.match(/\.(mp4|webm|mov)/i)) result.video = item;
+        else if (!result.image) result.image = item;
       }
     }
+    return result;
   }
   return {};
 }

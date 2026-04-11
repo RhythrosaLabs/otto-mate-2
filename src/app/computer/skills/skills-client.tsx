@@ -62,8 +62,13 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this skill?")) return;
-    await fetch(`/api/skills/${id}`, { method: "DELETE" });
-    setSkills((prev) => prev.filter((s) => s.id !== id));
+    try {
+      const res = await fetch(`/api/skills/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      setSkills((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error("Failed to delete skill:", err);
+    }
   }
 
   function openCreate() {

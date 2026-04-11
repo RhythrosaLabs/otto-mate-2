@@ -340,10 +340,12 @@ function GenerateTab({ onEditImage }: { onEditImage: (url: string) => void }) {
     try {
       const res = await fetch(url);
       const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = blobUrl;
       a.download = `nova-image-${Date.now()}.png`;
       a.click();
+      URL.revokeObjectURL(blobUrl);
     } catch { /* ignore */ }
   };
 
@@ -664,12 +666,16 @@ function EditTab({ initialImageUrl }: { initialImageUrl?: string }) {
   const downloadResult = async () => {
     const url = resultUrl || imageUrl;
     if (!url) return;
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `nova-edit-${Date.now()}.png`;
-    a.click();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `nova-edit-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch { /* ignore download failure */ }
   };
 
   return (
@@ -906,12 +912,16 @@ function GalleryTab({ onEditImage }: { onEditImage: (url: string) => void }) {
   const remove    = (id: string) => setItems(removeFromGallery(id));
 
   const download = async (url: string) => {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `nova-image-${Date.now()}.png`;
-    a.click();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `nova-image-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch { /* ignore */ }
   };
 
   return (

@@ -283,7 +283,12 @@ function executeMacOSKeyboard(action: KeyboardAction): ComputerUseResult {
     case "type": {
       if (!action.text) return { success: false, action: "type", error: "No text provided" };
       // Use cliclick for typing (handles special chars)
-      execSync(`cliclick t:"${action.text.replace(/"/g, '\\"')}"`, { timeout: 10000 });
+      const safeText = action.text
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\$/g, "\\$")
+        .replace(/`/g, "\\`");
+      execSync(`cliclick t:"${safeText}"`, { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }
     case "key": {
@@ -311,7 +316,12 @@ function executeLinuxKeyboard(action: KeyboardAction): ComputerUseResult {
   switch (action.type) {
     case "type": {
       if (!action.text) return { success: false, action: "type", error: "No text provided" };
-      execSync(`xdotool type --delay 50 "${action.text.replace(/"/g, '\\"')}"`, { timeout: 10000 });
+      const safeText = action.text
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\$/g, "\\$")
+        .replace(/`/g, "\\`");
+      execSync(`xdotool type --delay 50 "${safeText}"`, { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }
     case "key": {

@@ -178,9 +178,10 @@ export function AnalyticsClient() {
             <p className="text-xs text-pplx-muted">No activity data yet</p>
           ) : (
             <div className="flex items-end gap-1 h-24">
-              {data.daily_tasks.slice(-30).map((d) => {
-                const max = Math.max(...data.daily_tasks.map(x => x.count), 1);
-                const height = (d.count / max) * 100;
+              {(() => {
+                const dailyMax = Math.max(...data.daily_tasks.map(x => x.count), 1);
+                return data.daily_tasks.slice(-30).map((d) => {
+                const height = (d.count / dailyMax) * 100;
                 const successPct = d.count > 0 ? d.successes / d.count : 0;
                 return (
                   <div
@@ -197,7 +198,8 @@ export function AnalyticsClient() {
                     />
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           )}
         </div>

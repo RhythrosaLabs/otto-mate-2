@@ -513,7 +513,7 @@ export function FilesClient({ files, initialFolders, stats }: {
 
     if (search) {
       const q = search.toLowerCase();
-      list = files.filter(f =>
+      list = list.filter(f =>
         f.name.toLowerCase().includes(q) ||
         f.task_title?.toLowerCase().includes(q)
       );

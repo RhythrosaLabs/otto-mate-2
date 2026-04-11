@@ -14,8 +14,12 @@ export async function GET(
   const { taskId, filename } = await params;
   const fileName = filename.join("/");
 
-  // Sanitize - prevent path traversal
-  const safeName = path.basename(fileName);
+  // Sanitize each path segment to prevent traversal (no ".." or absolute paths)
+  const segments = fileName.split("/").filter(s => s && s !== "." && s !== "..");
+  if (segments.length === 0) {
+    return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+  }
+  const safeName = segments.join("/");
   const filePath = path.join(FILES_DIR, taskId, safeName);
 
   // Ensure path is within FILES_DIR

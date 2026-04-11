@@ -42,16 +42,17 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Ta
           user_input: userInput,
         }),
       });
-      if (res.ok) {
-        const data = await res.json() as { task_id: string };
-        // Start the task
-        await fetch(`/api/tasks/${data.task_id}/run`, { method: "POST" });
-        router.push(`/computer/tasks/${data.task_id}`);
-      }
-    } finally {
-      setIsRunning(false);
+      if (!res.ok) throw new Error(`Template run failed: ${res.status}`);
+      const data = await res.json() as { task_id: string };
+      const runRes = await fetch(`/api/tasks/${data.task_id}/run`, { method: "POST" });
+      if (!runRes.ok) throw new Error(`Task start failed: ${runRes.status}`);
+      router.push(`/computer/tasks/${data.task_id}`);
       setSelectedTemplate(null);
       setUserInput("");
+    } catch (err) {
+      console.error("Failed to run template:", err);
+    } finally {
+      setIsRunning(false);
     }
   }
 
