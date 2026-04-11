@@ -810,12 +810,14 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
 
   const deleteBoard = (id: string) => {
     if (boards.length <= 1) return;
-    setBoards((prev) => prev.filter((b) => b.id !== id));
-    if (activeBoardId === id) {
-      const remaining = boards.filter((b) => b.id !== id);
-      setActiveBoardId(remaining[0]?.id ?? "");
-      setSelectedShotId(remaining[0]?.shots[0]?.id ?? null);
-    }
+    setBoards((prev) => {
+      const remaining = prev.filter((b) => b.id !== id);
+      if (activeBoardId === id) {
+        setActiveBoardId(remaining[0]?.id ?? "");
+        setSelectedShotId(remaining[0]?.shots[0]?.id ?? null);
+      }
+      return remaining;
+    });
   };
 
   // =======================================================================
@@ -830,7 +832,11 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
   const removeShot = (shotId: string) => {
     updateBoard((b) => ({ ...b, shots: b.shots.filter((s) => s.id !== shotId) }));
     if (selectedShotId === shotId) {
-      setSelectedShotId(board.shots.find((s) => s.id !== shotId)?.id ?? null);
+      setBoards((prev) => {
+        const currentBoard = prev.find((b) => b.id === activeBoardId);
+        setSelectedShotId(currentBoard?.shots.find((s) => s.id !== shotId)?.id ?? null);
+        return prev;
+      });
     }
   };
 
@@ -998,9 +1004,9 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
   // =======================================================================
   // Generation
   // =======================================================================
-  const generateSingle = async (shotId: string, promptText: string, genMode: GenerationMode) => {
+  const generateSingle = async (shotId: string, promptText: string, genMode: GenerationMode, modelOverride?: string) => {
     const body: Record<string, unknown> = {};
-    const activeModel = isVideoMode ? videoModel : imageModel;
+    const activeModel = modelOverride || (isVideoMode ? videoModel : imageModel);
 
     // Append camera motion to prompt
     let finalPrompt = promptText;
@@ -1132,6 +1138,7 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
       body.replicate_model = selectedReplicateModel;
     }
     if (hdrEnabled && isVideoMode) body.hdr = true;
+    if (modelOverride) body.model = modelOverride;
 
     const res = await fetch("/api/luma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json();
@@ -1163,9 +1170,11 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
     setError("");
     setGenerating(true);
 
-    // Auto-model selection
+    // Auto-model selection — capture effective model synchronously for generateSingle
+    let modelOverride: string | undefined;
     if (autoModelEnabled && recommendedModel && recommendedModel !== currentModel) {
       setCurrentModel(recommendedModel);
+      modelOverride = recommendedModel;
     }
 
     // Append annotation context to prompt if any
@@ -1184,7 +1193,7 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
           if (i === 0) setSelectedShotId(shot.id);
         }
         updateShot(shotId, { prompt: finalPrompt, mode, status: "queued", phase: (isVideoMode && videoModel.includes("flash")) || (!isVideoMode && imageModel.includes("flash")) ? "draft" : undefined });
-        await generateSingle(shotId, finalPrompt, mode);
+        await generateSingle(shotId, finalPrompt, mode, modelOverride);
       }
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err));
@@ -1439,18 +1448,19 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
     }
 
     // Build dependency graph
-    const completed = new Set<string>();
+    const processed = new Set<string>();
+    const failed = new Set<string>();
     const stepMap = new Map(chain.steps.map((s) => [s.id, s]));
 
     const canRun = (step: CommandStep) => {
-      if (completed.has(step.id)) return false;
+      if (processed.has(step.id)) return false;
       if (step.status === "running" || step.status === "completed") return false;
       if (!step.depends_on) return true;
       // Support both single dependency and array of dependencies
-      if (Array.isArray(step.depends_on)) {
-        return step.depends_on.every((dep) => completed.has(dep));
-      }
-      return completed.has(step.depends_on);
+      const deps = Array.isArray(step.depends_on) ? step.depends_on : [step.depends_on];
+      // Don't run if any dependency failed
+      if (deps.some((dep) => failed.has(dep))) return false;
+      return deps.every((dep) => processed.has(dep));
     };
 
     const runStep = async (step: CommandStep): Promise<void> => {
@@ -1595,7 +1605,7 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
           // Also search ALL completed steps for video/audio if deps didn't provide them
           if (!body.video_url || !body.audio_url) {
             for (const [, s] of stepMap) {
-              if (s.result && completed.has(s.id)) {
+              if (s.result && processed.has(s.id)) {
                 if (!body.video_url && s.result.videoUrl) body.video_url = s.result.videoUrl;
                 if (!body.audio_url && s.result.audioUrl) body.audio_url = s.result.audioUrl;
               }
@@ -1714,17 +1724,29 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
           updateShot(shotId, { status: "failed", error: errMsg });
         }
         console.error(`[Dreamscape Chain] Step "${step.name || step.id}" failed:`, errMsg);
+        failed.add(step.id);
       }
 
-      completed.add(step.id);
+      processed.add(step.id);
       completedCount++;
       setChainProgress((completedCount / totalSteps) * 100);
     };
 
     // Execute with parallelism: run all steps whose dependencies are satisfied
-    while (completed.size < totalSteps) {
+    while (processed.size < totalSteps) {
       const runnable = chain.steps.filter(canRun);
-      if (runnable.length === 0) break; // No more runnable steps (all done or blocked)
+      if (runnable.length === 0) {
+        // Mark remaining unprocessed steps as failed (blocked by failed dependencies)
+        chain.steps.forEach((step) => {
+          if (!processed.has(step.id)) {
+            processed.add(step.id);
+            setActiveChain((prev) =>
+              prev ? { ...prev, steps: prev.steps.map((s) => (s.id === step.id ? { ...s, status: "failed" } : s)) } : prev,
+            );
+          }
+        });
+        break;
+      }
       // Run all independent steps in parallel
       await Promise.all(runnable.map(runStep));
     }

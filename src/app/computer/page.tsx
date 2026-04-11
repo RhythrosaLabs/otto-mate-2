@@ -334,7 +334,7 @@ function ComputerPageInner() {
       </div>
 
       {/* Input area */}
-      <div className="w-full max-w-2xl animate-fade-in">
+      <div className="relative w-full max-w-2xl animate-fade-in">
         <form onSubmit={handleSubmit}>
           <div className="relative rounded-2xl border border-pplx-border bg-pplx-card focus-within:border-pplx-accent/50 transition-colors shadow-lg">
             <textarea
@@ -431,7 +431,7 @@ function ComputerPageInner() {
                         if (!Ctor) { alert("Speech recognition is not supported in this browser."); return; }
                         const recognition = new Ctor();
                         recognition.continuous = false;
-                        recognition.interimResults = true;
+                        recognition.interimResults = false;
                         recognition.lang = "en-US";
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         recognition.onresult = (event: any) => {

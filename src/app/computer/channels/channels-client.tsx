@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from "react";
 import {
-  MessageCircle,
-  Hash,
   Globe,
   CheckCircle2,
   XCircle,
   ExternalLink,
-  RefreshCw,
   Copy,
   Loader2,
 } from "lucide-react";
@@ -78,7 +75,7 @@ export function ChannelsClient() {
       setLoading(true);
       const results: Record<string, ChannelInfo | null> = {};
       await Promise.all(
-        CHANNELS.filter(c => c.id !== "whatsapp").map(async (ch) => {
+        CHANNELS.map(async (ch) => {
           try {
             const res = await fetch(ch.endpoint);
             if (res.ok) {

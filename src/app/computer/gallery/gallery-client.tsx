@@ -35,14 +35,19 @@ export function GalleryClient({ items }: { items: GalleryItem[] }) {
   const rest = filtered.filter((i) => !i.is_featured);
 
   async function usePrompt(prompt: string) {
-    const res = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
-    if (res.ok) {
-      const task = await res.json();
-      router.push(`/computer/tasks/${task.id}`);
+    try {
+      const model = typeof window !== "undefined" ? localStorage.getItem("ottomate_model") || "auto" : "auto";
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, model }),
+      });
+      if (res.ok) {
+        const task = await res.json();
+        router.push(`/computer/tasks/${task.id}`);
+      }
+    } catch (err) {
+      console.error("Failed to create task from gallery:", err);
     }
   }
 

@@ -1061,10 +1061,13 @@ export function PlaygroundClient() {
     } catch {}
   }, []);
 
-  const saveHistory = useCallback((items: RunResult[]) => {
-    const trimmed = items.slice(0, 100);
-    setHistory(trimmed);
-    try { localStorage.setItem("playground-history", JSON.stringify(trimmed)); } catch {}
+  const saveHistory = useCallback((updater: (prev: RunResult[]) => RunResult[]) => {
+    setHistory((prev) => {
+      const newItems = updater(prev);
+      const trimmed = newItems.slice(0, 100);
+      try { localStorage.setItem("playground-history", JSON.stringify(trimmed)); } catch {}
+      return trimmed;
+    });
   }, []);
 
   // ─── Column management ─────────────────────────────────────────────────
@@ -1119,14 +1122,14 @@ export function PlaygroundClient() {
           predictTime: data.predictTime || data.computeTime,
         };
         setColumns(prev => prev.map(c => c.id === colId ? { ...c, running: false, result } : c));
-        saveHistory([result, ...history]);
+        saveHistory(prev => [result, ...prev]);
       }
     } catch (err) {
       setColumns(prev => prev.map(c => c.id === colId ? {
         ...c, running: false, error: err instanceof Error ? err.message : String(err)
       } : c));
     }
-  }, [prompt, columns, uploadedFile, history, saveHistory]);
+  }, [prompt, columns, uploadedFile, saveHistory]);
 
   const runAll = useCallback(() => {
     if (!prompt.trim()) return;
@@ -1151,12 +1154,12 @@ export function PlaygroundClient() {
       } else {
         const result: RunResult = { ...data, prompt: prompt.trim(), createdAt: new Date().toISOString(), predictTime: data.predictTime || data.computeTime };
         setColumns(prev => prev.map(c => c.id === colId ? { ...c, running: false, result } : c));
-        saveHistory([result, ...history]);
+        saveHistory(prev => [result, ...prev]);
       }
     } catch (err) {
       setColumns(prev => prev.map(c => c.id === colId ? { ...c, running: false, error: err instanceof Error ? err.message : String(err) } : c));
     }
-  }, [prompt, columns, uploadedFile, history, saveHistory]);
+  }, [prompt, columns, uploadedFile, saveHistory]);
 
   const handleRunAsTask = useCallback(() => {
     const col = columns[0];
@@ -1401,7 +1404,7 @@ export function PlaygroundClient() {
       <HistoryRail
         history={history}
         onSelect={handleHistorySelect}
-        onClear={() => saveHistory([])}
+        onClear={() => saveHistory(() => [])}
       />
     </div>
   );

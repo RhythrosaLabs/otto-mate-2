@@ -102,11 +102,18 @@ export function GenerateSpeechClient() {
       const blob = await res.blob();
       const audioUrl = URL.createObjectURL(blob);
 
+      // Convert blob to data URL so it persists across navigation
+      const persistentUrl: string = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
       const newResult: SpeechResult = {
         id: Date.now().toString(),
         text: text.trim(),
         voice,
-        audioUrl,
+        audioUrl: persistentUrl,
         provider: currentVoice.provider,
         createdAt: new Date().toISOString(),
       };
@@ -116,10 +123,10 @@ export function GenerateSpeechClient() {
       setHistory(newHist);
       saveHistory("speech-gen", newHist);
 
-      // Save to gallery
+      // Save to gallery with persistent data URL (blob URLs expire on navigation)
       saveToGallery({
-        type: "audio",
-        url: audioUrl,
+        type: "speech",
+        url: persistentUrl,
         prompt: text.trim().slice(0, 100),
         model: model || `${currentVoice.provider}/${currentVoice.id}`,
         metadata: { voice, speed, language, provider: currentVoice.provider },

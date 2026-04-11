@@ -97,19 +97,24 @@ export default function ScheduledTasksClient() {
   };
 
   const handleRunDue = async () => {
-    const res = await fetch("/api/scheduled-tasks", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "run-due" }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.ran > 0) {
-        alert(`Ran ${data.ran} scheduled task(s)!`);
-      } else {
-        alert("No tasks are due right now.");
+    try {
+      const res = await fetch("/api/scheduled-tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "run-due" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ran > 0) {
+          alert(`Ran ${data.ran} scheduled task(s)!`);
+        } else {
+          alert("No tasks are due right now.");
+        }
+        fetchTasks();
       }
-      fetchTasks();
+    } catch (err) {
+      console.error("Failed to run due tasks:", err);
+      alert("Failed to run due tasks. Check the console for details.");
     }
   };
 

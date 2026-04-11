@@ -457,6 +457,16 @@ export function PipelinesClient() {
       } catch (err) { console.error(err); }
     }
 
+    // Start root tasks (those with no dependencies)
+    for (const node of orderedNodes) {
+      const hasDeps = node.depends_on.length > 0 && node.depends_on.some(d => taskMap[d]);
+      if (!hasDeps && taskMap[node.id]) {
+        try {
+          await fetch(`/api/tasks/${taskMap[node.id]}/run`, { method: "POST" });
+        } catch (err) { console.error(`Failed to start task for node ${node.id}:`, err); }
+      }
+    }
+
     // Update node statuses
     const nodes = activePipeline.nodes.map(n => ({
       ...n,
@@ -470,7 +480,7 @@ export function PipelinesClient() {
       });
     } catch (err) { console.error(err); }
 
-    alert(`Pipeline launched! ${orderedNodes.length} tasks created.`);
+    alert(`Pipeline launched! ${orderedNodes.length} tasks created and root tasks started.`);
     fetchPipelines();
   }
 

@@ -34,7 +34,7 @@ export const STUDIO_MAP = {
   },
   dreamscape: {
     label: "Video Studio",
-    route: "/computer/dreamscape",
+    route: "/computer/dreamscape/studio",
     icon: "🎬",
     accepts: ["image", "video", "audio"] as HandoffMimeCategory[],
   },

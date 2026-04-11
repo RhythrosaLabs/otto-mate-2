@@ -30,8 +30,10 @@ import {
   Settings2,
   Activity,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ModelSearchSelector } from "@/app/computer/firefly/components/model-search-selector";
+import { useHandoff } from "@/components/handoff-context";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Types
@@ -183,6 +185,8 @@ function useProgressTimer(active: boolean, durationSeconds: number) {
 ───────────────────────────────────────────────────────────────────────────── */
 
 export function AudioStudioEmbed() {
+  const searchParams = useSearchParams();
+  const { addToShelf, consumeHandoff } = useHandoff();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [tab, setTab] = useState<"compose" | "speech" | "record">("compose");
 
@@ -236,6 +240,33 @@ export function AudioStudioEmbed() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
+
+  // Consume any pending handoff on mount (e.g., audio from another studio)
+  useEffect(() => {
+    if (searchParams.get("handoff") !== "1") return;
+    const h = consumeHandoff();
+    if (!h) return;
+    if (h.mimeCategory === "audio" && h.url) {
+      const newTrack: Track = {
+        id: `handoff-${Date.now()}`,
+        name: h.name || h.prompt || "Imported audio",
+        type: "music",
+        url: h.url,
+        prompt: h.prompt || "",
+        duration: 0,
+        generating: false,
+        progress: 100,
+        error: null,
+        muted: false,
+        volume: 0.85,
+        looping: false,
+        color: TRACK_COLORS[tracks.length % TRACK_COLORS.length],
+        meta: {},
+      };
+      setTracks((prev) => [...prev, newTrack]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Instrument toggle ── */
   const toggleInstrument = useCallback((inst: string) => {
@@ -301,13 +332,26 @@ export function AudioStudioEmbed() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
 
+      const audioUrl = data.audio?.url ?? null;
       setTracks((prev) =>
         prev.map((t) =>
           t.id === trackId
-            ? { ...t, url: data.audio?.url ?? null, duration: data.audio?.duration ?? duration, generating: false, progress: 100 }
+            ? { ...t, url: audioUrl, duration: data.audio?.duration ?? duration, generating: false, progress: 100 }
             : t
         )
       );
+
+      // Add to handoff shelf so other studios can use this audio
+      if (audioUrl) {
+        addToShelf({
+          url: audioUrl,
+          name: prompt.trim() || `${genre} · ${mood}`,
+          mimeCategory: "audio",
+          mimeType: "audio/mpeg",
+          source: "audio-studio",
+          prompt: prompt.trim(),
+        });
+      }
     } catch (err) {
       setTracks((prev) =>
         prev.map((t) =>
@@ -318,7 +362,7 @@ export function AudioStudioEmbed() {
       setGenerating(false);
       setPrompt("");
     }
-  }, [prompt, genre, mood, duration, tempo, energy, bpm, key, modelVersion, replicateModel, selectedInstruments, temperature, cfgScale, tracks.length]);
+  }, [prompt, genre, mood, duration, tempo, energy, bpm, key, modelVersion, replicateModel, selectedInstruments, temperature, cfgScale, tracks.length, addToShelf]);
 
   /* ── Generate Speech ── */
   const generateSpeech = useCallback(async () => {
@@ -350,11 +394,24 @@ export function AudioStudioEmbed() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "TTS failed");
+      const speechUrl = data.url ?? data.audioUrl ?? null;
       setTracks((prev) =>
         prev.map((t) =>
-          t.id === trackId ? { ...t, url: data.url ?? data.audioUrl ?? null, generating: false, progress: 100 } : t
+          t.id === trackId ? { ...t, url: speechUrl, generating: false, progress: 100 } : t
         )
       );
+
+      // Add to handoff shelf
+      if (speechUrl) {
+        addToShelf({
+          url: speechUrl,
+          name: speechText.slice(0, 50),
+          mimeCategory: "audio",
+          mimeType: "audio/mpeg",
+          source: "audio-studio",
+          prompt: speechText,
+        });
+      }
     } catch (err) {
       setTracks((prev) =>
         prev.map((t) =>
@@ -365,7 +422,7 @@ export function AudioStudioEmbed() {
       setSpeechGenerating(false);
       setSpeechText("");
     }
-  }, [speechText, speechVoice, tracks.length]);
+  }, [speechText, speechVoice, tracks.length, addToShelf]);
 
   /* ── Recording ── */
   const startRecording = useCallback(async () => {
@@ -454,11 +511,20 @@ export function AudioStudioEmbed() {
     setTracks((prev) => prev.filter((t) => t.id !== id));
   }, [playingId]);
 
-  const downloadTrack = useCallback((url: string, name: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name.replace(/[^a-z0-9 ]/gi, "_").trim() + ".wav";
-    a.click();
+  const downloadTrack = useCallback(async (url: string, name: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = name.replace(/[^a-z0-9 ]/gi, "_").trim() + ".wav";
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback: open in new tab if fetch fails (e.g. CORS)
+      window.open(url, "_blank");
+    }
   }, []);
 
   /* ── AI Chat ── */
@@ -965,7 +1031,14 @@ export function AudioStudioEmbed() {
                   onPlay={() => track.url && togglePlay(track.id, track.url, track.looping)}
                   onDownload={() => track.url && downloadTrack(track.url, track.name)}
                   onRemove={() => removeTrack(track.id)}
-                  onMute={() => setTracks((prev) => prev.map((t) => t.id === track.id ? { ...t, muted: !t.muted } : t))}
+                  onMute={() => {
+                    setTracks((prev) => prev.map((t) => {
+                      if (t.id !== track.id) return t;
+                      const audio = audioRefs.current.get(track.id);
+                      if (audio) audio.muted = !t.muted;
+                      return { ...t, muted: !t.muted };
+                    }));
+                  }}
                   onLoop={() => toggleLoop(track.id)}
                   onVolumeChange={(vol) => setTrackVolume(track.id, vol)}
                 />

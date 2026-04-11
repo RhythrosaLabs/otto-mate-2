@@ -77,7 +77,8 @@ export function TaskDetailClient({ task: initialTask }: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const hasAutoRunRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<unknown>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
 
   // ─── Background ops tracking ─────────────────────────────────────────────
   useEffect(() => {
@@ -1010,16 +1011,58 @@ export function TaskDetailClient({ task: initialTask }: Props) {
             {/* Voice input button */}
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 if (isListening) {
-                  (recognitionRef.current as { stop: () => void } | null)?.stop();
+                  const ref = recognitionRef.current;
+                  if (ref && typeof ref.stop === "function") ref.stop();
                   setIsListening(false);
-                } else {
+                  return;
+                }
+
+                // Primary: MediaRecorder → Whisper API
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                    ? "audio/webm;codecs=opus"
+                    : "audio/webm";
+                  const recorder = new MediaRecorder(stream, { mimeType });
+                  const chunks: Blob[] = [];
+
+                  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+                  recorder.onstop = async () => {
+                    stream.getTracks().forEach((t) => t.stop());
+                    if (chunks.length === 0) return;
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const form = new FormData();
+                    form.append("audio", blob, "recording.webm");
+                    form.append("language", "en");
+                    try {
+                      const res = await fetch("/api/voice/stt", { method: "POST", body: form });
+                      const data = await res.json();
+                      if (data.text) {
+                        setInput((prev: string) => (prev ? prev + " " : "") + data.text);
+                      } else if (data.fallback === "browser") {
+                        startBrowserSpeechRecognition();
+                      }
+                    } catch {
+                      startBrowserSpeechRecognition();
+                    }
+                  };
+
+                  recognitionRef.current = recorder;
+                  recorder.start();
+                  setIsListening(true);
+                } catch {
+                  startBrowserSpeechRecognition();
+                }
+
+                function startBrowserSpeechRecognition() {
                   try {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                    if (!SpeechRecognitionCtor) { addCommandResult("Speech recognition not supported in this browser", "error"); return; }
-                    const recognition = new SpeechRecognitionCtor();
+                    const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                    if (!Ctor) { addCommandResult("Speech recognition not supported in this browser", "error"); return; }
+                    const recognition = new Ctor();
                     recognition.continuous = false;
                     recognition.interimResults = true;
                     recognition.lang = "en-US";

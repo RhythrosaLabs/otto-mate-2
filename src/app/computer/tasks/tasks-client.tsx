@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, CalendarClock, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, MinusCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
+import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
 import { cn, formatRelativeTime, getStatusBgColor, truncate } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
 import type { Task } from "@/lib/types";
@@ -58,7 +58,10 @@ export function TasksClientPage({ initialTasks }: Props) {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-      if (res.ok) setTasks((prev) => prev.filter((t) => t.id !== id));
+      if (res.ok) {
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+        setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      }
     } catch (err) {
       console.error("Failed to delete task:", err);
     }
