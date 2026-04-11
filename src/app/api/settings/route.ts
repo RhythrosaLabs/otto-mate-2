@@ -18,7 +18,12 @@ export async function GET(req: NextRequest) {
 
 // PUT /api/settings — update settings (body: { key: string, value: string } or { settings: Record<string, string> })
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { key?: string; value?: string; settings?: Record<string, string> };
+  let body: { key?: string; value?: string; settings?: Record<string, string> };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
   if (body.settings) {
     for (const [k, v] of Object.entries(body.settings)) {

@@ -17,7 +17,12 @@ export async function GET() {
 
 // POST /api/connectors — connect
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { id: string; api_key?: string; [key: string]: unknown };
+  let body: { id: string; api_key?: string; [key: string]: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   const { id, ...rest } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 

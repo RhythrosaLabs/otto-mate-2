@@ -58,6 +58,22 @@ export function Sidebar() {
     setMobileOpen(false);
   }, [pathname]);
 
+  // Close dropdowns on outside click
+  useEffect(() => {
+    if (!showModelDropdown && !showPersonaDropdown) return;
+    function handleClick() {
+      setShowModelDropdown(false);
+      setShowPersonaDropdown(false);
+    }
+    const id = requestAnimationFrame(() => {
+      document.addEventListener("click", handleClick, { once: true });
+    });
+    return () => {
+      cancelAnimationFrame(id);
+      document.removeEventListener("click", handleClick);
+    };
+  }, [showModelDropdown, showPersonaDropdown]);
+
   // Persist model selection
   useEffect(() => {
     const saved = localStorage.getItem("ottomate_model");

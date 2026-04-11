@@ -11,7 +11,7 @@ export async function GET() {
 
 // POST /api/gallery — add item
 export async function POST(req: NextRequest) {
-  const body = await req.json() as {
+  let body: {
     title: string;
     description: string;
     prompt: string;
@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
     preview_url?: string;
     is_featured?: boolean;
   };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
   if (!body.title || !body.prompt) {
     return NextResponse.json({ error: "title and prompt are required" }, { status: 400 });

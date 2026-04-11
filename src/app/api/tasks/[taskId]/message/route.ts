@@ -13,7 +13,12 @@ export async function POST(
   const task = getTask(taskId);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = await req.json() as { content: string };
+  let body: { content: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   if (!body.content?.trim()) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
   }

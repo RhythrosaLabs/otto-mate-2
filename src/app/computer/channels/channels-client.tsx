@@ -80,6 +80,8 @@ export function ChannelsClient() {
             const res = await fetch(ch.endpoint);
             if (res.ok) {
               results[ch.id] = await res.json() as ChannelInfo;
+            } else {
+              results[ch.id] = null;
             }
           } catch {
             results[ch.id] = null;
@@ -92,11 +94,15 @@ export function ChannelsClient() {
     fetchAll();
   }, []);
 
-  function copyWebhookUrl(path: string) {
+  async function copyWebhookUrl(path: string) {
     const url = `${window.location.origin}${path}`;
-    navigator.clipboard.writeText(url);
-    setCopiedPath(path);
-    setTimeout(() => setCopiedPath(null), 2000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedPath(path);
+      setTimeout(() => setCopiedPath(null), 2000);
+    } catch {
+      // Clipboard API not available or permission denied
+    }
   }
 
   return (

@@ -1850,7 +1850,9 @@ async function runWithGoogle(
         if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
-      currentMessage = JSON.stringify(funcResponses);
+      currentMessage = funcResponses.map(fr => ({
+        functionResponse: { name: fr.name, response: fr.response }
+      })) as never;
     }
     const { getTask } = await import("./db");
     const t = getTask(taskId);
@@ -3226,10 +3228,7 @@ async function executeBrowseWeb(
                 }
                 case "evaluate": {
                   const script = (action.script as string) || (action.code as string) || "document.title";
-                  const evalResult = await page.evaluate((s: string) => {
-                    // eslint-disable-next-line no-new-func
-                    return new Function(s)();
-                  }, script);
+                  const evalResult = await page.evaluate(script);
                   results.push(`Evaluate result: ${JSON.stringify(evalResult)}`);
                   break;
                 }

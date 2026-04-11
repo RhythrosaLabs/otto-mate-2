@@ -11,12 +11,17 @@ export async function GET() {
 
 // POST /api/skills
 export async function POST(req: NextRequest) {
-  const body = await req.json() as {
+  let body: {
     name: string;
     description?: string;
     instructions?: string;
     category?: string;
   };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });

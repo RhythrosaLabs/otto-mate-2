@@ -230,16 +230,16 @@ function ComputerPageInner() {
     ...GALLERY_EXAMPLES,
   ];
 
+  const promptStart = (shuffleIndex * 3) % Math.max(ALL_PROMPTS.length, 1);
   const currentExamples =
     activeCategory !== null
       ? ALL_CATEGORIES[activeCategory].prompts
-      : ALL_PROMPTS.slice(shuffleIndex * 3, shuffleIndex * 3 + 3);
+      : ALL_PROMPTS.slice(promptStart, promptStart + 3);
 
   function handleShuffle() {
     setActiveCategory(null);
-    // For gallery: cycle through groups of 6; for prompts: groups of 3
     const maxGalleryPages = Math.max(1, Math.ceil(galleryItems.length / 6));
-    const maxPromptPages = Math.max(1, Math.floor(ALL_PROMPTS.length / 3));
+    const maxPromptPages = Math.max(1, Math.ceil(ALL_PROMPTS.length / 3));
     setShuffleIndex((i) => (i + 1) % Math.max(maxGalleryPages, maxPromptPages));
   }
 
@@ -270,6 +270,9 @@ function ComputerPageInner() {
       }
 
       router.push(`/computer/tasks/${data.id}`);
+      setPrompt("");
+      setAttachments([]);
+      setIsSubmitting(false);
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -407,12 +410,12 @@ function ComputerPageInner() {
                           if (data.text) {
                             setPrompt((prev) => (prev ? prev + " " : "") + data.text);
                           } else if (data.fallback === "browser") {
-                            // Server has no STT key — fall back to browser SpeechRecognition
-                            startBrowserSpeechRecognition();
+                            // Server has no STT key — cannot transcribe recorded audio
+                            console.warn('No STT key configured on server; recorded audio could not be transcribed.');
                           }
                         } catch {
-                          // Network error — try browser fallback
-                          startBrowserSpeechRecognition();
+                          // Network error — recorded audio lost
+                          console.warn('Voice transcription failed (network error).');
                         }
                       };
 

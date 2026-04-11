@@ -41,6 +41,8 @@ export function BackgroundStatus() {
   const finishedOps = visibleOps.filter((op) => op.status !== "running");
 
   // Auto-dismiss completed ops after 15 seconds
+  // Stabilize dependency on the set of finished op IDs, not the array reference
+  const finishedOpIds = finishedOps.map((op) => op.id).join(",");
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
     for (const op of finishedOps) {
@@ -55,7 +57,8 @@ export function BackgroundStatus() {
       timers.push(timer);
     }
     return () => timers.forEach(clearTimeout);
-  }, [finishedOps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedOpIds]);
 
   // Nothing to show
   if (visibleOps.length === 0) return null;

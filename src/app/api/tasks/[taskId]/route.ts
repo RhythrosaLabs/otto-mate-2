@@ -20,7 +20,12 @@ export async function PATCH(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
-  const body = await req.json() as { title?: string };
+  let body: { title?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   if (body.title) {
     updateTaskTitle(taskId, body.title);
   }
