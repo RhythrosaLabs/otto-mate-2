@@ -74,8 +74,11 @@ export function TaskDetailClient({ task: initialTask }: Props) {
   } | null>(null);
   const stepsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const stepsContainerRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const hasAutoRunRef = useRef(false);
+  const isStreamingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -220,26 +223,41 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     prevHtmlCountRef.current = htmlFiles.length;
   }, [htmlFiles.length]);
 
-  // Auto-scroll
+  // Auto-scroll only when user is near the bottom (not reading above)
+  function isNearBottom(container: HTMLElement | null, threshold = 150): boolean {
+    if (!container) return true;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  }
+
   useEffect(() => {
-    stepsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const parent = stepsContainerRef.current ?? stepsEndRef.current?.parentElement ?? null;
+    if (isNearBottom(parent)) {
+      stepsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [task.steps.length, streamingText]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const parent = chatContainerRef.current ?? chatEndRef.current?.parentElement ?? null;
+    if (isNearBottom(parent)) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [task.messages.length]);
 
-  // SSE-based live updates (replaces polling)
+  // SSE-based live updates — disabled while streaming to prevent duplicate updates
   useEffect(() => {
     if (task.status !== "running" && task.status !== "pending") return;
+    // While the run-stream is active, we get updates directly from it — skip global SSE
+    if (isStreamingRef.current) return;
 
     const es = new EventSource("/api/tasks/events");
 
     es.onmessage = async (ev) => {
+      // Don't process events while actively streaming from the run endpoint
+      if (isStreamingRef.current) return;
       try {
         const data = JSON.parse(ev.data);
         if (data.type === "update" && data.task?.id === task.id) {
-          // Fetch fresh task data when our task updates
           const res = await fetch(`/api/tasks/${task.id}`);
           if (res.ok) {
             const updated = (await res.json()) as Task;
@@ -309,6 +327,7 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     abortRef.current?.abort();
     setIsSubmitting(true);
     setStreamingText("");
+    isStreamingRef.current = true;
     abortRef.current = new AbortController();
 
     try {
@@ -370,6 +389,7 @@ export function TaskDetailClient({ task: initialTask }: Props) {
         console.error(err);
       }
     } finally {
+      isStreamingRef.current = false;
       setIsSubmitting(false);
       setStreamingText("");
       // Final fetch to get latest task state
@@ -709,16 +729,18 @@ export function TaskDetailClient({ task: initialTask }: Props) {
               ))}
             </div>
 
-            {/* Streaming indicator */}
+            {/* Streaming indicator — shows live tokens as they arrive */}
             {isSubmitting && (
               <div className="mt-2 flex items-start gap-3 p-3 rounded-xl border border-pplx-accent/20 bg-pplx-accent/5 agent-step">
                 <Loader2 size={14} className="text-pplx-accent animate-spin mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-pplx-accent font-medium mb-1">Thinking...</p>
+                  <p className="text-xs text-pplx-accent font-medium mb-1">
+                    {streamingText ? "Writing..." : task.steps.length > 0 ? `Working (step ${task.steps.length + 1})...` : "Starting..."}
+                  </p>
                   {streamingText && (
-                    <p className="text-xs text-pplx-muted leading-relaxed">
-                      {streamingText.slice(-500)}
-                    </p>
+                    <div className="text-xs text-pplx-muted leading-relaxed whitespace-pre-wrap">
+                      {streamingText.length > 800 ? streamingText.slice(-800) : streamingText}
+                    </div>
                   )}
                 </div>
               </div>
@@ -959,12 +981,18 @@ export function TaskDetailClient({ task: initialTask }: Props) {
       </div>
 
       {/* Input area - show for waiting or when user wants to interact */}
-      {(task.status === "waiting_for_input" || task.status === "completed" || task.status === "failed") && (
+      {(task.status === "waiting_for_input" || task.status === "completed" || task.status === "failed" || task.status === "paused") && (
         <div className="px-6 py-4 border-t border-pplx-border">
           {task.status === "waiting_for_input" && (
             <div className="mb-3 flex items-center gap-2 text-yellow-400 text-xs">
               <Clock size={12} />
               Computer is waiting for your input
+            </div>
+          )}
+          {task.status === "paused" && (
+            <div className="mb-3 flex items-center gap-2 text-yellow-400 text-xs">
+              <Clock size={12} />
+              Task paused. Send a message to resume.
             </div>
           )}
           <form onSubmit={handleSendMessage} className="flex gap-2 relative">

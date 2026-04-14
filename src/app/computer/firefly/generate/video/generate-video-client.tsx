@@ -62,7 +62,7 @@ export function GenerateVideoClient() {
   const initialImageUrl = searchParams.get("imageUrl") || "";
 
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [model, setModel] = useState("minimax/video-01");
+  const [model, setModel] = useState("minimax/video-01-live");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [duration, setDuration] = useState(5);
   const [cameraMotion, setCameraMotion] = useState("none");

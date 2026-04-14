@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Trash2, Download, CheckSquare, Square, XCircle, Pencil, Check, X, Tag } from "lucide-react";
+import { Trash2, Download, CheckSquare, Square, XCircle, Pencil, Check, X, Tag, Brain, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEntry } from "@/lib/types";
 import { usePageVisible } from "@/components/persistent-layout";
@@ -22,6 +22,9 @@ export default function MemoryClient() {
   const [editValue, setEditValue] = useState("");
   const [editTags, setEditTags] = useState("");
   const [saving, setSaving] = useState(false);
+  const [memoryStats, setMemoryStats] = useState<{
+    total_memories: number; compressed_memories: number;
+  } | null>(null);
 
   const fetchMemory = useCallback(async (q = "") => {
     setLoading(true);
@@ -38,6 +41,11 @@ export default function MemoryClient() {
 
   useEffect(() => {
     void fetchMemory();
+    // Fetch self-improvement stats
+    fetch("/api/self-improvement")
+      .then(r => r.json())
+      .then(data => setMemoryStats(data.stats))
+      .catch(() => { /* best effort */ });
   }, [fetchMemory]);
 
   // Refresh data when page becomes visible again
@@ -203,6 +211,16 @@ export default function MemoryClient() {
             </button>
           </div>
         </div>
+
+        {/* Self-Improvement Memory Stats */}
+        {memoryStats && memoryStats.compressed_memories > 0 && (
+          <div className="mb-6 rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/5 to-blue-500/5 p-3 flex items-center gap-3">
+            <Brain size={16} className="text-violet-400 shrink-0" />
+            <p className="text-xs text-pplx-muted">
+              <span className="text-violet-400 font-medium">{memoryStats.compressed_memories}</span> memories compressed · Self-improvement engine is actively managing memory
+            </p>
+          </div>
+        )}
 
         {/* Add form */}
         {showAdd && (
@@ -428,8 +446,17 @@ export default function MemoryClient() {
                             {entry.tags.map(tag => (
                               <span
                                 key={tag}
-                                className="px-2 py-0.5 rounded-full text-xs bg-pplx-bg text-pplx-muted border border-pplx-border"
+                                className={cn(
+                                  "px-2 py-0.5 rounded-full text-xs border",
+                                  tag === "auto-extracted" ? "bg-violet-500/10 text-violet-400 border-violet-500/20" :
+                                  tag === "self-improvement" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                                  tag === "skill-creation" ? "bg-pink-500/10 text-pink-400 border-pink-500/20" :
+                                  tag === "user-preference" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                  tag === "correction" ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                                  "bg-pplx-bg text-pplx-muted border-pplx-border"
+                                )}
                               >
+                                {tag === "auto-extracted" && <><Sparkles size={10} className="inline mr-0.5 -mt-0.5" /></>}
                                 {tag}
                               </span>
                             ))}

@@ -89,7 +89,7 @@ const FEATURED_MODELS = [
   { fullName: "facebook/musicgen-small", label: "MusicGen (HF)", provider: "huggingface" as const, tag: "Music" },
   { fullName: "recraft-ai/recraft-remove-background", label: "Remove BG", provider: "replicate" as const, tag: "Tool" },
   { fullName: "recraft-ai/recraft-crisp-upscale", label: "Crisp Upscale", provider: "replicate" as const, tag: "Upscale" },
-  { fullName: "meta/meta-llama-3-70b-instruct", label: "Llama 3 70B", provider: "replicate" as const, tag: "Text" },
+  { fullName: "meta/meta-llama-4-scout-instruct", label: "Llama 4 Scout", provider: "replicate" as const, tag: "Text" },
 ];
 
 const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"];

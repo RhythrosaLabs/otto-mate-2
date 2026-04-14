@@ -1,20 +1,20 @@
 // Core types matching Perplexity Computer's data model
 
 export type ModelId =
-  | "claude-opus-4-6"          // Primary: reasoning, orchestration
-  | "claude-sonnet-4-6"        // Fast Claude: balanced tasks
-  | "claude-3.5-haiku"         // Ultra-fast Claude: cheapest
-  | "gpt-4o"                   // Long-context recall, wide search
-  | "gpt-4o-mini"              // Speed: lightweight tasks
-  | "gpt-4.1"                  // Latest GPT: strong reasoning
-  | "gpt-4.1-mini"             // Fast GPT 4.1
-  | "gpt-4.1-nano"             // Ultra-cheap GPT
-  | "gemini-1.5-pro"           // Deep research sub-agents
-  | "gemini-1.5-flash"         // Fast Gemini
-  | "gemini-2.0-flash"         // Latest Gemini Flash
+  | "claude-opus-4-6"          // Primary: reasoning, orchestration ($5/$25 per 1M, 1M ctx)
+  | "claude-sonnet-4-6"        // Fast Claude: balanced tasks ($3/$15 per 1M, 1M ctx)
+  | "claude-haiku-4-5"         // Ultra-fast Claude: cheapest ($1/$5 per 1M, 200K ctx)
+  | "gpt-5.4"                  // Latest GPT: strong reasoning + 1M ctx ($2.50/$15)
+  | "gpt-5.4-mini"             // Fast GPT: balanced ($0.75/$4.50, 400K ctx)
+  | "gpt-5.4-nano"             // Ultra-cheap GPT ($0.20/$1.25, 400K ctx)
+  | "gemini-2.5-pro"           // Advanced reasoning + massive context ($1.25/$10)
+  | "gemini-2.5-flash"         // Fast Gemini: balanced speed/quality ($0.15/$0.60)
+  | "gemini-2.5-flash-lite"    // Ultra-cheap Gemini ($0.02/$0.10)
+  | "gemini-2.5-nano"           // Smallest Gemini: edge/mobile tasks ($0.01/$0.04)
   | "sonar"                    // Perplexity Sonar (search-augmented)
   | "sonar-pro"                // Perplexity Sonar Pro (advanced search)
   | "sonar-reasoning-pro"      // Perplexity Sonar Reasoning Pro
+  | "sonar-deep-research"      // Perplexity Deep Research (expert-level research)
   | "openrouter"               // OpenRouter: access any model
   | "free"                     // Free mode: zero-cost via OpenRouter free models
   | "auto";                    // Auto-select best model per task
@@ -42,7 +42,7 @@ export type TaskStatus =
 
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
-export type TaskSource = "manual" | "scheduled" | "webhook" | "template";
+export type TaskSource = "manual" | "scheduled" | "webhook";
 
 export interface Task {
   id: string;
@@ -209,6 +209,13 @@ export interface Skill {
   tools?: ToolName[];       // restricted tool set (undefined = all tools)
   max_steps?: number;       // max agentic iterations
   max_tokens?: number;      // output token budget
+  // Self-improvement tracking (Hermes-inspired)
+  usage_count?: number;
+  success_count?: number;
+  failure_count?: number;
+  auto_generated?: boolean;
+  source_task_id?: string;
+  performance_score?: number;
 }
 
 export interface GalleryItem {
@@ -256,6 +263,7 @@ export type ToolName =
   | "memory_delete"
   | "memory_update"
   | "list_skills"
+  | "skill_manage"
   | "organize_files"
   | "deep_research"
   | "finance_data"
@@ -361,23 +369,6 @@ export interface HealthInfo {
   onboarding_completed: boolean;
 }
 
-// ─── Task Templates (OpenClaw/Community-inspired) ─────────────────────────────
-
-export interface TaskTemplate {
-  id: string;
-  name: string;
-  description: string;
-  prompt: string;
-  category: string;
-  icon: string;
-  model: string;
-  tags: string[];
-  is_builtin: boolean;
-  use_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
 // ─── Slash Commands (Otto-inspired) ───────────────────────────────────────────
 
 export interface SlashCommand {
@@ -412,27 +403,6 @@ export interface ConversationSession {
   persona_id?: string;
   context_summary?: string;
   pinned: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-// ─── Task DAG Pipeline (Otto Task Queue + Node Mode) ──────────────────────────
-
-export interface PipelineNode {
-  id: string;
-  task_id?: string;
-  label: string;
-  status: TaskStatus;
-  x: number;
-  y: number;
-  depends_on: string[];
-}
-
-export interface Pipeline {
-  id: string;
-  name: string;
-  description?: string;
-  nodes: PipelineNode[];
   created_at: string;
   updated_at: string;
 }

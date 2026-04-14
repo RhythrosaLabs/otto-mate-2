@@ -202,7 +202,7 @@ const TASK_PATTERNS: TaskPattern[] = [
     patterns: /\b(llm|language.?model|generate.?text|llama|mistral|chat.?model|write|essay|poem|story|explain|answer|tell.?me|summarize|summarise|translate|rewrite|paragraph|sentence|lyrics|script|blog|article|code|program|function|convert.?text|list|describe(?!.*(image|photo|picture)))\b/i,
     priority: 7,
     searchTerms: ["language model", "text generation"],
-    defaultModel: "meta/meta-llama-3-70b-instruct",
+    defaultModel: "meta/meta-llama-4-scout-instruct",
   },
 ];
 

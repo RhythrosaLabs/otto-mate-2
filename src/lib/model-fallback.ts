@@ -29,9 +29,9 @@ interface ProviderConfig {
 }
 
 const PROVIDERS: ProviderConfig[] = [
-  { name: "anthropic",   envKey: "ANTHROPIC_API_KEY",   defaultModel: "claude-sonnet-4-6",            cheapModel: "claude-3.5-haiku" },
-  { name: "openai",      envKey: "OPENAI_API_KEY",      defaultModel: "gpt-4o",                       cheapModel: "gpt-4o-mini" },
-  { name: "google",      envKey: "GOOGLE_AI_API_KEY",   defaultModel: "gemini-1.5-pro",               cheapModel: "gemini-2.0-flash" },
+  { name: "anthropic",   envKey: "ANTHROPIC_API_KEY",   defaultModel: "claude-sonnet-4-6",            cheapModel: "claude-haiku-4-5" },
+  { name: "openai",      envKey: "OPENAI_API_KEY",      defaultModel: "gpt-5.4",                      cheapModel: "gpt-5.4-mini" },
+  { name: "google",      envKey: "GOOGLE_AI_API_KEY",   defaultModel: "gemini-2.5-pro",               cheapModel: "gemini-2.5-flash" },
   { name: "openrouter",  envKey: "OPENROUTER_API_KEY",  defaultModel: "openrouter/free", cheapModel: "openrouter/free" },
   { name: "perplexity",  envKey: "PERPLEXITY_API_KEY",  defaultModel: "sonar-pro",                    cheapModel: "sonar" },
 ];
@@ -98,7 +98,7 @@ async function callOpenAI(opts: {
     },
     body: JSON.stringify({
       model: opts.model,
-      max_tokens: opts.maxTokens,
+      max_completion_tokens: opts.maxTokens,
       temperature: opts.temperature,
       messages: [
         { role: "system", content: opts.system },

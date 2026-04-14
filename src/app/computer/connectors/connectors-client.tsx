@@ -188,7 +188,7 @@ export function ConnectorsClient({
       }
 
       setConnected((prev) => new Set([...prev, modalConnector.id]));
-      setBanner({ type: "success", message: `Connected ${modalConnector.name}${modalConnector.env_key ? " — API key saved to .env.local" : ""}` });
+      setBanner({ type: "success", message: `Connected ${modalConnector.name}${modalConnector.env_key ? " — API key saved to .env" : ""}` });
       setModalConnector(null);
     } catch (err) {
       setBanner({ type: "error", message: `Failed to connect ${modalConnector.name}` });

@@ -95,7 +95,7 @@ async function* streamOpenAI(opts: {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
 
-  const model = "gpt-4o";
+  const model = "gpt-5.4";
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {

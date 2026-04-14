@@ -610,7 +610,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "openai",
     name: "OpenAI / ChatGPT",
-    description: "Access GPT-4o, DALL-E 3, and Whisper. Pay-per-use pricing — new accounts get $5 trial credit. Get key from platform.openai.com/api-keys.",
+    description: "Access GPT-5.4, gpt-image-1, and Whisper. Pay-per-use pricing — new accounts get $5 trial credit. Get key from platform.openai.com/api-keys.",
     icon_url: "https://openai.com/favicon.ico",
     category: "ai",
     auth_type: "api_key",
@@ -865,7 +865,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "runway",
     name: "Runway ML",
-    description: "Generate AI videos with Gen-3 Alpha Turbo. Text-to-video, image-to-video with cinematic quality. Pay-per-use credits.",
+    description: "Generate AI videos with Gen-4 Turbo. Text-to-video, image-to-video with cinematic quality. Pay-per-use credits.",
     icon_url: "https://runwayml.com/favicon.ico",
     category: "ai_video",
     auth_type: "api_key",
@@ -966,7 +966,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "stability",
     name: "Stability AI (Stable Diffusion)",
-    description: "Generate images with Stable Diffusion 3.5, SDXL, and SD3. Upscale, inpaint, outpaint, remove backgrounds, search-and-replace. 25 free credits to start.",
+    description: "Generate images with Stable Diffusion 3.5, SDXL, and Ultra. Upscale, inpaint, outpaint, remove backgrounds, search-and-replace. 25 free credits to start.",
     icon_url: "https://stability.ai/favicon.ico",
     category: "ai_image",
     auth_type: "api_key",
@@ -1241,7 +1241,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "groq",
     name: "Groq",
-    description: "Ultra-fast LLM inference on custom LPU hardware. Llama 3.3 70B, Mixtral, Gemma. Free tier with 30 RPM.",
+    description: "Ultra-fast LLM inference on custom LPU hardware. Llama 4 Scout, Mixtral, Gemma. Free tier with 30 RPM.",
     icon_url: "https://groq.com/favicon.ico",
     category: "ai_llm",
     auth_type: "api_key",
@@ -1271,7 +1271,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "fireworks",
     name: "Fireworks AI",
-    description: "Blazing fast open model inference. Llama 3.3, Mixtral, DeepSeek, function calling models. $1 free credit.",
+    description: "Blazing fast open model inference. Llama 4, Mixtral, DeepSeek, function calling models. $1 free credit.",
     icon_url: "https://fireworks.ai/favicon.ico",
     category: "ai_llm",
     auth_type: "api_key",
@@ -1300,7 +1300,7 @@ export const ALL_CONNECTORS: Connector[] = [
   {
     id: "mistral",
     name: "Mistral AI",
-    description: "Access Mistral Large 2, Medium, Small, and Codestral models. Strong multilingual and code capabilities. Free tier available.",
+    description: "Access Mistral Large, Medium, Small, and Codestral models. Strong multilingual and code capabilities. Free tier available.",
     icon_url: "https://mistral.ai/favicon.ico",
     category: "ai_llm",
     auth_type: "api_key",

@@ -68,9 +68,16 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "task is required" }), { status: 400 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), { status: 503 });
+  // Provider fallback chain for computer use:
+  // 1. Anthropic (computer_20251124 beta) — best computer use, primary
+  // 2. OpenAI GPT-5.4 (computer use support) — strong fallback
+  // 3. Google Gemini 2.5 Pro (vision + function calling) — last resort
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const googleKey = process.env.GOOGLE_AI_API_KEY;
+
+  if (!anthropicKey && !openaiKey && !googleKey) {
+    return new Response(JSON.stringify({ error: "No AI provider API keys configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_AI_API_KEY." }), { status: 503 });
   }
 
   const sessionId = uuidv4();
@@ -140,6 +147,28 @@ export async function POST(req: NextRequest) {
         : (savedMaxIter > 0 ? savedMaxIter : 75);
       let iterations = 0;
 
+      // ── No Anthropic key: jump directly to fallback providers ────────────
+      if (!anthropicKey) {
+        if (openaiKey) {
+          send({ type: "status", status: "running", message: "Using OpenAI GPT-5.4 for computer use (no Anthropic key)…" });
+          await runComputerUseWithOpenAI({
+            task, initScreenshot: initSS, apiW, apiH, screen,
+            blockedApps, maxIterations: MAX_ITERATIONS, session, sessionId,
+            send, abortController, openaiKey,
+          });
+        } else if (googleKey) {
+          send({ type: "status", status: "running", message: "Using Google Gemini for computer use (no Anthropic key)…" });
+          await runComputerUseWithGemini({
+            task, initScreenshot: initSS, apiW, apiH, screen,
+            blockedApps, maxIterations: Math.min(MAX_ITERATIONS, 30), session, sessionId,
+            send, abortController, googleKey,
+          });
+        }
+        session.status = "done";
+        send({ type: "done", reason: "task_complete" });
+        return;
+      }
+
       while (iterations < MAX_ITERATIONS) {
         if (abortController.signal.aborted) break;
         iterations++;
@@ -159,7 +188,7 @@ export async function POST(req: NextRequest) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-api-key": apiKey,
+              "x-api-key": anthropicKey!,
               "anthropic-version": "2023-06-01",
               // computer-use-2025-11-24 enables computer_20251124 + bash_20250124 + text_editor_20250728
               // prompt-caching reduces cost on repeated context
@@ -205,14 +234,60 @@ export async function POST(req: NextRequest) {
 
         if (!resp.ok) {
           const errText = await resp.text();
-          // Surface billing errors clearly — computer use requires Anthropic specifically
-          // (no provider fallback is possible since this tool is Anthropic-only)
           let errJson: { error?: { message?: string } } = {};
           try { errJson = JSON.parse(errText); } catch { /* ignore */ }
           const apiMsg = errJson?.error?.message ?? errText;
+
+          // ── Provider Fallback ──────────────────────────────────────────────
+          // If Anthropic fails on the FIRST iteration (billing, rate limit, model error),
+          // fall back to OpenAI GPT-5.4 computer use, then Google Gemini as last resort.
+          // Once Anthropic succeeds at least once, we don't provider-switch mid-run.
+          if (iterations === 1) {
+            const isRecoverable = resp.status === 402 || resp.status === 429 || resp.status === 529 || resp.status === 503 ||
+              /credit.?balance|insufficient.?funds|billing|payment.?required|plan.?limit|rate.?limit|overloaded/i.test(apiMsg);
+            if (isRecoverable) {
+              // Try OpenAI GPT-5.4 computer use as fallback
+              if (openaiKey) {
+                send({ type: "status", status: "running", message: `Anthropic unavailable (${resp.status}), falling back to OpenAI GPT-5.4 computer use…` });
+                try {
+                  await runComputerUseWithOpenAI({
+                    task, initScreenshot: initSS, apiW, apiH, screen,
+                    blockedApps, maxIterations: MAX_ITERATIONS, session, sessionId,
+                    send, abortController, openaiKey,
+                  });
+                  return; // OpenAI handled the rest
+                } catch (oaiErr) {
+                  send({ type: "status", status: "running", message: `OpenAI fallback also failed: ${oaiErr instanceof Error ? oaiErr.message : String(oaiErr)}. Trying Google…` });
+                }
+              }
+              // Try Google Gemini as last resort (vision + function calling for screenshot analysis)
+              if (googleKey) {
+                send({ type: "status", status: "running", message: `Falling back to Google Gemini for vision-guided computer use…` });
+                try {
+                  await runComputerUseWithGemini({
+                    task, initScreenshot: initSS, apiW, apiH, screen,
+                    blockedApps, maxIterations: Math.min(MAX_ITERATIONS, 30), session, sessionId,
+                    send, abortController, googleKey,
+                  });
+                  return;
+                } catch (gemErr) {
+                  send({ type: "status", status: "running", message: `All providers failed. Google error: ${gemErr instanceof Error ? gemErr.message : String(gemErr)}` });
+                }
+              }
+              // All providers exhausted
+              if (resp.status === 402 || /credit.?balance|insufficient.?funds|billing|payment.?required|plan.?limit/i.test(apiMsg)) {
+                throw new Error(
+                  `All computer use providers failed. Anthropic: insufficient credits (add at https://console.anthropic.com/settings/billing). ` +
+                  `${openaiKey ? "OpenAI: failed." : "OpenAI: not configured."} ${googleKey ? "Google: failed." : "Google: not configured."}`
+                );
+              }
+            }
+          }
+
+          // Non-recoverable or mid-run error — surface clearly
           if (resp.status === 402 || /credit.?balance|insufficient.?funds|billing|payment.?required|plan.?limit/i.test(apiMsg)) {
             throw new Error(
-              `Anthropic account has insufficient credits. Computer Control requires the Anthropic API (computer_20251124 tool is Anthropic-only — no provider fallback is possible). Add credits at: https://console.anthropic.com/settings/billing`
+              `Anthropic account has insufficient credits. Computer Control requires the Anthropic API. Add credits at: https://console.anthropic.com/settings/billing`
             );
           }
           throw new Error(`Anthropic API ${resp.status}: ${apiMsg}`);
@@ -439,6 +514,414 @@ function detectAppFromAction(action: string, input: Record<string, unknown>): st
     }
   }
   return null; // Most actions don't have a specific app; permissions are requested by app name when Claude mentions it
+}
+
+// ─── Computer Use Function Calling Tools ──────────────────────────────────────
+// These tool definitions allow OpenAI/Google to control the desktop via function calling,
+// mirroring the actions provided by Anthropic's native computer_20251624 tool.
+
+const CU_TOOLS_FOR_FUNCTION_CALLING = [
+  {
+    name: "computer_screenshot",
+    description: "Take a screenshot of the current screen. Returns a base64 PNG image. Use this to see the current state of the desktop.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "computer_left_click",
+    description: "Performs a left mouse click at the given coordinates.",
+    parameters: { type: "object", properties: { x: { type: "number", description: "X coordinate" }, y: { type: "number", description: "Y coordinate" } }, required: ["x", "y"] },
+  },
+  {
+    name: "computer_right_click",
+    description: "Performs a right mouse click at the given coordinates.",
+    parameters: { type: "object", properties: { x: { type: "number", description: "X coordinate" }, y: { type: "number", description: "Y coordinate" } }, required: ["x", "y"] },
+  },
+  {
+    name: "computer_double_click",
+    description: "Double-clicks at the given coordinates.",
+    parameters: { type: "object", properties: { x: { type: "number", description: "X coordinate" }, y: { type: "number", description: "Y coordinate" } }, required: ["x", "y"] },
+  },
+  {
+    name: "computer_type",
+    description: "Type the given text at the current cursor position.",
+    parameters: { type: "object", properties: { text: { type: "string", description: "Text to type" } }, required: ["text"] },
+  },
+  {
+    name: "computer_key",
+    description: "Press a keyboard key or combination (e.g. 'Return', 'cmd+c', 'ctrl+alt+delete').",
+    parameters: { type: "object", properties: { key: { type: "string", description: "Key name or combination" } }, required: ["key"] },
+  },
+  {
+    name: "computer_scroll",
+    description: "Scroll the screen in a direction.",
+    parameters: { type: "object", properties: { x: { type: "number", description: "X coordinate" }, y: { type: "number", description: "Y coordinate" }, direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Scroll direction" }, amount: { type: "number", description: "Scroll amount (clicks), default 3" } }, required: ["x", "y", "direction"] },
+  },
+  {
+    name: "computer_mouse_move",
+    description: "Move the mouse cursor to the given coordinates without clicking.",
+    parameters: { type: "object", properties: { x: { type: "number", description: "X coordinate" }, y: { type: "number", description: "Y coordinate" } }, required: ["x", "y"] },
+  },
+  {
+    name: "bash_execute",
+    description: "Execute a bash command and return its output. Prefer this for file operations, installing software, running scripts.",
+    parameters: { type: "object", properties: { command: { type: "string", description: "The bash command to execute" } }, required: ["command"] },
+  },
+  {
+    name: "task_complete",
+    description: "Call this when the requested task has been fully completed.",
+    parameters: { type: "object", properties: { summary: { type: "string", description: "Brief summary of what was accomplished" } }, required: ["summary"] },
+  },
+];
+
+// Helper: map function-call tool invocations to executeAction/executeBash
+async function executeFunctionCallTool(
+  toolName: string,
+  args: Record<string, unknown>,
+  sessionId: string,
+  screenW: number,
+  screenH: number,
+  apiW: number,
+  apiH: number,
+  blockedApps: string[],
+  send: (data: object) => void,
+): Promise<{ result: string; screenshot?: { data: string; width: number; height: number }; done?: boolean }> {
+  switch (toolName) {
+    case "computer_screenshot": {
+      const ss = await takeScreenshot(sessionId).catch(() => null);
+      if (ss) {
+        send({ type: "screenshot", data: ss.data, width: ss.apiWidth, height: ss.apiHeight });
+        return { result: "Screenshot taken. The image is included in the conversation.", screenshot: { data: ss.data, width: ss.apiWidth, height: ss.apiHeight } };
+      }
+      return { result: "Failed to take screenshot." };
+    }
+    case "computer_left_click":
+    case "computer_right_click":
+    case "computer_double_click":
+    case "computer_mouse_move": {
+      const actionName = toolName.replace("computer_", "");
+      const coordinate = [args.x as number, args.y as number];
+      send({ type: "action", action: actionName, input: { coordinate }, description: describeAction(actionName, { coordinate }) });
+      const res = await executeAction(actionName, { action: actionName, coordinate }, sessionId, screenW, screenH, apiW, apiH, blockedApps);
+      if (res.base64_image) {
+        send({ type: "screenshot", data: res.base64_image, width: apiW, height: apiH });
+        return { result: res.output || "Done", screenshot: { data: res.base64_image, width: apiW, height: apiH } };
+      }
+      return { result: res.output || res.error || "Done" };
+    }
+    case "computer_type": {
+      send({ type: "action", action: "type", input: { text: args.text }, description: describeAction("type", { text: args.text }) });
+      const res = await executeAction("type", { action: "type", text: args.text as string }, sessionId, screenW, screenH, apiW, apiH, blockedApps);
+      return { result: res.output || "Typed text." };
+    }
+    case "computer_key": {
+      send({ type: "action", action: "key", input: { text: args.key }, description: describeAction("key", { text: args.key }) });
+      const res = await executeAction("key", { action: "key", text: args.key as string }, sessionId, screenW, screenH, apiW, apiH, blockedApps);
+      return { result: res.output || "Key pressed." };
+    }
+    case "computer_scroll": {
+      const scrollInput = { action: "scroll", coordinate: [args.x, args.y], scroll_direction: args.direction, scroll_amount: args.amount ?? 3 };
+      send({ type: "action", action: "scroll", input: scrollInput, description: describeAction("scroll", scrollInput) });
+      const res = await executeAction("scroll", scrollInput as Record<string, unknown>, sessionId, screenW, screenH, apiW, apiH, blockedApps);
+      return { result: res.output || "Scrolled." };
+    }
+    case "bash_execute": {
+      const cmd = args.command as string;
+      send({ type: "action", action: "bash", input: { command: cmd }, description: describeAction("bash", { command: cmd }) });
+      const bashRes = await executeBash(cmd);
+      const parts: string[] = [];
+      if (bashRes.output) parts.push(bashRes.output);
+      if (bashRes.error) parts.push(`stderr: ${bashRes.error}`);
+      return { result: parts.length > 0 ? parts.join("\n") : "(no output)" };
+    }
+    case "task_complete":
+      return { result: args.summary as string || "Task complete.", done: true };
+    default:
+      return { result: `Unknown tool: ${toolName}` };
+  }
+}
+
+// ─── OpenAI GPT-5.4 Computer Use Fallback ─────────────────────────────────────
+
+interface ComputerUseFallbackParams {
+  task: string;
+  initScreenshot: { data: string; apiWidth: number; apiHeight: number } | null;
+  apiW: number;
+  apiH: number;
+  screen: { width: number; height: number };
+  blockedApps: string[];
+  maxIterations: number;
+  session: ComputerSession;
+  sessionId: string;
+  send: (data: object) => void;
+  abortController: AbortController;
+  openaiKey?: string;
+  googleKey?: string;
+}
+
+async function runComputerUseWithOpenAI(params: ComputerUseFallbackParams): Promise<void> {
+  const { task, initScreenshot, apiW, apiH, screen, blockedApps, maxIterations,
+          session, sessionId, send, abortController, openaiKey } = params;
+
+  const openaiTools = CU_TOOLS_FOR_FUNCTION_CALLING.map(t => ({
+    type: "function" as const,
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+
+  // Build initial messages with screenshot + task
+  const messages: Array<Record<string, unknown>> = [
+    {
+      role: "system",
+      content: SYSTEM_PROMPT + `\n\nYou have tools to control a macOS desktop. The screen resolution is ${apiW}x${apiH}. Coordinates in tool calls must be within that range. Always take a screenshot first to see the current state, then perform actions.`,
+    },
+    {
+      role: "user",
+      content: initScreenshot
+        ? [
+            { type: "image_url", image_url: { url: `data:image/png;base64,${initScreenshot.data}`, detail: "high" } },
+            { type: "text", text: task },
+          ]
+        : task,
+    },
+  ];
+
+  let iterations = 0;
+  while (iterations < maxIterations) {
+    if (abortController.signal.aborted) break;
+    iterations++;
+    send({ type: "status", status: "running", message: `OpenAI thinking… (step ${iterations})` });
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openaiKey}`,
+      },
+      signal: abortController.signal,
+      body: JSON.stringify({
+        model: "gpt-5.4",
+        max_tokens: 8192,
+        messages,
+        tools: openaiTools,
+        tool_choice: iterations === 1 ? "required" : "auto",
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`OpenAI API ${resp.status}: ${errText.slice(0, 500)}`);
+    }
+
+    const data = await resp.json() as {
+      choices: Array<{
+        message: {
+          role: string;
+          content?: string | null;
+          tool_calls?: Array<{
+            id: string;
+            type: string;
+            function: { name: string; arguments: string };
+          }>;
+        };
+        finish_reason: string;
+      }>;
+    };
+
+    const choice = data.choices[0];
+    if (!choice) break;
+
+    const assistantMsg = choice.message;
+    messages.push(assistantMsg);
+
+    // Emit text content if any
+    if (assistantMsg.content) {
+      send({ type: "text", content: assistantMsg.content });
+    }
+
+    // No tool calls — model is done
+    if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+      send({ type: "done", reason: "task_complete" });
+      session.status = "done";
+      return;
+    }
+
+    // Process each tool call
+    let taskDone = false;
+    for (const tc of assistantMsg.tool_calls) {
+      let args: Record<string, unknown> = {};
+      try { args = JSON.parse(tc.function.arguments); } catch { /* empty */ }
+
+      const result = await executeFunctionCallTool(
+        tc.function.name, args, sessionId, screen.width, screen.height, apiW, apiH, blockedApps, send
+      );
+
+      // Build tool result message — include screenshot as image if available
+      const toolContent: unknown[] = [{ type: "text", text: result.result }];
+      if (result.screenshot) {
+        toolContent.push({
+          type: "image_url",
+          image_url: { url: `data:image/png;base64,${result.screenshot.data}`, detail: "high" },
+        });
+      }
+
+      messages.push({
+        role: "tool",
+        tool_call_id: tc.id,
+        content: toolContent,
+      });
+
+      if (result.done) {
+        taskDone = true;
+        break;
+      }
+    }
+
+    // Filter old screenshots to keep context manageable
+    filterOldScreenshots(messages as Message[], 3);
+
+    if (taskDone) {
+      send({ type: "done", reason: "task_complete" });
+      session.status = "done";
+      return;
+    }
+  }
+
+  if (iterations >= maxIterations) {
+    send({ type: "done", reason: "max_iterations" });
+  }
+  session.status = "done";
+}
+
+// ─── Google Gemini Computer Use Fallback ──────────────────────────────────────
+
+async function runComputerUseWithGemini(params: ComputerUseFallbackParams): Promise<void> {
+  const { task, initScreenshot, apiW, apiH, screen, blockedApps, maxIterations,
+          session, sessionId, send, abortController, googleKey } = params;
+
+  const geminiTools = [{
+    functionDeclarations: CU_TOOLS_FOR_FUNCTION_CALLING.map(t => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    })),
+  }];
+
+  // Build initial contents with screenshot + task
+  const userParts: Array<Record<string, unknown>> = [];
+  if (initScreenshot) {
+    userParts.push({ inlineData: { mimeType: "image/png", data: initScreenshot.data } });
+  }
+  userParts.push({ text: task });
+
+  const contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [
+    { role: "user", parts: userParts },
+  ];
+
+  let iterations = 0;
+  while (iterations < maxIterations) {
+    if (abortController.signal.aborted) break;
+    iterations++;
+    send({ type: "status", status: "running", message: `Gemini thinking… (step ${iterations})` });
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${encodeURIComponent(googleKey!)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: SYSTEM_PROMPT + `\n\nYou have tools to control a macOS desktop. Screen resolution: ${apiW}x${apiH}. Take screenshots to see the screen state, then perform actions.` }],
+          },
+          contents,
+          tools: geminiTools,
+          toolConfig: iterations === 1 ? { functionCallingConfig: { mode: "ANY" } } : undefined,
+        }),
+      }
+    );
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Google Gemini API ${resp.status}: ${errText.slice(0, 500)}`);
+    }
+
+    const data = await resp.json() as {
+      candidates?: Array<{
+        content?: {
+          role: string;
+          parts: Array<{
+            text?: string;
+            functionCall?: { name: string; args?: Record<string, unknown> };
+          }>;
+        };
+        finishReason?: string;
+      }>;
+    };
+
+    const candidate = data.candidates?.[0];
+    if (!candidate?.content) break;
+
+    // Add assistant turn
+    contents.push(candidate.content as { role: string; parts: Array<Record<string, unknown>> });
+
+    // Extract text and function calls
+    const funcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    for (const part of candidate.content.parts) {
+      if (part.text) {
+        send({ type: "text", content: part.text });
+      }
+      if (part.functionCall) {
+        funcCalls.push({ name: part.functionCall.name, args: part.functionCall.args ?? {} });
+      }
+    }
+
+    // No function calls — model is done
+    if (funcCalls.length === 0) {
+      send({ type: "done", reason: "task_complete" });
+      session.status = "done";
+      return;
+    }
+
+    // Execute function calls and collect responses
+    const responseParts: Array<Record<string, unknown>> = [];
+    let taskDone = false;
+
+    for (const fc of funcCalls) {
+      const result = await executeFunctionCallTool(
+        fc.name, fc.args, sessionId, screen.width, screen.height, apiW, apiH, blockedApps, send
+      );
+
+      const responseContent: Record<string, unknown> = { result: result.result };
+      responseParts.push({
+        functionResponse: { name: fc.name, response: responseContent },
+      });
+
+      // If there's a screenshot, add it as inline data in the next user turn
+      if (result.screenshot) {
+        responseParts.push({
+          inlineData: { mimeType: "image/png", data: result.screenshot.data },
+        });
+      }
+
+      if (result.done) {
+        taskDone = true;
+        break;
+      }
+    }
+
+    // Add function responses as user turn
+    contents.push({ role: "user", parts: responseParts });
+
+    if (taskDone) {
+      send({ type: "done", reason: "task_complete" });
+      session.status = "done";
+      return;
+    }
+  }
+
+  if (iterations >= maxIterations) {
+    send({ type: "done", reason: "max_iterations" });
+  }
+  session.status = "done";
 }
 
 function describeAction(action: string, input: Record<string, unknown>): string {

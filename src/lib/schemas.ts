@@ -14,18 +14,18 @@ export const ModelIdSchema = z.enum([
   "auto",
   "claude-opus-4-6",
   "claude-sonnet-4-6",
-  "claude-3.5-haiku",
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4.1",
-  "gpt-4.1-mini",
-  "gpt-4.1-nano",
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
-  "gemini-2.0-flash",
+  "claude-haiku-4-5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.4-nano",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-nano",
   "sonar",
   "sonar-pro",
   "sonar-reasoning-pro",
+  "sonar-deep-research",
   "openrouter",
   "free",
 ]);
@@ -40,7 +40,7 @@ export const TaskStatusSchema = z.enum([
 
 export const PrioritySchema = z.enum(["low", "medium", "high", "critical"]);
 
-export const TaskSourceSchema = z.enum(["manual", "scheduled", "webhook", "template"]);
+export const TaskSourceSchema = z.enum(["manual", "scheduled", "webhook"]);
 
 // ─── Task Schemas ─────────────────────────────────────────────────────────────
 
@@ -54,23 +54,6 @@ export const CreateTaskSchema = z.object({
   depends_on: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional(),
   source: TaskSourceSchema.optional(),
-});
-
-// ─── Template Schemas ─────────────────────────────────────────────────────────
-
-export const TemplatePostSchema = z.object({
-  action: z.enum(["create", "run", "delete"]).optional().default("create"),
-  // For create:
-  name: z.string().min(1).max(200).optional(),
-  prompt: z.string().min(1).max(50000).optional(),
-  description: z.string().max(1000).optional(),
-  category: z.string().max(100).optional(),
-  icon: z.string().max(10).optional(),
-  model: z.string().max(100).optional(),
-  tags: z.array(z.string().max(100)).max(20).optional(),
-  // For run/delete:
-  template_id: z.string().uuid().optional(),
-  user_input: z.string().max(50000).optional(),
 });
 
 // ─── Scheduled Task Schemas ───────────────────────────────────────────────────

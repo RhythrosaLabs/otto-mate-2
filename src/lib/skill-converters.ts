@@ -875,6 +875,30 @@ export function convertToSkills(data: unknown, format?: ConvertibleFormat): Conv
     const result = converter(data);
     // Ensure format is set
     result.format = detectedFormat;
+    
+    // Post-conversion: validate, score, and refine each skill
+    if (result.success && result.skills.length > 0) {
+      result.skills = result.skills.map(skill => refineConvertedSkill(skill));
+      
+      // Add quality scores as metadata
+      for (const skill of result.skills) {
+        const score = scoreConversionQuality(skill);
+        skill.source_metadata = { ...skill.source_metadata, quality_score: score.total, quality_details: score };
+      }
+      
+      // Generate warnings for low-quality conversions
+      const lowQuality = result.skills.filter(s => {
+        const score = (s.source_metadata?.quality_score as number) || 0;
+        return score < 0.5;
+      });
+      if (lowQuality.length > 0) {
+        result.warnings = [
+          ...(result.warnings || []),
+          ...lowQuality.map(s => `"${s.name}" has low conversion quality (${Math.round(((s.source_metadata?.quality_score as number) || 0) * 100)}%) — review and refine instructions before use`),
+        ];
+      }
+    }
+    
     return result;
   } catch (err) {
     return {
@@ -884,4 +908,206 @@ export function convertToSkills(data: unknown, format?: ConvertibleFormat): Conv
       errors: [`Conversion failed: ${err instanceof Error ? err.message : String(err)}`],
     };
   }
+}
+
+// ─── Conversion Quality Scoring ───────────────────────────────────────────────
+// Evaluates how complete and useful a converted skill is.
+
+export interface ConversionQualityScore {
+  total: number;             // 0-1 overall score
+  name_quality: number;      // Is the name descriptive?
+  description_quality: number; // Is description informative?
+  instructions_quality: number; // Are instructions actionable?
+  triggers_quality: number;  // Are triggers specific enough?
+  completeness: number;      // All fields present?
+}
+
+export function scoreConversionQuality(skill: ConvertedSkill): ConversionQualityScore {
+  // Name quality (0-1): not generic, reasonable length, descriptive
+  const nameWords = skill.name.split(/[\s-_]+/).filter(w => w.length > 2);
+  const genericNames = ["agent", "task", "workflow", "unnamed", "untitled", "skill"];
+  const nameIsGeneric = genericNames.some(g => skill.name.toLowerCase() === g);
+  const name_quality = nameIsGeneric ? 0.1 : Math.min(1, nameWords.length / 3);
+
+  // Description quality (0-1): length and specificity
+  const desc = skill.description || "";
+  const description_quality = Math.min(1, desc.length / 100) * (desc.length > 10 ? 1 : 0.3);
+
+  // Instructions quality (0-1): length, has steps, has structure
+  const instr = skill.instructions || "";
+  const hasSteps = /\d+\.|step|##|###|\*\*/i.test(instr);
+  const hasToolMentions = /tool|api|use|execute|call|run/i.test(instr);
+  const instrLength = Math.min(1, instr.length / 300);
+  const instructions_quality = instrLength * 0.4 + (hasSteps ? 0.3 : 0) + (hasToolMentions ? 0.3 : 0);
+
+  // Triggers quality (0-1): specific, not empty
+  const triggers = skill.triggers || [];
+  const triggers_quality = triggers.length === 0 ? 0.1
+    : Math.min(1, triggers.length / 3) * (triggers.some(t => t.length > 5) ? 1 : 0.5);
+
+  // Completeness (0-1): all fields present
+  const fields = [skill.name, skill.description, skill.instructions, skill.category].filter(Boolean).length;
+  const completeness = fields / 4;
+
+  const total = name_quality * 0.2 + description_quality * 0.15 + instructions_quality * 0.35 + triggers_quality * 0.15 + completeness * 0.15;
+
+  return { total, name_quality, description_quality, instructions_quality, triggers_quality, completeness };
+}
+
+// ─── Post-Import Skill Refinement ─────────────────────────────────────────────
+// Automatically improves converted skills with better defaults, inferred triggers,
+// and normalized formatting.
+
+function refineConvertedSkill(skill: ConvertedSkill): ConvertedSkill {
+  const refined = { ...skill };
+
+  // 1. Clean up name: title case, remove redundant prefixes
+  refined.name = cleanSkillName(refined.name);
+
+  // 2. Ensure triggers are lowercase and deduplicated
+  if (refined.triggers) {
+    refined.triggers = [...new Set(refined.triggers.map(t => t.toLowerCase().trim()))].filter(Boolean);
+  }
+
+  // 3. Auto-infer additional triggers from name and description
+  if (!refined.triggers || refined.triggers.length < 2) {
+    const inferredTriggers = inferTriggersFromContent(
+      `${refined.name} ${refined.description} ${refined.instructions}`.toLowerCase()
+    );
+    refined.triggers = [...new Set([...(refined.triggers || []), ...inferredTriggers])].slice(0, 8);
+  }
+
+  // 4. Add format-specific context to instructions
+  if (refined.source_format !== "generic") {
+    const formatLabel = FORMAT_INFO[refined.source_format]?.label || refined.source_format;
+    if (!refined.instructions.includes(formatLabel)) {
+      refined.instructions = `> Imported from ${formatLabel}\n\n${refined.instructions}`;
+    }
+  }
+
+  // 5. Ensure category is valid
+  const validCategories = ["research", "coding", "writing", "creative", "automation", "marketing", "communication", "finance", "general", "custom"];
+  if (!validCategories.includes(refined.category)) {
+    refined.category = inferCategoryFromContent(refined.description + " " + refined.instructions);
+  }
+
+  // 6. Add actionable guidance if instructions are too vague
+  if (refined.instructions.length < 100) {
+    refined.instructions += `\n\n### Usage Notes\n- Review and customize these instructions for your specific use case\n- Add specific tool calls and step-by-step workflow as needed\n- Consider adding error handling and edge case instructions`;
+  }
+
+  return refined;
+}
+
+function cleanSkillName(name: string): string {
+  // Remove common prefixes
+  let cleaned = name
+    .replace(/^(crewai|comfyui|n8n|make|zapier|flowise|dify|langchain)\s*[-:]\s*/i, "")
+    .replace(/^(agent|task|workflow|scenario|module)\s*[-:]\s*/i, "")
+    .trim();
+
+  // Title case
+  cleaned = cleaned.replace(/\b\w/g, c => c.toUpperCase());
+  
+  // Truncate if too long
+  if (cleaned.length > 60) cleaned = cleaned.slice(0, 57) + "...";
+  
+  return cleaned || name;
+}
+
+function inferTriggersFromContent(content: string): string[] {
+  const triggerPatterns: Array<{ pattern: RegExp; triggers: string[] }> = [
+    { pattern: /\b(research|investigate|analyze)\b/, triggers: ["research", "analyze"] },
+    { pattern: /\b(write|draft|compose|content)\b/, triggers: ["write", "draft"] },
+    { pattern: /\b(code|program|implement|debug)\b/, triggers: ["code", "implement"] },
+    { pattern: /\b(scrape|extract|crawl)\b/, triggers: ["scrape", "extract data"] },
+    { pattern: /\b(email|send|newsletter)\b/, triggers: ["email", "send"] },
+    { pattern: /\b(image|design|generate.*image)\b/, triggers: ["image", "design"] },
+    { pattern: /\b(video|animation|film)\b/, triggers: ["video", "animation"] },
+    { pattern: /\b(data|csv|chart|dashboard)\b/, triggers: ["data analysis", "chart"] },
+    { pattern: /\b(deploy|docker|infrastructure)\b/, triggers: ["deploy", "infrastructure"] },
+    { pattern: /\b(social|post|tweet|linkedin)\b/, triggers: ["social media", "post"] },
+    { pattern: /\b(automate|workflow|pipeline)\b/, triggers: ["automate", "workflow"] },
+    { pattern: /\b(test|qa|quality)\b/, triggers: ["test", "quality"] },
+  ];
+
+  const found: string[] = [];
+  for (const { pattern, triggers } of triggerPatterns) {
+    if (pattern.test(content)) found.push(...triggers);
+  }
+  return [...new Set(found)].slice(0, 5);
+}
+
+function inferCategoryFromContent(content: string): string {
+  const lower = content.toLowerCase();
+  if (/code|program|debug|api|function/.test(lower)) return "coding";
+  if (/research|analyze|investigate|study/.test(lower)) return "research";
+  if (/write|draft|blog|article|content/.test(lower)) return "writing";
+  if (/image|design|video|animation|creative/.test(lower)) return "creative";
+  if (/automate|workflow|scrape|cron|trigger/.test(lower)) return "automation";
+  if (/market|seo|social|campaign/.test(lower)) return "marketing";
+  if (/email|send|communicate|message/.test(lower)) return "communication";
+  if (/finance|stock|budget|revenue/.test(lower)) return "finance";
+  return "general";
+}
+
+// ─── Batch Import with Deduplication ──────────────────────────────────────────
+// Handles importing multiple skills while checking for duplicates.
+
+export interface BatchImportResult {
+  imported: ConvertedSkill[];
+  skipped: Array<{ skill: ConvertedSkill; reason: string }>;
+  refined: number;
+}
+
+export function prepareBatchImport(
+  skills: ConvertedSkill[],
+  existingSkillNames: string[],
+): BatchImportResult {
+  const existingNormalized = new Set(
+    existingSkillNames.map(n => n.toLowerCase().replace(/[^a-z0-9]/g, ""))
+  );
+
+  const imported: ConvertedSkill[] = [];
+  const skipped: Array<{ skill: ConvertedSkill; reason: string }> = [];
+  let refined = 0;
+
+  for (const skill of skills) {
+    const normalized = skill.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    
+    // Check for duplicates
+    if (existingNormalized.has(normalized)) {
+      skipped.push({ skill, reason: "Duplicate: a skill with this name already exists" });
+      continue;
+    }
+
+    // Check for near-duplicates (Levenshtein distance < 3)
+    const isNearDuplicate = [...existingNormalized].some(existing => {
+      if (Math.abs(existing.length - normalized.length) > 3) return false;
+      let diff = 0;
+      for (let i = 0; i < Math.max(existing.length, normalized.length); i++) {
+        if (existing[i] !== normalized[i]) diff++;
+        if (diff > 3) return false;
+      }
+      return diff < 3;
+    });
+
+    if (isNearDuplicate) {
+      skipped.push({ skill, reason: "Near-duplicate: a very similar skill name exists" });
+      continue;
+    }
+
+    // Quality gate: skip very low-quality conversions
+    const quality = scoreConversionQuality(skill);
+    if (quality.total < 0.2) {
+      skipped.push({ skill, reason: `Quality too low (${Math.round(quality.total * 100)}%) — instructions are too vague` });
+      continue;
+    }
+
+    imported.push(skill);
+    existingNormalized.add(normalized);
+    refined++;
+  }
+
+  return { imported, skipped, refined };
 }

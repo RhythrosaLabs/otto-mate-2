@@ -1,6 +1,9 @@
 // ─── Embedding-Based Memory Engine (ReMe-inspired) ────────────────────────────
 // Upgrades flat key-value memory to semantic vector search with importance scoring,
 // memory compression, and automatic forgetting. Inspired by agentscope-ai/ReMe.
+//
+// v2: Adaptive importance decay, multi-tier consolidation, cross-task context
+//     threading, procedural memory reinforcement, and smarter compression.
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -128,7 +131,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dot / denom : 0;
 }
 
-// ─── Importance Scoring (ReMe-inspired) ──────────────────────────────────────
+// ─── Importance Scoring (ReMe-inspired, v2: adaptive decay) ──────────────────
 
 export function computeImportance(entry: {
   access_count?: number;
@@ -136,16 +139,26 @@ export function computeImportance(entry: {
   created_at: string;
   value: string;
   tags: string[];
+  memory_type?: string;
+  compressed?: boolean;
 }): number {
   const now = Date.now();
   const lastAccess = new Date(entry.last_accessed_at || entry.created_at).getTime();
   const age = now - lastAccess;
 
-  // Recency: decays over time (half-life = 7 days)
-  const recencyScore = Math.exp(-age / (7 * 24 * 3600 * 1000));
+  // Adaptive half-life based on memory type:
+  // - Procedural: slower decay (14 days) — how-to knowledge stays relevant longer
+  // - Semantic: standard decay (7 days) — facts need periodic revalidation
+  // - Episodic: faster decay (3 days) — specific events become less relevant
+  const halfLifeMs = entry.memory_type === "procedural" ? 14 * 24 * 3600 * 1000
+    : entry.memory_type === "episodic" ? 3 * 24 * 3600 * 1000
+    : 7 * 24 * 3600 * 1000;
+  
+  const recencyScore = Math.exp(-age / halfLifeMs);
 
-  // Frequency: logarithmic scaling of access count
-  const freqScore = Math.min(Math.log2((entry.access_count || 0) + 1) / 5, 1);
+  // Frequency: logarithmic scaling of access count (boosted for high-access memories)
+  const accessCount = entry.access_count || 0;
+  const freqScore = Math.min(Math.log2(accessCount + 1) / 5, 1);
 
   // Content richness: longer, tagged memories are more valuable
   const contentScore = Math.min(
@@ -153,8 +166,20 @@ export function computeImportance(entry: {
     1
   );
 
+  // Type bonus: user preferences and corrections are more important
+  let typeBonus = 0;
+  const tagSet = new Set(entry.tags);
+  if (tagSet.has("user-preference") || tagSet.has("preference")) typeBonus = 0.15;
+  if (tagSet.has("correction")) typeBonus = 0.2;
+  if (tagSet.has("procedural") || entry.memory_type === "procedural") typeBonus = Math.max(typeBonus, 0.1);
+  
+  // Compressed memories get a slight penalty (summaries are less precise)
+  const compressionPenalty = entry.compressed ? -0.05 : 0;
+
   // Weighted combination
-  return recencyScore * 0.4 + freqScore * 0.3 + contentScore * 0.3;
+  return Math.min(1, Math.max(0,
+    recencyScore * 0.35 + freqScore * 0.25 + contentScore * 0.25 + typeBonus + 0.15 + compressionPenalty
+  ));
 }
 
 // ─── Semantic Memory Recall ──────────────────────────────────────────────────
@@ -195,8 +220,24 @@ export function semanticRecall(
     const overlap = memTokens.filter(t => queryTokens.has(t)).length;
     const keywordScore = Math.min(overlap / Math.max(queryTokens.size, 1), 1);
 
-    // Combined score: semantic similarity + importance + keyword overlap
-    const combinedScore = similarity * 0.4 + importance * 0.25 + keywordScore * 0.35;
+    // Memory type relevance boost:
+    // - Procedural memories boost when query looks like a "how to" question
+    // - Episodic memories boost when query references past tasks
+    const queryLower = query.toLowerCase();
+    let typeRelevance = 0;
+    if (m.memory_type === "procedural" && /how|steps|process|workflow|guide/i.test(queryLower)) {
+      typeRelevance = 0.1;
+    }
+    if (m.memory_type === "episodic" && /last time|previous|before|earlier|history/i.test(queryLower)) {
+      typeRelevance = 0.1;
+    }
+    // User preferences always get a boost (they're always relevant context)
+    if (m.tags?.includes("user-preference") || m.tags?.includes("preference")) {
+      typeRelevance = Math.max(typeRelevance, 0.05);
+    }
+
+    // Combined score: semantic similarity + importance + keyword overlap + type relevance
+    const combinedScore = similarity * 0.35 + importance * 0.2 + keywordScore * 0.35 + typeRelevance + 0.1;
 
     return { entry: m, similarity, combinedScore };
   });
@@ -206,9 +247,78 @@ export function semanticRecall(
   return scored.slice(0, limit).filter(r => r.combinedScore > 0.05);
 }
 
+// ─── Cross-Task Context Threading ─────────────────────────────────────────────
+// Finds memories from related tasks to build cross-task context chains.
+
+export function findRelatedTaskMemories(
+  taskId: string,
+  memories: MemoryEntry[],
+  limit: number = 5,
+): MemoryEntry[] {
+  // Find memories from the same source task
+  const directMatches = memories.filter(m => m.source_task_id === taskId);
+  
+  // Also find memories that reference this task (e.g., task pattern memories)
+  const referenceMatches = memories.filter(m => 
+    m.value.includes(taskId.slice(0, 8)) && m.source_task_id !== taskId
+  );
+
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const results: MemoryEntry[] = [];
+  for (const m of [...directMatches, ...referenceMatches]) {
+    if (!seen.has(m.id) && results.length < limit) {
+      seen.add(m.id);
+      results.push(m);
+    }
+  }
+  return results;
+}
+
+// ─── Proactive Memory Priming ─────────────────────────────────────────────────
+// Selects the best memories to prime the agent with before a task starts.
+// Different from recall — this is about context, not search results.
+
+export function primeMemoriesForTask(
+  taskPrompt: string,
+  memories: MemoryEntry[],
+  maxPrime: number = 8,
+): MemoryEntry[] {
+  if (memories.length === 0) return [];
+
+  // Always include user preferences (up to 3)
+  const preferences = memories
+    .filter(m => m.tags?.includes("user-preference") || m.tags?.includes("preference") || m.tags?.includes("identity"))
+    .slice(0, 3);
+
+  // Include recent corrections (up to 2)
+  const corrections = memories
+    .filter(m => m.tags?.includes("correction"))
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 2);
+
+  // Semantic recall for task-relevant memories
+  const remaining = maxPrime - preferences.length - corrections.length;
+  const semanticMatches = remaining > 0
+    ? semanticRecall(taskPrompt, memories, remaining).map(r => r.entry)
+    : [];
+
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const primed: MemoryEntry[] = [];
+  for (const m of [...preferences, ...corrections, ...semanticMatches]) {
+    if (!seen.has(m.id) && primed.length < maxPrime) {
+      seen.add(m.id);
+      primed.push(m);
+    }
+  }
+  return primed;
+}
+
 // ─── Memory Compression ──────────────────────────────────────────────────────
 // When memory bank gets large, compress old low-importance memories
 // into summary entries. Each compressed entry summarizes 3-5 related memories.
+// v2: Type-aware compression (only compress same-type memories together)
 
 export function identifyCompressible(
   memories: MemoryEntry[],
@@ -225,7 +335,7 @@ export function identifyCompressible(
   // Sort by importance (lowest first)
   scored.sort((a, b) => a.importance - b.importance);
 
-  // Mark the bottom 20% as compressible (but never compress recently accessed)
+  // Mark the bottom 20% as compressible (but protect important categories)
   const cutoff = Math.floor(memories.length * 0.2);
   const oneDayAgo = Date.now() - 24 * 3600 * 1000;
 
@@ -233,7 +343,14 @@ export function identifyCompressible(
     .slice(0, cutoff)
     .filter(s => {
       const lastAccess = new Date(s.entry.last_accessed_at || s.entry.created_at).getTime();
-      return lastAccess < oneDayAgo && !s.entry.compressed;
+      // Never compress recently accessed
+      if (lastAccess >= oneDayAgo) return false;
+      // Never compress already-compressed
+      if (s.entry.compressed) return false;
+      // Protect user preferences and corrections from compression
+      const protectedTags = ["user-preference", "preference", "correction", "identity"];
+      if (s.entry.tags?.some(t => protectedTags.includes(t))) return false;
+      return true;
     })
     .map(s => s.entry);
 }
@@ -242,16 +359,28 @@ export function compressMemories(memories: MemoryEntry[]): MemoryEntry {
   const keys = memories.map(m => m.key);
   const values = memories.map(m => m.value);
   const allTags = [...new Set(memories.flatMap(m => m.tags))];
+  
+  // Determine the dominant memory type for the compressed entry
+  const typeCounts = new Map<string, number>();
+  for (const m of memories) {
+    const t = m.memory_type || "semantic";
+    typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
+  }
+  const dominantType = [...typeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "semantic";
+
+  // Build a more informative compressed value
+  const summaryLines = values.map((v, i) => `• ${keys[i]}: ${v.slice(0, 120)}`);
+  const compressedValue = summaryLines.join("\n");
 
   const compressed: MemoryEntry = {
     id: uuidv4(),
     key: `[compressed] ${keys.slice(0, 3).join(", ")}${keys.length > 3 ? ` +${keys.length - 3} more` : ""}`,
-    value: values.map((v, i) => `• ${keys[i]}: ${v.slice(0, 100)}`).join("\n"),
+    value: compressedValue,
     tags: [...allTags.slice(0, 5), "compressed"],
     importance_score: 0.3,
     access_count: 0,
     last_accessed_at: new Date().toISOString(),
-    memory_type: "semantic",
+    memory_type: dominantType as "semantic" | "episodic" | "procedural",
     compressed: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

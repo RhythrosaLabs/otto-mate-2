@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Zap, Pencil, Trash2, X, Store, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Zap, Pencil, Trash2, X, Store, Upload, Brain, TrendingUp } from "lucide-react";
 import type { Skill } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SkillMarketplace } from "./skill-marketplace";
@@ -17,6 +17,12 @@ const CATEGORY_ICONS: Record<string, string> = {
   research: "🔍",
   automation: "⚙️",
   custom: "✨",
+  general: "🧩",
+  creative: "🎨",
+  marketing: "📢",
+  communication: "💬",
+  finance: "💰",
+  coding: "🔧",
 };
 
 export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
@@ -26,6 +32,16 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
   const [form, setForm] = useState({ name: "", description: "", instructions: "", category: "custom" });
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"my-skills" | "marketplace" | "import">("my-skills");
+  const [selfImprovementStats, setSelfImprovementStats] = useState<{
+    auto_skills: number; avg_skill_performance: number; total_learnings: number; high_confidence_learnings: number;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/self-improvement")
+      .then(r => r.json())
+      .then(data => setSelfImprovementStats(data.stats))
+      .catch(() => { /* best effort */ });
+  }, []);
 
   async function handleSave() {
     if (!form.name.trim()) return;
@@ -226,6 +242,34 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
         />
       ) : (
         <>
+          {/* Self-Improvement Stats Banner */}
+          {selfImprovementStats && (selfImprovementStats.auto_skills > 0 || selfImprovementStats.total_learnings > 0) && (
+            <div className="rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/5 via-pink-500/5 to-orange-500/5 p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Brain size={16} className="text-violet-400" />
+                <span className="text-sm font-medium text-pplx-text">Self-Improvement</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-violet-400">{selfImprovementStats.auto_skills}</p>
+                  <p className="text-xs text-pplx-muted">Auto-created Skills</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-emerald-400">{selfImprovementStats.avg_skill_performance > 0 ? `${(selfImprovementStats.avg_skill_performance * 100).toFixed(0)}%` : "—"}</p>
+                  <p className="text-xs text-pplx-muted">Avg Success Rate</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-blue-400">{selfImprovementStats.total_learnings}</p>
+                  <p className="text-xs text-pplx-muted">Learnings</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-amber-400">{selfImprovementStats.high_confidence_learnings}</p>
+                  <p className="text-xs text-pplx-muted">High-Confidence</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* My Skills grid */}
 
       {skills.length === 0 && !isCreating ? (
@@ -274,6 +318,25 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
               </div>
 
               <p className="text-xs text-pplx-muted leading-relaxed">{skill.description}</p>
+
+              {/* Auto-generated badge & performance indicators */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(skill as Skill & { auto_generated?: boolean }).auto_generated && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-[10px] font-medium text-violet-400">
+                    <Brain size={10} />
+                    Auto-created
+                  </span>
+                )}
+                {(skill as Skill & { usage_count?: number }).usage_count !== undefined && (skill as Skill & { usage_count?: number }).usage_count! > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-medium text-emerald-400">
+                    <TrendingUp size={10} />
+                    {(skill as Skill & { usage_count?: number }).usage_count} uses
+                    {(skill as Skill & { performance_score?: number }).performance_score !== undefined && (
+                      <> · {((skill as Skill & { performance_score?: number }).performance_score! * 100).toFixed(0)}%</>
+                    )}
+                  </span>
+                )}
+              </div>
 
               {skill.instructions && (
                 <div className="bg-pplx-bg rounded-lg p-2.5 border border-pplx-border">

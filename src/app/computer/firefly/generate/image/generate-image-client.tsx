@@ -71,7 +71,7 @@ const MODELS = [
   { id: "firefly-image-5", label: "Nova Image 5 (Preview)", description: "Latest model with enhanced detail", tag: "New" },
   { id: "flux-schnell", label: "FLUX Schnell", description: "Fast generation, good quality", tag: "Fast" },
   { id: "flux-pro", label: "FLUX 1.1 Pro", description: "Professional quality", tag: "Pro" },
-  { id: "dall-e-3", label: "DALL-E 3", description: "OpenAI's latest image model", tag: "OpenAI" },
+  { id: "gpt-image-1", label: "GPT Image 1", description: "OpenAI's latest image model", tag: "OpenAI" },
 ];
 
 const ASPECT_RATIOS = [

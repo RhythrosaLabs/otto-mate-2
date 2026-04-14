@@ -26,23 +26,11 @@ import {
 // Defines which studios can receive which mime categories.
 
 export const STUDIO_MAP = {
-  "image-studio": {
-    label: "Image Studio",
-    route: "/computer/image-studio",
-    icon: "✨",
-    accepts: ["image"] as HandoffMimeCategory[],
-  },
   dreamscape: {
     label: "Video Studio",
     route: "/computer/dreamscape/studio",
     icon: "🎬",
     accepts: ["image", "video", "audio"] as HandoffMimeCategory[],
-  },
-  "audio-studio": {
-    label: "Audio Studio",
-    route: "/computer/audio-studio",
-    icon: "🎵",
-    accepts: ["audio"] as HandoffMimeCategory[],
   },
   "3d-studio": {
     label: "3D Studio",

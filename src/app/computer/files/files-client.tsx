@@ -886,6 +886,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                   return (
                   <div key={file.id}
                     onClick={() => { setSelectedFile(selectedFile?.id === file.id ? null : file); setSelectedFolderId(null); }}
+                    onDoubleClick={() => setPreviewFile(file)}
                     onContextMenu={(e) => handleContextMenu(e, file.id)}
                     className={cn("flex items-center gap-3 px-4 py-[7px] cursor-pointer group border-b border-white/[0.03] transition-all",
                       selectedFile?.id === file.id ? "bg-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "hover:bg-white/[0.025]")}>
@@ -904,10 +905,8 @@ export function FilesClient({ files, initialFolders, stats }: {
                       {file.mime_type.split("/")[1]?.replace(/x-/, "") ?? file.mime_type}
                     </div>
                     <div className="w-24 flex-shrink-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {canPreview(file.mime_type, file.name) && (
-                        <button onClick={(e) => { e.stopPropagation(); setPreviewFile(file); }}
+                      <button onClick={(e) => { e.stopPropagation(); setPreviewFile(file); }}
                           className="p-1.5 rounded-md text-white/35 hover:text-white/85 hover:bg-white/[0.06] transition-all"><Eye size={12} /></button>
-                      )}
                       <a href={`/api/files/${file.task_id}/${file.name}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                         className="p-1.5 rounded-md text-white/35 hover:text-white/85 hover:bg-white/[0.06] transition-all"><ExternalLink size={12} /></a>
                       <a href={`/api/files/${file.task_id}/${file.name}?download=1`} onClick={(e) => e.stopPropagation()}
@@ -938,7 +937,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                       return (
                       <button key={file.id}
                         onClick={() => { setSelectedFile(selectedFile?.id === file.id ? null : file); setSelectedFolderId(null); }}
-                        onDoubleClick={() => canPreview(file.mime_type, file.name) && setPreviewFile(file)}
+                        onDoubleClick={() => setPreviewFile(file)}
                         onContextMenu={(e) => handleContextMenu(e, file.id)}
                         className={cn("flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all text-center relative",
                           selectedFile?.id === file.id ? "bg-white/[0.08] ring-1 ring-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" : "hover:bg-white/[0.04]")}>
@@ -980,12 +979,10 @@ export function FilesClient({ files, initialFolders, stats }: {
                           ))}
                         </div>
                         <div className="p-3 border-t border-white/[0.06] flex gap-2">
-                          {canPreview(selectedFile.mime_type, selectedFile.name) && (
-                            <button onClick={() => setPreviewFile(selectedFile)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs text-white/50 hover:text-white bg-white/[0.05] hover:bg-white/[0.09] transition-all">
-                              <Eye size={12} /> Preview
-                            </button>
-                          )}
+                          <button onClick={() => setPreviewFile(selectedFile)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs text-white/50 hover:text-white bg-white/[0.05] hover:bg-white/[0.09] transition-all">
+                            <Eye size={12} /> Preview
+                          </button>
                           <a href={`/api/files/${selectedFile.task_id}/${selectedFile.name}?download=1`}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs text-white/50 hover:text-white bg-white/[0.05] hover:bg-white/[0.09] transition-all">
                             <Download size={12} /> Save
@@ -1044,7 +1041,7 @@ export function FilesClient({ files, initialFolders, stats }: {
                   {filtered.map(file => (
                     <button key={file.id}
                       onClick={() => { setSelectedFile(selectedFile?.id === file.id ? null : file); setSelectedFolderId(null); }}
-                      onDoubleClick={() => canPreview(file.mime_type, file.name) && setPreviewFile(file)}
+                      onDoubleClick={() => setPreviewFile(file)}
                       onContextMenu={(e) => handleContextMenu(e, file.id)}
                       className={cn("flex flex-col items-center gap-1 p-2 rounded-lg transition-all text-center",
                         selectedFile?.id === file.id ? "bg-white/[0.08] ring-1 ring-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" : "hover:bg-white/[0.04]")}>

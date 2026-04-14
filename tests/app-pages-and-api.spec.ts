@@ -39,25 +39,21 @@ const NAV_PAGES: Array<{ path: string; heading: RegExp | string }> = [
   { path: "/computer", heading: /Ottomate|New Task|What would you like/i },
   { path: "/computer/tasks", heading: "Tasks" },
   { path: "/computer/skills", heading: /Skills/i },
-  { path: "/computer/gallery", heading: /Gallery/i },
   { path: "/computer/playground", heading: /Multimedia Playground/i },
   { path: "/computer/memory", heading: /Memory/i },
-  { path: "/computer/templates", heading: /Templates/i },
   { path: "/computer/scheduled", heading: /Scheduled/i },
   { path: "/computer/analytics", heading: /Analytics/i },
   { path: "/computer/audit", heading: /Audit/i },
-  { path: "/computer/pipelines", heading: /Pipelines/i },
   { path: "/computer/sessions", heading: /Sessions/i },
   { path: "/computer/settings", heading: /Settings/i },
   { path: "/computer/channels", heading: /Channels/i },
-  // app-builder h1 says "What do you want to build?"
-  { path: "/computer/app-builder", heading: /What do you want to build/i },
 ];
 
 // Pages that don't use h1 — tested separately below
 // /computer/files uses breadcrumb text "Files" (macOS Finder-style UI)
 // /computer/connectors uses h1 but has 193 connectors causing slow hydration
 // /computer/dreamscape uses <span> "Video Producer" not h1
+// /computer/app-builder is an iframe wrapper with no h1
 
 test.describe("Page load — all nav pages", () => {
   for (const { path, heading } of NAV_PAGES) {
@@ -77,7 +73,7 @@ test.describe("Page load — all nav pages", () => {
     await page.goto("/computer/tasks");
     await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
     // Check a sample of nav links are present somewhere on page (desktop sidebar)
-    const links = ["Tasks", "Skills", "Gallery", "Memory", "Settings"];
+    const links = ["Tasks", "Skills", "Memory", "Settings"];
     for (const label of links) {
       await expect(page.getByRole("link", { name: label }).first()).toBeVisible();
     }
@@ -101,6 +97,12 @@ test.describe("Page load — all nav pages", () => {
     // dreamscape uses a <span> inside a <header> for its title (not h1)
     // use header span to avoid matching the hidden sidebar nav link
     await expect(page.locator("header span").filter({ hasText: "Video Producer" })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("/computer/app-builder loads (iframe-based, no h1)", async ({ page }) => {
+    // app-builder is a placeholder div; the actual UI is bolt-diy in a persistent iframe
+    const res = await page.goto("/computer/app-builder", { waitUntil: "domcontentloaded" });
+    expect(res?.status()).toBe(200);
   });
 });
 
@@ -390,67 +392,8 @@ test.describe("Sessions API", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Templates API
+// 8. Templates API (REMOVED — consolidated into Skills)
 // ---------------------------------------------------------------------------
-
-test.describe("Templates API", () => {
-  test("GET /api/templates returns array", async ({ request }) => {
-    const { status, body } = await getJSON(request, "/api/templates");
-    expect(status).toBe(200);
-    expect(Array.isArray(body)).toBe(true);
-  });
-
-  test("POST /api/templates with action=create creates template", async ({ request }) => {
-    const { status, body } = await postJSON(request, "/api/templates", {
-      action: "create",
-      name: "E2E Template",
-      prompt: "Do something useful for E2E testing",
-      description: "E2E test template",
-      category: "productivity",
-    });
-    expect(status).toBe(201);
-    expect(body).toHaveProperty("id");
-    expect(body.name).toBe("E2E Template");
-  });
-
-  test("POST /api/templates with action=create and no name returns 400", async ({
-    request,
-  }) => {
-    const { status } = await postJSON(request, "/api/templates", {
-      action: "create",
-      prompt: "some prompt",
-    });
-    expect(status).toBe(400);
-  });
-
-  test("POST /api/templates with action=run and no template_id returns 400", async ({
-    request,
-  }) => {
-    const { status } = await postJSON(request, "/api/templates", {
-      action: "run",
-    });
-    expect(status).toBe(400);
-  });
-
-  test("POST /api/templates with action=run and unknown template_id returns 404", async ({
-    request,
-  }) => {
-    const { status } = await postJSON(request, "/api/templates", {
-      action: "run",
-      template_id: "00000000-0000-0000-0000-000000000000",
-    });
-    expect(status).toBe(404);
-  });
-
-  test("POST /api/templates with action=delete and no id returns 400", async ({
-    request,
-  }) => {
-    const { status } = await postJSON(request, "/api/templates", {
-      action: "delete",
-    });
-    expect(status).toBe(400);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 9. Scheduled Tasks API
@@ -503,42 +446,8 @@ test.describe("Scheduled Tasks API", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. Gallery API
+// 10. Gallery API (REMOVED)
 // ---------------------------------------------------------------------------
-
-test.describe("Gallery API", () => {
-  test("GET /api/gallery returns array", async ({ request }) => {
-    const { status, body } = await getJSON(request, "/api/gallery");
-    expect(status).toBe(200);
-    expect(Array.isArray(body)).toBe(true);
-  });
-
-  test("POST /api/gallery creates gallery item", async ({ request }) => {
-    const { status, body } = await postJSON(request, "/api/gallery", {
-      title: "E2E Gallery Item",
-      prompt: "Create something for E2E test",
-      description: "Test description",
-      category: "coding",
-    });
-    expect(status).toBe(201);
-    expect(body).toHaveProperty("id");
-    expect(body.title).toBe("E2E Gallery Item");
-  });
-
-  test("POST /api/gallery without title returns 400", async ({ request }) => {
-    const { status } = await postJSON(request, "/api/gallery", {
-      prompt: "no title",
-    });
-    expect(status).toBe(400);
-  });
-
-  test("POST /api/gallery without prompt returns 400", async ({ request }) => {
-    const { status } = await postJSON(request, "/api/gallery", {
-      title: "no prompt",
-    });
-    expect(status).toBe(400);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 11. Analytics API
@@ -584,38 +493,8 @@ test.describe("Audit API", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 13. Pipelines API
+// 13. Pipelines API (REMOVED — consolidated into Skills)
 // ---------------------------------------------------------------------------
-
-test.describe("Pipelines API", () => {
-  test("GET /api/pipelines returns pipelines array", async ({ request }) => {
-    const { status, body } = await getJSON(request, "/api/pipelines");
-    expect(status).toBe(200);
-    expect(body).toHaveProperty("pipelines");
-    expect(Array.isArray(body.pipelines)).toBe(true);
-  });
-
-  test("POST /api/pipelines creates pipeline", async ({ request }) => {
-    const { status, body } = await postJSON(request, "/api/pipelines", {
-      name: "E2E Pipeline",
-      description: "Created by E2E tests",
-    });
-    expect(status).toBe(201);
-    expect(body).toHaveProperty("id");
-  });
-
-  test("POST /api/pipelines without name returns 400", async ({ request }) => {
-    const { status } = await postJSON(request, "/api/pipelines", {
-      description: "no name",
-    });
-    expect(status).toBe(400);
-  });
-
-  test("DELETE /api/pipelines without id returns 400", async ({ request }) => {
-    const res = await request.delete("/api/pipelines");
-    expect(res.status()).toBe(400);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 14. Connectors API
@@ -651,6 +530,7 @@ test.describe("Connectors API", () => {
 
 test.describe("Files API", () => {
   test("GET /api/files returns 200 or empty list", async ({ request }) => {
+    test.setTimeout(60_000);
     // Scanning 50+ task-file directories can be slow mid-suite; use a generous timeout
     const res = await request.get("/api/files", { timeout: 45_000 });
     expect([200, 404]).toContain(res.status());
@@ -684,10 +564,11 @@ test.describe("Tasks page UI", () => {
   test("tasks page shows status filter buttons", async ({ page }) => {
     await page.goto("/computer/tasks");
     await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
+    // "All" is always visible; others only show when count > 0
     await expect(page.getByRole("button", { name: /All/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Running/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Completed/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Failed/ })).toBeVisible();
+    // Verify at least one filter button renders (any status with tasks)
+    const filterBar = page.locator(".flex.items-center.gap-2.mb-4");
+    await expect(filterBar).toBeVisible();
   });
 
   test("tasks search input filters tasks by typing", async ({ page }) => {
@@ -819,22 +700,8 @@ test.describe("Sessions page UI", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 22. Templates page UI
+// 22. Templates page UI (REMOVED — consolidated into Skills)
 // ---------------------------------------------------------------------------
-
-test.describe("Templates page UI", () => {
-  test("templates page shows heading", async ({ page }) => {
-    await page.goto("/computer/templates");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: /Templates/i })).toBeVisible();
-  });
-
-  test("templates page shows All, Productivity, etc. filter tabs", async ({ page }) => {
-    await page.goto("/computer/templates");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    await expect(page.getByRole("button", { name: /All/i }).first()).toBeVisible();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 23. Analytics page UI
@@ -849,17 +716,8 @@ test.describe("Analytics page UI", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 24. Gallery page UI
+// 24. Gallery page UI (REMOVED)
 // ---------------------------------------------------------------------------
-
-test.describe("Gallery page UI", () => {
-  test("gallery page shows heading and search", async ({ page }) => {
-    await page.goto("/computer/gallery");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: /Gallery/i })).toBeVisible();
-    await expect(page.getByPlaceholder(/Search gallery/i)).toBeVisible();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 25. Connectors page UI
@@ -1548,53 +1406,6 @@ test.describe("Scheduled Tasks API (extended)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 57. Gallery DELETE with valid ID
-// ---------------------------------------------------------------------------
-
-test.describe("Gallery API (extended)", () => {
-  test("POST /api/gallery creates item and GET returns it", async ({ request }) => {
-    // Gallery has GET + POST only (no DELETE handler)
-    const createRes = await request.post("/api/gallery", {
-      data: {
-        title: "Lifecycle Gallery Item",
-        prompt: "A beautiful sunset",
-        url: "https://example.com/test.png",
-        provider: "test",
-        model: "test-model",
-      },
-    });
-    expect([200, 201]).toContain(createRes.status());
-    const item = await createRes.json() as { id: string; title: string };
-    expect(item.title).toBe("Lifecycle Gallery Item");
-
-    // Verify it appears in GET
-    const listRes = await request.get("/api/gallery");
-    expect(listRes.status()).toBe(200);
-    const list = await listRes.json() as Array<{ id: string }>;
-    expect(list.some((g) => g.id === item.id)).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 58. Pipelines DELETE with valid ID
-// ---------------------------------------------------------------------------
-
-test.describe("Pipelines API (extended)", () => {
-  test("full pipeline lifecycle: create → delete", async ({ request }) => {
-    const createRes = await request.post("/api/pipelines", {
-      data: { name: "Lifecycle Pipeline", steps: [] },
-    });
-    expect([200, 201]).toContain(createRes.status());
-    const pipeline = await createRes.json() as { id: string };
-    const pipelineId = pipeline.id;
-
-    // DELETE uses query param ?id=, not request body
-    const deleteRes = await request.delete(`/api/pipelines?id=${pipelineId}`);
-    expect([200, 204]).toContain(deleteRes.status());
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 59. Tasks DELETE / full lifecycle
 // ---------------------------------------------------------------------------
 
@@ -1652,42 +1463,6 @@ test.describe("Skills API (extended)", () => {
     // Delete
     const deleteRes = await request.delete(`/api/skills/${skillId}`);
     expect([200, 204]).toContain(deleteRes.status());
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 61. Templates full lifecycle
-// ---------------------------------------------------------------------------
-
-test.describe("Templates API (extended)", () => {
-  test("full template lifecycle: create → run → delete", async ({ request }) => {
-    const createRes = await request.post("/api/templates", {
-      data: {
-        action: "create",
-        name: "Lifecycle Template",
-        prompt: "Summarise {{input}}",
-        description: "A lifecycle test template",
-        category: "test",
-        tags: ["lifecycle"],
-      },
-    });
-    expect([200, 201]).toContain(createRes.status());
-    const tmpl = await createRes.json() as { id?: string; template?: { id: string } };
-    const templateId = tmpl.id ?? tmpl.template?.id ?? "";
-
-    if (templateId) {
-      // Run (creates a task from the template)
-      const runRes = await request.post("/api/templates", {
-        data: { action: "run", template_id: templateId, variables: {} },
-      });
-      expect([200, 201]).toContain(runRes.status());
-
-      // Delete — action=delete requires template_id, not id
-      const deleteRes = await request.post("/api/templates", {
-        data: { action: "delete", template_id: templateId },
-      });
-      expect([200, 204]).toContain(deleteRes.status());
-    }
   });
 });
 
@@ -1819,9 +1594,9 @@ test.describe("Tasks page — interactions", () => {
     await page.goto("/computer/tasks");
     await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
     for (const label of ["Running", "Completed", "Failed", "All"]) {
-      const btn = page.getByRole("button", { name: new RegExp(label, "i") });
+      const btn = page.getByRole("button", { name: new RegExp(label, "i") }).first();
       if (await btn.isVisible()) {
-        await btn.first().click();
+        await btn.click();
         await page.waitForTimeout(150);
       }
     }
@@ -1847,16 +1622,13 @@ test.describe("Settings page — interactions", () => {
   test("max iterations input accepts numeric value", async ({ page }) => {
     await page.goto("/computer/settings");
     await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const iterInput = page.locator("input[type='number'], input[type='text']")
-      .filter({ hasText: /iter/i });
-    // Try by label proximity — look for input near "Max Agent Iterations"
+    // Look for input near "Max Agent Iterations" label
     const label = page.getByText("Max Agent Iterations");
     if (await label.isVisible()) {
-      // The input is usually nearby
       const input = page.locator("input[type='number']").first();
       if (await input.isVisible()) {
-        await input.fill("5");
-        await expect(input).toHaveValue("5");
+        await input.fill("25");
+        await expect(input).toHaveValue("25");
       }
     }
   });
@@ -2041,107 +1813,6 @@ test.describe("Sessions page — interactions", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 71. Templates page — category filters, template selection, user input
-// ---------------------------------------------------------------------------
-
-test.describe("Templates page — interactions", () => {
-  test("category filter tabs filter the template list", async ({ page }) => {
-    await page.goto("/computer/templates");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const allBtn = page.getByRole("button", { name: /^All$/i }).first();
-    await allBtn.click();
-    await page.waitForTimeout(200);
-    // Click a category if any exist
-    const catBtns = page.locator("button").filter({ hasText: /Research|Writing|Productivity|Development/i });
-    const count = await catBtns.count();
-    if (count > 0) {
-      await catBtns.first().click();
-      await page.waitForTimeout(200);
-      // Click All again to reset
-      await allBtn.click();
-    }
-    await expect(page.locator("body")).toBeVisible();
-  });
-
-  test("New Template button opens create form", async ({ page }) => {
-    await page.goto("/computer/templates");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const newBtn = page.locator("button").filter({ hasText: /New Template|Create Template|Create/i }).first();
-    if (await newBtn.isVisible()) {
-      await newBtn.click();
-      await page.waitForTimeout(300);
-      // A form/modal with name input should appear
-      const nameInput = page.locator("input[placeholder*='name' i], input[placeholder*='template' i]").first();
-      if (await nameInput.isVisible({ timeout: 3_000 })) {
-        await nameInput.fill("Test Template");
-        await expect(nameInput).toHaveValue("Test Template");
-      }
-    }
-  });
-
-  test("clicking a template card selects it and shows user input", async ({ page, request }) => {
-    // Ensure at least one template exists
-    const createRes = await request.post("/api/templates", {
-      data: {
-        action: "create",
-        name: "UI Tab Test Template",
-        prompt: "Do {{task}}",
-        description: "test",
-        category: "test",
-      },
-    });
-
-    await page.goto("/computer/templates");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-
-    const card = page.locator("[role='button'], button, div[class*='cursor-pointer']")
-      .filter({ hasText: "UI Tab Test Template" }).first();
-    if (await card.isVisible({ timeout: 3_000 })) {
-      await card.click();
-      // User input textarea should appear
-      const inputArea = page.getByPlaceholder(/Type your specific input/i);
-      await expect(inputArea).toBeVisible({ timeout: 5_000 });
-    }
-
-    // Cleanup
-    const tmpl = await createRes.json() as { id?: string };
-    if (tmpl.id) {
-      await request.post("/api/templates", { data: { action: "delete", template_id: tmpl.id } });
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 72. Gallery page — category filters, search
-// ---------------------------------------------------------------------------
-
-test.describe("Gallery page — interactions", () => {
-  test("gallery category filter buttons work", async ({ page }) => {
-    await page.goto("/computer/gallery");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    // Find category tabs (All, Images, Videos, etc.)
-    const catBtns = page.locator("button").filter({ hasText: /^All$|Images|Videos|Audio/i });
-    const count = await catBtns.count();
-    for (let i = 0; i < Math.min(count, 4); i++) {
-      await catBtns.nth(i).click();
-      await page.waitForTimeout(150);
-    }
-    await expect(page.locator("body")).toBeVisible();
-  });
-
-  test("gallery search filters items", async ({ page }) => {
-    await page.goto("/computer/gallery");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const search = page.getByPlaceholder(/Search gallery/i);
-    await search.fill("test_zzz_no_match");
-    await page.waitForTimeout(300);
-    await expect(search).toHaveValue("test_zzz_no_match");
-    await search.clear();
-    await expect(search).toHaveValue("");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 73. Scheduled tasks page — form, name/prompt fields, schedule types
 // ---------------------------------------------------------------------------
 
@@ -2200,47 +1871,6 @@ test.describe("Scheduled tasks page — interactions", () => {
       await page.waitForTimeout(200);
       await expect(nameInput).not.toBeVisible();
     }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 74. Pipelines page — create, add node, back, run
-// ---------------------------------------------------------------------------
-
-test.describe("Pipelines page — interactions", () => {
-  test("New Pipeline button shows create form or opens pipeline", async ({ page }) => {
-    await page.goto("/computer/pipelines");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const newBtn = page.locator("button").filter({ hasText: /New Pipeline|Create/i }).first();
-    await expect(newBtn).toBeVisible();
-    await newBtn.click();
-    await page.waitForTimeout(300);
-    // Should show a create form or an empty pipeline editor
-    await expect(page.locator("body")).toBeVisible();
-  });
-
-  test("existing pipeline: clicking shows editor with Run button", async ({ page, request }) => {
-    // Create a pipeline via API
-    const createRes = await request.post("/api/pipelines", {
-      data: { name: "UI Test Pipeline", steps: [] },
-    });
-    expect([200, 201]).toContain(createRes.status());
-    const pipeline = await createRes.json() as { id: string };
-
-    await page.goto("/computer/pipelines");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    // Click the pipeline card
-    const card = page.locator("div, button").filter({ hasText: "UI Test Pipeline" }).first();
-    if (await card.isVisible({ timeout: 3_000 })) {
-      await card.click();
-      await page.waitForTimeout(300);
-      // Should show Run Pipeline button or Add Step
-      const runBtn = page.locator("button").filter({ hasText: /Run Pipeline|Run|Add Step|Add Node/i }).first();
-      await expect(runBtn).toBeVisible({ timeout: 5_000 });
-    }
-
-    // Cleanup
-    await request.delete("/api/pipelines", { data: { id: pipeline.id } });
   });
 });
 
@@ -2317,46 +1947,11 @@ test.describe("Channels page — interactions", () => {
   test("Copy webhook URL buttons are present", async ({ page }) => {
     await page.goto("/computer/channels");
     await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    // The copy button uses an icon (no text); it has title="Copy full webhook URL"
-    const copyBtns = page.locator("button[title*='Copy' i], button[title*='copy' i]");
-    const count = await copyBtns.count();
-    // Should be at least one copy button (Discord, Slack, Telegram)
+    // Copy buttons only appear after channel status API calls finish loading
+    const copyBtn = page.locator("button[title='Copy full webhook URL']").first();
+    await copyBtn.waitFor({ state: "visible", timeout: 15_000 });
+    const count = await page.locator("button[title='Copy full webhook URL']").count();
     expect(count).toBeGreaterThanOrEqual(1);
-    await copyBtns.first().click();
-    await page.waitForTimeout(200);
-    await expect(page.locator("body")).toBeVisible();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 78. App Builder page — prompt, reset, device buttons
-// ---------------------------------------------------------------------------
-
-test.describe("App Builder page — interactions", () => {
-  test("prompt textarea accepts text input", async ({ page }) => {
-    await page.goto("/computer/app-builder");
-    await page.waitForSelector("textarea, h1", { state: "visible", timeout: 30_000 });
-    const textarea = page.locator("textarea").first();
-    if (await textarea.isVisible()) {
-      await textarea.fill("Build me a todo app");
-      await expect(textarea).toHaveValue("Build me a todo app");
-    }
-  });
-
-  test("device selector buttons (mobile/tablet/desktop) are clickable", async ({ page }) => {
-    await page.goto("/computer/app-builder");
-    await page.waitForSelector("h1", { state: "visible", timeout: 30_000 });
-    const deviceBtns = page.locator("button").filter({
-      hasText: /Mobile|Tablet|Desktop|Phone/i,
-    });
-    const count = await deviceBtns.count();
-    if (count > 0) {
-      for (let i = 0; i < Math.min(count, 3); i++) {
-        await deviceBtns.nth(i).click();
-        await page.waitForTimeout(100);
-      }
-      await expect(page.locator("body")).toBeVisible();
-    }
   });
 });
 

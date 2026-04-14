@@ -199,11 +199,11 @@ async function generateWithOpenAI(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
 
-  // Map size to DALL-E 3 supported sizes
+  // Map size to gpt-image-1 supported sizes
   const ratio = size.width / size.height;
   let dalleSize = "1024x1024";
-  if (ratio > 1.3) dalleSize = "1792x1024";
-  else if (ratio < 0.77) dalleSize = "1024x1792";
+  if (ratio > 1.3) dalleSize = "1536x1024";
+  else if (ratio < 0.77) dalleSize = "1024x1536";
 
   const fullPrompt = negativePrompt
     ? `${prompt}. Avoid: ${negativePrompt}`
@@ -220,18 +220,18 @@ async function generateWithOpenAI(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "dall-e-3",
+        model: "gpt-image-1",
         prompt: fullPrompt,
         n: 1,
         size: dalleSize,
-        quality: quality === "hd" ? "hd" : "standard",
+        quality: quality === "hd" ? "high" : "medium",
         response_format: "url",
       }),
     });
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`OpenAI DALL-E error: ${err}`);
+      throw new Error(`OpenAI image generation error: ${err}`);
     }
 
     const data = await res.json();
@@ -241,8 +241,8 @@ async function generateWithOpenAI(
   }
 
   // Download external URLs to local storage so they persist
-  const localUrls = await downloadExternalImages(results, taskId, "dalle");
-  return { urls: localUrls, model: "dall-e-3" };
+  const localUrls = await downloadExternalImages(results, taskId, "openai");
+  return { urls: localUrls, model: "gpt-image-1" };
 }
 
 async function generateWithReplicate(
@@ -265,6 +265,7 @@ async function generateWithReplicate(
 
   switch (modelName) {
     case "dall-e-3":
+    case "gpt-image-1":
     case "flux-schnell":
       replicateModel = "black-forest-labs/flux-schnell";
       input = {
@@ -474,7 +475,7 @@ export async function POST(req: NextRequest) {
     let result: { urls: string[]; model: string };
 
     const knownModels = new Set([
-      "dall-e-3", "flux-schnell", "flux-pro", "flux-2-pro",
+      "dall-e-3", "gpt-image-1", "flux-schnell", "flux-pro", "flux-2-pro",
       "firefly-image-4", "firefly-image-4-ultra", "firefly-image-5",
     ]);
 

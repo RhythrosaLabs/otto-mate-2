@@ -4,15 +4,21 @@ import path from "path";
 
 export const dynamic = "force-dynamic";
 
-const ENV_FILE = path.resolve(process.cwd(), ".env.local");
+const ENV_LOCAL = path.resolve(process.cwd(), ".env.local");
+const ENV_MAIN = path.resolve(process.cwd(), ".env");
+const ENV_FILES = [
+  ENV_LOCAL,
+  ENV_MAIN,
+  path.resolve(process.cwd(), ".env.development.local"),
+];
 
 /**
- * Read the current .env.local file into a Map of key→value
+ * Read a single env file into a Map of key→value
  */
-function readEnvFile(): Map<string, string> {
+function readSingleEnvFile(filePath: string): Map<string, string> {
   const entries = new Map<string, string>();
-  if (!fs.existsSync(ENV_FILE)) return entries;
-  const content = fs.readFileSync(ENV_FILE, "utf-8");
+  if (!fs.existsSync(filePath)) return entries;
+  const content = fs.readFileSync(filePath, "utf-8");
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
@@ -26,12 +32,27 @@ function readEnvFile(): Map<string, string> {
 }
 
 /**
- * Write the Map back to .env.local, preserving comments and blank lines
+ * Read all env files (.env.local, .env, .env.development.local) merged.
+ * .env.local keys take precedence, matching Next.js priority.
  */
-function writeEnvFile(updates: Record<string, string>): void {
+function readEnvFile(): Map<string, string> {
+  const merged = new Map<string, string>();
+  // Read in reverse priority so higher-priority files overwrite
+  for (let i = ENV_FILES.length - 1; i >= 0; i--) {
+    const entries = readSingleEnvFile(ENV_FILES[i]);
+    for (const [k, v] of entries) merged.set(k, v);
+  }
+  return merged;
+}
+
+/**
+ * Write keys to a single env file, preserving comments and blank lines.
+ * Updates existing keys in-place, appends new keys at the end.
+ */
+function writeSingleEnvFile(filePath: string, updates: Record<string, string>): void {
   let content = "";
-  if (fs.existsSync(ENV_FILE)) {
-    content = fs.readFileSync(ENV_FILE, "utf-8");
+  if (fs.existsSync(filePath)) {
+    content = fs.readFileSync(filePath, "utf-8");
   }
 
   const lines = content.split("\n");
@@ -58,29 +79,42 @@ function writeEnvFile(updates: Record<string, string>): void {
     }
   }
 
-  fs.writeFileSync(ENV_FILE, newLines.join("\n"), "utf-8");
+  fs.writeFileSync(filePath, newLines.join("\n"), "utf-8");
 }
 
 /**
- * DELETE a key from .env.local (set it to empty)
+ * Write keys to both .env.local and .env so they're universally accessible.
+ * .env.local takes precedence at runtime (Next.js convention),
+ * .env serves as the persistent canonical source.
  */
-function removeEnvKey(key: string): void {
-  if (!fs.existsSync(ENV_FILE)) return;
-  const content = fs.readFileSync(ENV_FILE, "utf-8");
-  const lines = content.split("\n");
-  const newLines = lines.map((line) => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) return line;
-    const idx = trimmed.indexOf("=");
-    if (idx === -1) return line;
-    const k = trimmed.slice(0, idx).trim();
-    if (k === key) return `${k}=`;
-    return line;
-  });
-  fs.writeFileSync(ENV_FILE, newLines.join("\n"), "utf-8");
+function writeEnvFile(updates: Record<string, string>): void {
+  writeSingleEnvFile(ENV_LOCAL, updates);
+  writeSingleEnvFile(ENV_MAIN, updates);
 }
 
-// POST /api/connectors/env — save API key(s) to .env.local
+/**
+ * DELETE a key — clears it in .env.local and .env
+ */
+function removeEnvKey(key: string): void {
+  for (const envFile of ENV_FILES) {
+    if (!fs.existsSync(envFile)) continue;
+    const content = fs.readFileSync(envFile, "utf-8");
+    const lines = content.split("\n");
+    let changed = false;
+    const newLines = lines.map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return line;
+      const idx = trimmed.indexOf("=");
+      if (idx === -1) return line;
+      const k = trimmed.slice(0, idx).trim();
+      if (k === key) { changed = true; return `${k}=`; }
+      return line;
+    });
+    if (changed) fs.writeFileSync(envFile, newLines.join("\n"), "utf-8");
+  }
+}
+
+// POST /api/connectors/env — save API key(s) to .env.local and .env
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as { keys: Record<string, string> };
@@ -107,7 +141,7 @@ export async function POST(req: NextRequest) {
       process.env[k] = v;
     }
 
-    return NextResponse.json({ success: true, keys_saved: Object.keys(validKeys) });
+    return NextResponse.json({ success: true, keys_saved: Object.keys(validKeys), files: [".env.local", ".env"] });
   } catch (err) {
     return NextResponse.json(
       { error: "Failed to save env keys. Check server logs for details." },

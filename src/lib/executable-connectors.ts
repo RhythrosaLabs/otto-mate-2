@@ -3,6 +3,59 @@
 // with standardized interfaces, webhook triggers, and expression resolution.
 // Inspired by n8n-io/n8n (180k stars).
 
+import fs from "fs";
+import path from "path";
+
+// ─── Env Key Helper ───────────────────────────────────────────────────────────
+// process.env only loads env files at Next.js startup. Keys added at runtime
+// via the connectors UI are written to .env.local AND set in process.env,
+// but if the server restarts or keys were set before the server started,
+// we need a fallback that reads env files directly.
+// Searches: .env.local → .env → .env.development.local (Next.js priority order)
+
+const ENV_FILES = [
+  ".env.local",
+  ".env",
+  ".env.development.local",
+];
+
+function readKeyFromEnvFile(filePath: string, key: string): string | undefined {
+  try {
+    if (!fs.existsSync(filePath)) return undefined;
+    const content = fs.readFileSync(filePath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const idx = trimmed.indexOf("=");
+      if (idx === -1) continue;
+      const k = trimmed.slice(0, idx).trim();
+      if (k === key) {
+        const v = trimmed.slice(idx + 1).trim();
+        return v || undefined;
+      }
+    }
+  } catch { /* ignore read errors */ }
+  return undefined;
+}
+
+function getEnvKey(key: string): string | undefined {
+  // Fast path: already in memory
+  const val = process.env[key];
+  if (val) return val;
+
+  // Fallback: search all env files on disk
+  const cwd = process.cwd();
+  for (const file of ENV_FILES) {
+    const v = readKeyFromEnvFile(path.resolve(cwd, file), key);
+    if (v) {
+      // Cache it in process.env so next lookup is fast
+      process.env[key] = v;
+      return v;
+    }
+  }
+  return undefined;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ConnectorExecution {
@@ -31,7 +84,6 @@ export interface WebhookTrigger {
   event: string;
   url: string;
   active: boolean;
-  pipeline_id?: string;   // Optional: auto-trigger a pipeline
   task_prompt?: string;    // Optional: auto-create a task
 }
 
@@ -60,10 +112,10 @@ export function resolveExpressions(
         return getNestedValue(context, inputMatch[1])?.toString() || "";
       }
 
-      // Support $env.VAR patterns
+      // Support $env.VAR patterns (with .env.local fallback)
       const envMatch = expr.match(/\$env\.(.+)/);
       if (envMatch) {
-        return process.env[envMatch[1]] || "";
+        return getEnvKey(envMatch[1]) || "";
       }
 
       // Direct context lookup
@@ -371,8 +423,8 @@ export async function executeConnectorAction(
     }
   }
 
-  // Get auth credentials
-  const apiKey = process.env[connector.env_key];
+  // Get auth credentials (check process.env + .env.local fallback)
+  const apiKey = getEnvKey(connector.env_key);
   if (!apiKey && connector.auth_type !== "none") {
     return { success: false, data: null, error: `${connector.name} not configured. Set ${connector.env_key} in .env.local` };
   }
@@ -578,7 +630,7 @@ async function executeStripeAction(action: string, params: Record<string, unknow
 export function processWebhookPayload(
   trigger: WebhookTrigger,
   payload: unknown
-): { should_execute: boolean; prompt?: string; pipeline_id?: string } {
+): { should_execute: boolean; prompt?: string } {
   if (!trigger.active) return { should_execute: false };
 
   return {
@@ -586,7 +638,6 @@ export function processWebhookPayload(
     prompt: trigger.task_prompt
       ? resolveExpressions(trigger.task_prompt, { payload: payload as Record<string, unknown> })
       : `Webhook received from ${trigger.connector_id}: ${JSON.stringify(payload).slice(0, 500)}`,
-    pipeline_id: trigger.pipeline_id,
   };
 }
 
@@ -602,7 +653,7 @@ export function listConnectorActions(connectorId?: string): string {
   }
 
   return connectors.map(c => {
-    const configured = process.env[c.env_key] ? "✅" : "❌";
+    const configured = getEnvKey(c.env_key) ? "✅" : "❌";
     const actions = c.actions.map(a => {
       const requiredParams = a.params.filter(p => p.required).map(p => p.name);
       return `  - ${a.id}: ${a.name} (${requiredParams.length > 0 ? `requires: ${requiredParams.join(", ")}` : "no required params"})`;

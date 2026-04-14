@@ -134,7 +134,7 @@ const FEATURED_BY_CATEGORY: Record<string, ModelResult[]> = {
     { id: "stabilityai/stable-diffusion-xl-base-1.0", fullName: "stabilityai/stable-diffusion-xl-base-1.0", label: "SDXL (HF)", description: "SDXL on HuggingFace Inference", provider: "huggingface", tag: "HF", featured: true },
   ],
   "video-generation": [
-    { id: "minimax/video-01", fullName: "minimax/video-01", label: "Minimax Video-01", description: "High quality text-to-video", provider: "replicate", tag: "Best", featured: true },
+    { id: "minimax/video-01-live", fullName: "minimax/video-01-live", label: "Minimax Video-01-Live", description: "High quality text-to-video", provider: "replicate", tag: "Best", featured: true },
     { id: "tencent/hunyuan-video", fullName: "tencent/hunyuan-video", label: "Hunyuan Video", description: "Tencent's video generation model", provider: "replicate", tag: "Quality", featured: true },
     { id: "wavespeedai/wan-2.1-t2v-480p", fullName: "wavespeedai/wan-2.1-t2v-480p", label: "Wan 2.1 (480p)", description: "Fast video gen by WaveSpeed", provider: "replicate", tag: "Fast", featured: true },
     { id: "kwaivgi/kling-v2.0-master-text-to-video", fullName: "kwaivgi/kling-v2.0-master-text-to-video", label: "Kling v2.0", description: "Cinematic text-to-video", provider: "replicate", tag: "Cinematic", featured: true },
@@ -155,12 +155,12 @@ const FEATURED_BY_CATEGORY: Record<string, ModelResult[]> = {
   general: [
     { id: "black-forest-labs/flux-schnell", fullName: "black-forest-labs/flux-schnell", label: "FLUX Schnell", description: "Fast image generation", provider: "replicate", tag: "Image", featured: true },
     { id: "black-forest-labs/flux-2-pro", fullName: "black-forest-labs/flux-2-pro", label: "FLUX 2 Pro", description: "Highest quality images", provider: "replicate", tag: "Image ★", featured: true },
-    { id: "minimax/video-01", fullName: "minimax/video-01", label: "Minimax Video", description: "Text to video", provider: "replicate", tag: "Video", featured: true },
+    { id: "minimax/video-01-live", fullName: "minimax/video-01-live", label: "Minimax Video", description: "Text to video", provider: "replicate", tag: "Video", featured: true },
     { id: "kwaivgi/kling-v2.0-master-text-to-video", fullName: "kwaivgi/kling-v2.0-master-text-to-video", label: "Kling v2.0", description: "Cinematic video", provider: "replicate", tag: "Video ★", featured: true },
     { id: "meta/musicgen", fullName: "meta/musicgen", label: "MusicGen", description: "Music & audio generation", provider: "replicate", tag: "Audio", featured: true },
     { id: "jaaari/kokoro-82m", fullName: "jaaari/kokoro-82m", label: "Kokoro TTS", description: "Text to speech", provider: "replicate", tag: "Speech", featured: true },
     { id: "stability-ai/triposr", fullName: "stability-ai/triposr", label: "TripoSR", description: "Image to 3D", provider: "replicate", tag: "3D", featured: true },
-    { id: "meta/meta-llama-3-70b-instruct", fullName: "meta/meta-llama-3-70b-instruct", label: "Llama 3 70B", description: "Meta's open LLM", provider: "replicate", tag: "LLM", featured: true },
+    { id: "meta/meta-llama-4-scout-instruct", fullName: "meta/meta-llama-4-scout-instruct", label: "Llama 4 Scout", description: "Meta's open LLM", provider: "replicate", tag: "LLM", featured: true },
     { id: "recraft-ai/recraft-v3-svg", fullName: "recraft-ai/recraft-v3-svg", label: "Recraft SVG", description: "Vector SVG generation", provider: "replicate", tag: "Vector", featured: true },
   ],
 };

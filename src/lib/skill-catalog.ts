@@ -3271,6 +3271,1794 @@ If no email provider is connected, save the HTML email as a downloadable file.`,
     tags: ["email", "marketing", "sendgrid", "campaign", "newsletter", "html-email"],
     tools: ["connector_call", "write_file"],
   },
+
+  // ── Job Hunting & Career Automation (OpenClaw/Hermes-inspired) ─────────
+  {
+    id: "mkt-job-hunter-pro",
+    name: "Job Hunter Pro",
+    description: "End-to-end autonomous job hunting: research openings, tailor resumes, write cover letters, and auto-apply via browser automation.",
+    instructions: `Execute the full job hunting pipeline autonomously:
+
+1. **Understand the candidate** — Ask for or retrieve from memory: target role, years of experience, key skills, salary range, location preferences (remote/hybrid/onsite), and industries of interest.
+2. **Research openings** — Use web_search to find relevant job postings across LinkedIn, Indeed, Glassdoor, AngelList, and company career pages. Search at least 5 different sources. Collect: title, company, location, salary (if listed), requirements, application URL.
+3. **Score & rank matches** — Rate each job 1-10 based on: skill match, salary alignment, culture fit signals, growth potential. Present a ranked table to the user.
+4. **Tailor the resume** — For each target job, customize the resume:
+   - Mirror keywords from the job description (ATS optimization)
+   - Quantify achievements (%, $, scale numbers)
+   - Reorder bullet points to prioritize relevant experience
+   - Keep to 1-2 pages max
+   - Output as clean HTML or Markdown
+5. **Write cover letters** — For each application:
+   - Opening hook referencing something specific about the company
+   - 2-3 paragraphs mapping your experience to their requirements
+   - Closing with enthusiasm and clear CTA
+   - Personalize for each company — NO generic letters
+6. **Apply** — Use browse_web or computer_use to navigate to application pages, fill in fields, upload resume, paste cover letter, and submit. Log each application with status.
+7. **Track applications** — Save a tracking spreadsheet: Company, Role, Date Applied, Status, Follow-up Date, Notes. Store in memory for ongoing tracking.
+8. **Follow-up reminders** — Create scheduled tasks for follow-ups at 1-week and 2-week marks.
+
+ATS Optimization Rules:
+- Use standard section headers (Experience, Education, Skills)
+- Include exact keywords from the job description
+- Avoid tables, columns, headers/footers (ATS can't parse them)
+- Use standard fonts and simple formatting`,
+    category: "automation",
+    icon: "🎯",
+    author: "Ottomate",
+    downloads: 22400,
+    rating: 4.9,
+    tags: ["job-hunting", "resume", "cover-letter", "career", "apply", "ats", "linkedin"],
+    tools: ["web_search", "scrape_url", "browse_web", "write_file", "memory_store", "memory_recall", "computer_use"],
+    max_steps: 50,
+  },
+  {
+    id: "mkt-linkedin-optimizer",
+    name: "LinkedIn Profile Optimizer",
+    description: "Optimize LinkedIn profiles for maximum visibility: headline, summary, experience bullets, skills, and keyword density for recruiter search.",
+    instructions: `Optimize a LinkedIn profile for maximum recruiter visibility:
+
+1. **Audit current profile** — If the user provides their LinkedIn URL, use browse_web to scrape current profile data. Otherwise, ask for their current headline, summary, and experience.
+2. **Headline optimization** — Create 3 headline variants (120 chars max):
+   - Include target role title + key skill + value proposition
+   - Example: "Senior Full-Stack Engineer | React & Node.js | Building Scalable SaaS Products"
+3. **About/Summary section** — Write a compelling 2000-char summary:
+   - First-person voice, conversational but professional
+   - Hook in first 2 lines (visible before "see more")
+   - Include 5-8 target keywords naturally
+   - End with a CTA (open to opportunities, let's connect)
+4. **Experience bullets** — Rewrite each role with:
+   - Action verb + specific achievement + measurable result
+   - Include keywords recruiters search for
+   - 3-5 bullets per role, most impressive first
+5. **Skills section** — Recommend top 50 skills ordered by relevance to target role, focusing on skills that appear in job descriptions.
+6. **Keyword density report** — Analyze how many times target keywords appear and where. Aim for 10+ natural keyword placements.
+7. **Engagement strategy** — Suggest 5 post ideas to boost profile visibility, comment templates for industry leaders, and connection request templates.`,
+    category: "writing",
+    icon: "💼",
+    author: "Ottomate",
+    downloads: 18700,
+    rating: 4.8,
+    tags: ["linkedin", "profile", "career", "networking", "personal-branding", "recruiter"],
+    tools: ["web_search", "browse_web", "scrape_url", "write_file"],
+  },
+  {
+    id: "mkt-interview-prep",
+    name: "Interview Preparation Coach",
+    description: "Prepare for interviews with company research, STAR-method answers, technical prep, and mock interview questions tailored to the specific role.",
+    instructions: `Prepare a candidate thoroughly for their interview:
+
+1. **Company deep-dive** — Research the company: mission, values, recent news, funding, products, competitors, culture (Glassdoor reviews), tech stack, team size. Compile a 1-page briefing.
+2. **Role analysis** — Parse the job description for: must-have skills, nice-to-haves, team dynamics, reporting structure, key responsibilities.
+3. **STAR stories** — Prepare 8-10 STAR stories (Situation, Task, Action, Result) covering: leadership, conflict resolution, failure/learning, achievement, teamwork, technical challenge, deadline pressure, innovation.
+4. **Behavioral questions** — Generate 15 likely behavioral questions based on the role and company values. Provide model answers using prepared STAR stories.
+5. **Technical prep** — Based on the tech stack/role:
+   - System design questions with solution frameworks
+   - Coding challenge practice areas
+   - Domain-specific questions (for PM: metrics, for marketing: campaign analysis, etc.)
+6. **Questions to ask** — Generate 10 thoughtful questions that demonstrate research and genuine interest. Avoid questions easily answered by the website.
+7. **Salary negotiation prep** — Research market rate (levels.fyi, Glassdoor, Payscale) and prepare negotiation talking points.
+8. **Mock interview script** — Create a full mock interview script the user can practice with.`,
+    category: "research",
+    icon: "🎤",
+    author: "Ottomate",
+    downloads: 15300,
+    rating: 4.8,
+    tags: ["interview", "career", "preparation", "star-method", "salary-negotiation"],
+    tools: ["web_search", "scrape_url", "write_file", "memory_store"],
+  },
+  {
+    id: "mkt-resume-builder",
+    name: "ATS-Proof Resume Builder",
+    description: "Build ATS-optimized resumes from scratch or rewrite existing ones. Outputs clean HTML, PDF-ready formatting, and keyword optimization scores.",
+    instructions: `Build a professional, ATS-proof resume:
+
+1. **Gather information** — Collect: contact info, target role, work history (company, title, dates, achievements), education, certifications, skills, projects.
+2. **Choose format** — Based on experience level:
+   - Entry-level: Skills-first functional format
+   - Mid-career: Reverse chronological
+   - Career changer: Combination format
+   - Executive: Achievement-focused with leadership narrative
+3. **Write professional summary** — 2-3 sentences: years of experience, key expertise, standout achievement, what you bring.
+4. **Optimize experience bullets** — For each role:
+   - Start with strong action verb (Led, Architected, Increased, Reduced)
+   - Include quantified results (%, $, time saved, team size)
+   - Mirror keywords from target job descriptions
+   - 4-6 bullets per role, highest impact first
+5. **Skills section** — Organize into categories: Technical Skills, Tools & Platforms, Soft Skills. Match to target role keywords.
+6. **ATS scoring** — Run a keyword match analysis against a sample job description and report match percentage. Target 70%+.
+7. **Output** — Generate clean HTML resume with:
+   - Simple, single-column layout (ATS-friendly)
+   - Standard section headers
+   - Consistent date formatting (MMM YYYY)
+   - No images, tables, or complex formatting
+   - Print-optimized CSS
+8. **Save to files** — Write resume.html and resume.md to task files.`,
+    category: "writing",
+    icon: "📄",
+    author: "Ottomate",
+    downloads: 21000,
+    rating: 4.9,
+    tags: ["resume", "cv", "ats", "career", "job-hunting", "formatting"],
+    tools: ["write_file", "web_search"],
+  },
+
+  // ── Form Filling & Document Automation ────────────────────────────────
+  {
+    id: "mkt-form-filler-pro",
+    name: "Intelligent Form Filler",
+    description: "Autonomously navigate and complete web forms, applications, registrations, and multi-step wizards using browser automation and stored profile data.",
+    instructions: `Complete web forms autonomously using browser automation:
+
+1. **Load profile data** — Use memory_recall to retrieve stored personal/business data: name, address, phone, email, SSN (last 4 if needed), employment history, education, etc.
+2. **Navigate to the form** — Use browse_web or computer_use to open the target URL and identify the form structure.
+3. **Map form fields** — Observe the page to identify all required and optional fields. Create a field mapping: form_field → profile_data_key.
+4. **Fill intelligently** — For each field:
+   - Text inputs: Type the mapped value
+   - Dropdowns: Select the closest matching option
+   - Radio buttons/checkboxes: Click the appropriate option
+   - Date fields: Format date according to the field's expected format
+   - File uploads: If resume/document needed, locate in task files and upload
+   - CAPTCHA: Flag for user assistance if encountered
+5. **Handle multi-step forms** — Click "Next"/"Continue" between sections. Maintain state across pages.
+6. **Review before submit** — Screenshot the completed form and present to user for review before final submission.
+7. **Submit and confirm** — Click submit, capture confirmation page/number, and store in memory.
+8. **Log the submission** — Record: form name, URL, date submitted, confirmation number, any notes.
+
+Safety rules:
+- NEVER auto-submit financial transactions without explicit user confirmation
+- NEVER fill in payment info (credit card, bank account) — flag for manual entry
+- Always screenshot before submission for review
+- Store confirmation numbers in memory for tracking`,
+    category: "automation",
+    icon: "📝",
+    author: "Ottomate",
+    downloads: 16800,
+    rating: 4.7,
+    tags: ["form-filling", "automation", "browser", "registration", "application"],
+    tools: ["browse_web", "computer_use", "memory_recall", "memory_store", "write_file"],
+    max_steps: 40,
+  },
+  {
+    id: "mkt-government-form-helper",
+    name: "Government Form Assistant",
+    description: "Guide through complex government forms (tax, immigration, business registration) with field-by-field explanations and validation.",
+    instructions: `Help complete government forms with expert guidance:
+
+1. **Identify the form** — Determine which form is needed (e.g., IRS forms, state filings, business registration, visa applications).
+2. **Research requirements** — Use web_search to find the latest version and instructions for the form. Government forms change frequently — always verify current requirements.
+3. **Gather information** — Create a structured checklist of all required information and supporting documents. Help the user prepare before filling.
+4. **Field-by-field guidance** — For each section:
+   - Explain what the field is asking in plain language
+   - Identify common mistakes and how to avoid them
+   - Note which fields are optional vs required
+   - Flag fields that affect other sections or trigger additional forms
+5. **Validation checks** — Cross-reference values: totals add up, dates are consistent, SSN/EIN format is correct, income reconciles.
+6. **Document preparation** — List all supporting documents needed, explain where to obtain them, and note any deadlines.
+7. **Generate draft** — Output a completed form draft as a structured document the user can review.
+8. **Deadline tracking** — Note filing deadlines and create scheduled reminders.
+
+IMPORTANT: This is guidance assistance only. Always recommend professional review for tax and legal filings. Do NOT provide tax or legal advice — provide form completion assistance only.`,
+    category: "custom",
+    icon: "🏛️",
+    author: "Ottomate",
+    downloads: 12400,
+    rating: 4.6,
+    tags: ["government", "tax", "forms", "compliance", "immigration", "registration"],
+    tools: ["web_search", "write_file", "memory_store"],
+  },
+
+  // ── Complex Video Production Pipeline ─────────────────────────────────
+  {
+    id: "mkt-video-producer-pro",
+    name: "Video Production Studio",
+    description: "End-to-end video production: concept → script → storyboard → generate scenes → edit → add music → render. Uses Luma AI, image generation, and audio tools.",
+    instructions: `Execute a full video production pipeline:
+
+1. **Creative brief** — Define: target audience, purpose (marketing/educational/entertainment), tone, duration, key message, platform (YouTube/TikTok/Instagram/LinkedIn).
+2. **Script writing** — Create a detailed script with:
+   - Hook (first 3 seconds for attention)
+   - Scene-by-scene breakdown with dialogue/narration
+   - Visual descriptions for each scene
+   - Timing annotations (scene duration)
+   - B-roll suggestions
+   - On-screen text/graphics callouts
+3. **Storyboard** — For each scene, generate a visual storyboard:
+   - Use generate_image to create key frame images
+   - Include camera angle notes (wide, close-up, overhead)
+   - Note transitions between scenes (cut, fade, zoom)
+4. **Scene generation** — Use dream_machine (Luma AI) to generate video clips:
+   - Create prompts optimized for Luma's style
+   - Generate hero shots, transitions, and b-roll
+   - Request specific camera movements (orbit, dolly, pan)
+   - Typical: 3-8 scenes of 4-5 seconds each
+5. **Image assets** — Use generate_image or replicate_run for:
+   - Thumbnails (1280x720, bold text, high contrast)
+   - Title cards and lower thirds
+   - Background images for text overlays
+   - Social media promotional images
+6. **Music & audio** — Suggest royalty-free music sources, create narration script for TTS, note sound effect placements.
+7. **Edit decision list (EDL)** — Create a detailed editing guide:
+   - Scene order with timestamps
+   - Transition types between scenes
+   - Text overlay positions and timing
+   - Music cue points
+   - Color grading notes
+8. **Deliverables package** — Organize all assets into folders:
+   - /scenes/ — Generated video clips
+   - /images/ — Thumbnails, graphics
+   - /scripts/ — Full script, EDL
+   - /audio/ — Music notes, narration script
+9. **Platform optimization** — Provide specs for target platform (aspect ratio, resolution, max length, hashtags).`,
+    category: "custom",
+    icon: "🎬",
+    author: "Ottomate",
+    downloads: 25600,
+    rating: 4.9,
+    tags: ["video", "production", "luma", "editing", "storyboard", "youtube", "tiktok"],
+    tools: ["dream_machine", "generate_image", "replicate_run", "write_file", "web_search"],
+    max_steps: 60,
+    model: "claude-sonnet-4-6",
+  },
+  {
+    id: "mkt-youtube-optimizer",
+    name: "YouTube Channel Optimizer",
+    description: "Optimize YouTube channels: SEO titles, descriptions, tags, thumbnails, content calendars, analytics interpretation, and growth strategies.",
+    instructions: `Optimize YouTube content for maximum growth:
+
+1. **Channel audit** — If URL provided, scrape channel data. Analyze: subscriber count, view trends, upload frequency, niche positioning, thumbnail style, title patterns.
+2. **Keyword research** — Use web_search to find:
+   - High-volume, low-competition keywords in the niche
+   - Trending topics and seasonal opportunities
+   - Competitor video analysis (top performers in the niche)
+   - YouTube autocomplete suggestions
+3. **Title optimization** — For each video:
+   - Primary keyword in first 40 characters
+   - Emotional trigger word (Amazing, Secret, Hidden, Ultimate)
+   - Number if applicable (Top 10, 5 Ways)
+   - Under 60 characters total
+   - Generate 5 title variants ranked by click potential
+4. **Description writing** — 3000+ character descriptions:
+   - First 150 chars: keyword-rich summary (shows in search)
+   - Timestamps for key sections
+   - Links to related videos (internal linking)
+   - Social media links
+   - Keywords paragraph (natural, not stuffed)
+   - CTA for subscribe and engage
+5. **Tag strategy** — 15-30 tags:
+   - Exact match primary keyword
+   - Long-tail variations
+   - Competitor channel names (as related topics)
+   - Broad niche tags
+6. **Thumbnail design brief** — Create a thumbnail spec:
+   - Bold text (3-5 words max, high contrast)
+   - Expressive face or dramatic visual
+   - Bright, saturated colors
+   - Generate thumbnail image with generate_image
+7. **Content calendar** — Plan 4 weeks of uploads:
+   - Mix of content types (tutorial, listicle, reaction, deep-dive)
+   - Optimal upload times based on niche
+   - Series concepts for retention
+8. **Growth strategy** — Community engagement plan, collaboration opportunities, Shorts strategy, playlist optimization.`,
+    category: "marketing",
+    icon: "📺",
+    author: "Ottomate",
+    downloads: 19800,
+    rating: 4.8,
+    tags: ["youtube", "seo", "video", "growth", "thumbnails", "content-calendar"],
+    tools: ["web_search", "scrape_url", "generate_image", "write_file"],
+  },
+  {
+    id: "mkt-tiktok-content-engine",
+    name: "TikTok Content Engine",
+    description: "Create viral TikTok content: trending sound research, hook writing, script templates, hashtag strategies, and posting schedules.",
+    instructions: `Create optimized TikTok content at scale:
+
+1. **Trend research** — Search for current TikTok trends:
+   - Trending sounds and how they're being used
+   - Viral formats (storytimes, POVs, tutorials, duets, greenscreen)
+   - Niche-specific trending hashtags
+   - Competitor analysis (top performers in the niche)
+2. **Hook library** — Write 20 scroll-stopping hooks (first 1-2 seconds):
+   - Pattern interrupt hooks ("Stop scrolling if you...")
+   - Curiosity gap hooks ("I can't believe this actually works")
+   - Controversial take hooks ("Unpopular opinion:")
+   - Story hooks ("So this happened to me...")
+3. **Script templates** — Create 10 video scripts:
+   - Hook (0-2s): Attention grabber
+   - Setup (2-5s): Context
+   - Value (5-45s): Main content
+   - CTA (last 3s): Follow, comment, share
+   - Each under 60 seconds
+4. **Hashtag strategy** — For each video:
+   - 3-5 niche hashtags (100K-1M views)
+   - 2-3 broad hashtags (1M-10M views)
+   - 1-2 trending hashtags
+   - Branded hashtag if applicable
+5. **Posting schedule** — Recommend optimal posting times based on niche audience.
+6. **Batch content plan** — Plan 2 weeks of daily content with variety in format.
+7. **Caption writing** — Engaging captions with CTA questions to boost comments.`,
+    category: "marketing",
+    icon: "📱",
+    author: "Community",
+    downloads: 17200,
+    rating: 4.7,
+    tags: ["tiktok", "social-media", "viral", "short-form", "content-creation"],
+    tools: ["web_search", "write_file"],
+  },
+
+  // ── Marketing Plans & Strategy ────────────────────────────────────────
+  {
+    id: "mkt-marketing-plan-builder",
+    name: "Marketing Plan Builder",
+    description: "Build comprehensive marketing plans: market analysis, positioning, channel strategy, budget allocation, KPIs, and 90-day execution roadmap.",
+    instructions: `Create a complete marketing plan:
+
+1. **Market analysis** — Research and document:
+   - Total addressable market (TAM), serviceable (SAM), obtainable (SOM)
+   - Target audience personas (3-5 detailed personas with demographics, psychographics, pain points, goals)
+   - Competitive landscape (direct & indirect competitors, positioning map)
+   - Market trends and opportunities
+2. **Positioning & messaging** — Define:
+   - Unique value proposition (UVP) statement
+   - Brand positioning statement
+   - Key messaging pillars (3-5 core messages)
+   - Elevator pitch (30-second and 2-minute versions)
+   - Tagline options (3-5 candidates)
+3. **Channel strategy** — For each channel, define:
+   - Content marketing: Blog, SEO, lead magnets, content pillars
+   - Social media: Platform selection, content mix, posting frequency
+   - Email marketing: List building, nurture sequences, newsletters
+   - Paid advertising: Google Ads, social ads, retargeting
+   - PR & partnerships: Media outreach, collaborations, events
+   - Community: Forums, groups, user communities
+4. **Content calendar** — 90-day content plan with:
+   - Weekly breakdown by channel
+   - Content themes tied to business goals
+   - Campaign tentpoles and launches
+   - Seasonal / trending opportunities
+5. **Budget allocation** — Recommended spend by channel with expected CAC and ROI.
+6. **KPIs & metrics** — Define success metrics per channel:
+   - Awareness: impressions, reach, brand mentions
+   - Engagement: clicks, comments, shares, email opens
+   - Conversion: leads, signups, purchases
+   - Retention: churn, NPS, repeat purchase rate
+7. **90-day execution roadmap** — Week-by-week action items with owners and deadlines.
+8. **Output** — Compile as a professional HTML document with tables, charts descriptions, and executive summary.`,
+    category: "marketing",
+    icon: "📈",
+    author: "Ottomate",
+    downloads: 20100,
+    rating: 4.9,
+    tags: ["marketing", "strategy", "plan", "go-to-market", "positioning", "kpi"],
+    tools: ["web_search", "scrape_url", "write_file", "memory_store"],
+    max_steps: 40,
+  },
+  {
+    id: "mkt-seo-content-cluster",
+    name: "SEO Content Cluster Builder",
+    description: "Build topical authority with pillar pages and content clusters. Keyword research, content briefs, internal linking strategy, and SERP analysis.",
+    instructions: `Build a complete SEO content cluster:
+
+1. **Seed keyword research** — Start with the user's topic and use web_search to find:
+   - Primary keyword (high volume, medium competition)
+   - 15-25 related long-tail keywords
+   - Question-based keywords (what, how, why, can, does)
+   - Competitor keywords (what competitors rank for)
+   - Search intent classification for each keyword (informational, commercial, transactional)
+2. **SERP analysis** — For the primary keyword:
+   - Analyze top 10 results: content type, word count, structure, unique angles
+   - Identify content gaps (what's missing from existing results)
+   - Featured snippet opportunities
+   - "People also ask" questions
+3. **Cluster architecture** — Design the content cluster:
+   - 1 Pillar page (3000-5000 words, comprehensive guide)
+   - 8-15 Cluster pages (1000-2000 words each, targeting long-tail keywords)
+   - Internal linking map (every cluster links to pillar, pillar links to all clusters)
+4. **Content briefs** — For each page, create a detailed brief:
+   - Target keyword and secondary keywords
+   - Search intent and target audience
+   - Recommended title (with keyword in first 40 chars)
+   - H2/H3 outline with keyword placement
+   - Word count target
+   - Internal links to include
+   - External reference sources
+   - Featured snippet optimization notes
+   - Schema markup recommendations
+5. **Pillar page draft** — Write the full pillar page with:
+   - Table of contents with jump links
+   - Comprehensive coverage of all subtopics
+   - FAQ section for "People also ask" optimization
+   - Call-to-action sections
+   - Schema markup (FAQ, HowTo, or Article)
+6. **Publishing schedule** — Recommend publishing order (pillar first, then clusters over 4-6 weeks).
+7. **Output** — All briefs and content as organized Markdown/HTML files.`,
+    category: "marketing",
+    icon: "🔎",
+    author: "Ottomate",
+    downloads: 16500,
+    rating: 4.8,
+    tags: ["seo", "content-cluster", "keyword-research", "pillar-page", "topical-authority"],
+    tools: ["web_search", "scrape_url", "write_file"],
+    max_steps: 45,
+  },
+  {
+    id: "mkt-growth-hacking-playbook",
+    name: "Growth Hacking Playbook",
+    description: "Design and execute growth experiments: acquisition channels, viral loops, referral programs, A/B test frameworks, and conversion funnel optimization.",
+    instructions: `Build a growth hacking playbook:
+
+1. **Funnel audit** — Map the current conversion funnel: Awareness → Interest → Consideration → Conversion → Retention → Referral. Identify drop-off points.
+2. **ICE scoring** — For each growth idea, score:
+   - Impact (1-10): How much will this move the needle?
+   - Confidence (1-10): How sure are we this will work?
+   - Ease (1-10): How easy is this to implement?
+   - Priority = (I + C + E) / 3
+3. **Experiment design** — For top 5 experiments:
+   - Hypothesis: "If we [change], then [metric] will [improvement] because [reasoning]"
+   - Success metric and target
+   - Sample size and duration needed
+   - Implementation steps
+   - Rollback plan
+4. **Viral loop design** — Create referral/viral mechanics:
+   - Referral program structure (rewards, tiers)
+   - Social sharing triggers (what makes users share)
+   - Network effects opportunities
+   - User-generated content strategies
+5. **Channel experiments** — Quick-win tests for each channel:
+   - SEO: Low-hanging keyword targets
+   - Content: Repurposing high-performers
+   - Email: Subject line tests, send time optimization
+   - Social: Format tests, posting frequency experiments
+   - Paid: Ad copy variants, audience segment tests
+6. **Metrics dashboard spec** — Define which metrics to track and how to visualize them.
+7. **Experiment log template** — Create a structured template for documenting experiment results.`,
+    category: "marketing",
+    icon: "🚀",
+    author: "Ottomate",
+    downloads: 14200,
+    rating: 4.7,
+    tags: ["growth", "experiments", "conversion", "funnel", "ab-testing", "viral"],
+    tools: ["web_search", "write_file", "execute_code"],
+  },
+
+  // ── Social Media Scheduling & Posting ─────────────────────────────────
+  {
+    id: "mkt-social-scheduler",
+    name: "Social Media Scheduler & Poster",
+    description: "Create, schedule, and auto-post content across platforms. Supports Twitter/X, LinkedIn, Instagram, Facebook, and cross-posting workflows.",
+    instructions: `Manage social media posting end-to-end:
+
+1. **Content creation** — Based on the user's topic or content brief:
+   - Write platform-specific posts (different length/tone for each platform)
+   - Twitter/X: Under 280 chars, punchy, with hooks
+   - LinkedIn: Professional, 1300 chars, storytelling format with line breaks
+   - Instagram: Visual-first caption, hashtag block (20-30 relevant tags)
+   - Facebook: Conversational, medium length, question-based for engagement
+2. **Visual assets** — Generate or source images:
+   - Use generate_image for custom graphics
+   - Create carousel content (multiple images with text)
+   - Design quote graphics and infographics
+   - Ensure correct dimensions per platform
+3. **Hashtag research** — For each platform:
+   - Mix of reach (large), engagement (medium), niche (small) hashtags
+   - Trending hashtags relevant to the content
+   - Branded hashtags
+4. **Scheduling** — Determine optimal posting times per platform:
+   - Twitter: 8-10am, 12pm, 6-9pm
+   - LinkedIn: Tue-Thu 7-8am, 12pm
+   - Instagram: 11am-1pm, 7-9pm
+   - Create scheduled tasks for each post
+5. **Cross-posting** — Adapt one piece of content across all platforms:
+   - Blog post → Twitter thread → LinkedIn article → Instagram carousel → Facebook story
+6. **Post via connectors** — Use connector_call to post:
+   - Twitter: connector_call(twitter, post_tweet, {text, media_url})
+   - LinkedIn: connector_call(linkedin, create_post, {text, image_url})
+   - Slack (internal sharing): connector_call(slack, send_message, {channel, text})
+7. **Engagement prompts** — Suggest reply templates, comment responses, and engagement actions to do within 1 hour of posting.
+8. **Analytics tracking** — Note which metrics to track and when to review performance.`,
+    category: "marketing",
+    icon: "📅",
+    author: "Ottomate",
+    downloads: 23100,
+    rating: 4.8,
+    tags: ["social-media", "scheduling", "posting", "twitter", "linkedin", "instagram", "cross-posting"],
+    tools: ["connector_call", "generate_image", "write_file", "web_search"],
+    max_steps: 35,
+  },
+  {
+    id: "mkt-cold-outreach-engine",
+    name: "Cold Outreach Engine",
+    description: "Build and execute personalized cold email/DM campaigns: prospect research, email sequences, follow-ups, and response tracking.",
+    instructions: `Run a cold outreach campaign end-to-end:
+
+1. **Define ICP (Ideal Customer Profile)** — Document: industry, company size, job title, pain points, buying triggers.
+2. **Prospect research** — Use web_search and scrape_url to find prospects:
+   - Search LinkedIn, company websites, industry directories
+   - Collect: name, title, company, email (if public), recent activity/posts
+   - Build a prospect list of 20-50 targets
+3. **Personalization research** — For each prospect:
+   - Recent LinkedIn posts or articles they've written
+   - Company news (funding, launches, partnerships)
+   - Mutual connections or shared experiences
+   - Pain points specific to their role/company
+4. **Email sequence writing** — Create a 4-email sequence:
+   - Email 1 (Day 1): Personalized cold open, value proposition, soft CTA
+   - Email 2 (Day 3): Follow-up with case study or social proof
+   - Email 3 (Day 7): Different angle, address common objection
+   - Email 4 (Day 14): Breakup email with final value offer
+   - Subject lines: A/B variant for each email
+5. **Personalize at scale** — Create templates with merge fields: {{first_name}}, {{company}}, {{personalization_line}}, {{pain_point}}.
+6. **Send via connector** — Use send_email or connector_call(gmail/sendgrid/outlook) to send.
+7. **Tracking** — Log each send: prospect, email number, date, subject, status (sent/opened/replied/bounced).
+8. **Response handling** — Suggest reply templates for common responses (interested, not now, wrong person, unsubscribe).
+
+Rules:
+- Always include unsubscribe mechanism
+- Never misrepresent who you are
+- Personalization must be genuine — no fake compliments
+- Follow CAN-SPAM / GDPR guidelines`,
+    category: "marketing",
+    icon: "📨",
+    author: "Ottomate",
+    downloads: 13900,
+    rating: 4.7,
+    tags: ["outreach", "cold-email", "sales", "prospecting", "email-sequence", "lead-gen"],
+    tools: ["web_search", "scrape_url", "send_email", "connector_call", "write_file", "memory_store"],
+    max_steps: 40,
+  },
+
+  // ── Website Login & Session Management ────────────────────────────────
+  {
+    id: "mkt-web-login-manager",
+    name: "Website Login & Session Manager",
+    description: "Securely log into websites, maintain sessions, and perform authenticated tasks using browser automation with anti-detection.",
+    instructions: `Handle website authentication and session management:
+
+1. **Identify the target** — Determine which website needs authentication and what action needs to be taken after login.
+2. **Retrieve credentials** — Use memory_recall to find stored credentials for the service. If not found, ask the user.
+3. **Navigate to login** — Use browse_web or computer_use to:
+   - Navigate to the login page
+   - Identify username/email and password fields
+   - Check for CAPTCHA or 2FA requirements
+4. **Authenticate** — Fill in credentials and submit:
+   - Handle "Remember me" checkboxes as appropriate
+   - If 2FA is required, prompt the user for the code
+   - Wait for and verify successful login (check for dashboard/home page elements)
+5. **Handle common challenges**:
+   - Cookie consent banners: Dismiss/accept
+   - Pop-ups and modals: Close
+   - Session timeouts: Re-authenticate
+   - Rate limiting: Wait and retry
+6. **Perform authenticated action** — Once logged in, execute the user's requested task (check account, download data, update settings, etc.)
+7. **Session cleanup** — Note the session state for future reference.
+
+Security rules:
+- NEVER log or display passwords in plain text
+- NEVER store credentials in task files — memory_store only with [CREDENTIAL] tag
+- Always verify the correct domain before entering credentials (prevent phishing)
+- Report any suspicious redirects or certificate warnings immediately`,
+    category: "automation",
+    icon: "🔐",
+    author: "Ottomate",
+    downloads: 18500,
+    rating: 4.6,
+    tags: ["login", "authentication", "browser", "session", "automation", "credentials"],
+    tools: ["browse_web", "computer_use", "memory_recall", "memory_store"],
+    max_steps: 30,
+  },
+  {
+    id: "mkt-web-data-extractor",
+    name: "Authenticated Data Extractor",
+    description: "Log into platforms (analytics, CRM, dashboards) and extract structured data for reports, spreadsheets, or analysis.",
+    instructions: `Extract data from authenticated web platforms:
+
+1. **Login** — Authenticate to the target platform using browse_web/computer_use.
+2. **Navigate to data** — Find the reports, analytics, or data views needed.
+3. **Extract data** — Use multiple strategies:
+   - If API available: Use direct API calls via scrape_url
+   - If export button exists: Trigger CSV/Excel download
+   - If table data: Scrape structured data from the page
+   - If dashboard: Take screenshots and extract values
+4. **Structure output** — Transform raw data into structured format:
+   - CSV for tabular data
+   - JSON for hierarchical data
+   - Markdown tables for reports
+5. **Validate** — Cross-check extracted numbers for consistency.
+6. **Save** — Write structured data to task files with clear naming.
+
+Common platforms: Google Analytics, HubSpot, Salesforce, Shopify Admin, LinkedIn Analytics, Twitter Analytics, Meta Business Suite, Stripe Dashboard, AWS Console.`,
+    category: "data",
+    icon: "📥",
+    author: "Ottomate",
+    downloads: 11800,
+    rating: 4.6,
+    tags: ["data-extraction", "scraping", "analytics", "dashboard", "authenticated"],
+    tools: ["browse_web", "computer_use", "scrape_url", "write_file", "execute_code"],
+  },
+
+  // ── E-Commerce Operations ─────────────────────────────────────────────
+  {
+    id: "mkt-ecommerce-manager",
+    name: "E-Commerce Operations Manager",
+    description: "Manage Shopify/WooCommerce stores: product listings, inventory, pricing optimization, collection management, and sales analytics.",
+    instructions: `Manage e-commerce operations comprehensively:
+
+1. **Product listing optimization** — For each product:
+   - SEO-optimized title (primary keyword + descriptors)
+   - Compelling description (features → benefits → social proof → CTA)
+   - 5-10 relevant tags for discoverability
+   - Metadata for search engines
+   - Generate product images if needed (generate_image)
+2. **Collection/category management** — Organize products into smart collections based on type, season, price range, or theme.
+3. **Pricing strategy** — Research competitor pricing via web_search:
+   - Competitive analysis table
+   - Psychological pricing recommendations ($29.99 vs $30)
+   - Bundle pricing suggestions
+   - Seasonal sale calendar
+4. **Inventory checks** — Via connector_call:
+   - Low stock alerts
+   - Reorder point calculations
+   - Seasonal demand forecasting
+5. **Sales analytics** — Pull and analyze:
+   - Revenue by product/category
+   - Conversion rate analysis
+   - Average order value trends
+   - Customer acquisition cost
+6. **Customer engagement** — Create:
+   - Abandoned cart email templates
+   - Post-purchase follow-up sequences
+   - Review request emails
+   - Loyalty program recommendations
+7. **Actions via Shopify connector** — Use connector_call(shopify, ...) for:
+   - create_product, update_product
+   - manage_inventory
+   - create_collection
+   - manage_orders
+   - create_discount`,
+    category: "ecommerce",
+    icon: "🏪",
+    author: "Ottomate",
+    downloads: 15600,
+    rating: 4.8,
+    tags: ["ecommerce", "shopify", "products", "inventory", "pricing", "sales"],
+    tools: ["connector_call", "web_search", "generate_image", "write_file"],
+    max_steps: 35,
+  },
+
+  // ── Advanced Blog & Content Publishing ────────────────────────────────
+  {
+    id: "mkt-seo-blog-pro",
+    name: "SEO Blog Writer Pro",
+    description: "Research, write, and publish SEO-optimized long-form blog posts with keyword optimization, structured data, and automatic publishing to connected CMS.",
+    instructions: `Write and publish high-ranking blog content:
+
+1. **Keyword research** — For the given topic:
+   - Search Google/Bing for top 10 results
+   - Analyze: word count, headings, content gaps
+   - Identify primary keyword, 5-8 secondary keywords
+   - Find "People Also Ask" questions
+   - Check keyword difficulty and search volume estimates
+2. **Outline creation** — Build an SEO-optimized outline:
+   - Title with primary keyword in first 40 chars (50-60 chars total)
+   - Meta description (150-160 chars with keyword and CTA)
+   - H2/H3 hierarchy incorporating secondary keywords
+   - FAQ section targeting PAA questions
+   - Introduction hook strategy
+3. **Write the article** — Create 1500-3000 word article:
+   - Hook opening (statistic, question, or bold statement)
+   - Primary keyword in first 100 words
+   - Secondary keywords distributed naturally
+   - Short paragraphs (2-4 sentences)
+   - Transition sentences between sections
+   - Actionable takeaways and examples
+   - Conclusion with CTA
+4. **On-page SEO** — Apply:
+   - Internal link suggestions (use [[brackets]] for placement)
+   - External links to authoritative sources (2-3)
+   - Image alt text with keywords
+   - Schema markup (Article, FAQ, HowTo)
+   - Readability score: target Flesch-Kincaid Grade 8 or lower
+5. **Format as HTML** — Clean semantic HTML:
+   - Proper heading hierarchy
+   - Lists and tables where appropriate
+   - Pull quotes for key insights
+   - Image placeholders with alt text
+6. **Publish** — If Shopify/WordPress connector is available:
+   - connector_call(shopify, create_blog_post, {...}) OR
+   - connector_call(wordpress, create_post, {...})
+   - Set tags, categories, featured image
+7. **Social promotion** — Generate social media posts promoting the article for 3 platforms.`,
+    category: "writing",
+    icon: "✍️",
+    author: "Ottomate",
+    downloads: 24300,
+    rating: 4.9,
+    tags: ["seo", "blog", "writing", "publishing", "content", "long-form", "cms"],
+    tools: ["web_search", "scrape_url", "write_file", "connector_call"],
+    max_steps: 40,
+    model: "claude-sonnet-4-6",
+  },
+
+  // ── Podcast Production Pipeline ───────────────────────────────────────
+  {
+    id: "mkt-podcast-producer",
+    name: "Podcast Production Pipeline",
+    description: "End-to-end podcast production: guest research, episode planning, show notes, transcript processing, audiogram creation, and multi-platform distribution.",
+    instructions: `Run the full podcast production pipeline:
+
+1. **Episode planning** — Based on the topic:
+   - Research trending angles via web_search
+   - Create 5-10 episode concept pitches with titles
+   - For selected episode: write a detailed outline with segments
+2. **Guest research** (if applicable):
+   - Find potential guests via web_search (industry experts, authors, founders)
+   - Compile guest profiles: bio, expertise, social links, recent appearances
+   - Write personalized outreach email for each guest
+3. **Interview prep** — Create:
+   - 15-20 questions organized by segment (warm-up, deep-dive, rapid-fire, closing)
+   - Research points for each question
+   - Potential follow-up prompts
+   - Guest's talking points and recent work
+4. **Show notes** — Write comprehensive show notes:
+   - Episode summary (2-3 paragraphs)
+   - Key timestamps and topics
+   - Guest bio and links
+   - Resources mentioned
+   - Call-to-action (subscribe, review, visit)
+5. **Transcript processing** — If transcript provided:
+   - Clean up filler words and false starts
+   - Add speaker labels and timestamps
+   - Extract pull quotes and highlights
+   - Create a blog post version
+6. **Promotional assets**:
+   - Audiogram concept (key quote + waveform description)
+   - Social media posts (5 platform-specific variants)
+   - Email newsletter snippet
+   - Episode artwork brief (generate_image for cover art)
+7. **SEO optimization** — Write episode page content:
+   - SEO title and meta description
+   - Keyword-optimized description
+   - FAQ schema from episode content
+8. **Distribution checklist** — Platform-specific submission guide.`,
+    category: "custom",
+    icon: "🎙️",
+    author: "Ottomate",
+    downloads: 11400,
+    rating: 4.7,
+    tags: ["podcast", "production", "show-notes", "interview", "audio", "distribution"],
+    tools: ["web_search", "scrape_url", "write_file", "generate_image", "send_email"],
+    max_steps: 35,
+  },
+
+  // ── Newsletter Management ─────────────────────────────────────────────
+  {
+    id: "mkt-newsletter-engine",
+    name: "Newsletter Engine",
+    description: "Curate, write, design, and send professional newsletters. Supports weekly digests, product updates, industry roundups, and nurture sequences.",
+    instructions: `Build and send professional newsletters:
+
+1. **Content curation** — Based on newsletter type:
+   - Industry roundup: Search web for top 5-10 stories of the week
+   - Product update: Compile changelog into reader-friendly format
+   - Educational: Write a focused lesson/guide
+   - Mixed: Combine curated + original content
+2. **Write the newsletter** — Structure:
+   - Subject line (3 variants for A/B testing, under 50 chars)
+   - Preview text (40-90 chars, complement subject line)
+   - Header with edition number and date
+   - Featured story with summary and link
+   - 3-5 curated items with one-paragraph summaries
+   - Original insight section (2-3 paragraphs of original value)
+   - Quick links / resources section
+   - CTA (reply, share, visit)
+   - Footer with social links and unsubscribe
+3. **HTML email design** — Create responsive HTML:
+   - 600px max-width table layout
+   - Inline CSS for email client compatibility
+   - Brand colors and consistent typography
+   - Clear visual hierarchy
+   - Mobile-responsive sections
+4. **Send** — Via connector_call:
+   - SendGrid: send_email with HTML body
+   - Mailchimp: create_campaign
+   - Gmail: send_email
+5. **Analytics prep** — Define metrics to track: opens, clicks, unsubscribes, replies.
+6. **Schedule** — If recurring, create a scheduled task for the next edition.`,
+    category: "writing",
+    icon: "📰",
+    author: "Ottomate",
+    downloads: 13200,
+    rating: 4.7,
+    tags: ["newsletter", "email", "curation", "digest", "email-marketing"],
+    tools: ["web_search", "scrape_url", "write_file", "connector_call", "send_email"],
+  },
+
+  // ── Influencer Marketing ──────────────────────────────────────────────
+  {
+    id: "mkt-influencer-marketing",
+    name: "Influencer Marketing Manager",
+    description: "Find, vet, and manage influencer partnerships: discovery, outreach, contract terms, campaign briefs, and ROI tracking.",
+    instructions: `Run an influencer marketing campaign:
+
+1. **Discovery** — Find relevant influencers using web_search:
+   - Search "[niche] influencers [platform]"
+   - Analyze follower count, engagement rate, content style, audience fit
+   - Check for fake followers (engagement rate < 1% on large accounts = red flag)
+   - Create a prospect list of 20-30 potential partners
+2. **Tiering** — Categorize influencers:
+   - Nano (1K-10K): High engagement, authentic, affordable
+   - Micro (10K-100K): Niche authority, good ROI
+   - Mid (100K-500K): Broader reach, moderate cost
+   - Macro (500K-1M): Brand awareness, premium pricing
+   - Mega (1M+): Mass reach, highest cost
+3. **Vetting** — For shortlisted influencers:
+   - Content quality and brand alignment
+   - Audience demographics match
+   - Past brand partnerships (any competitors?)
+   - Controversy check
+   - Engagement authenticity
+4. **Outreach** — Write personalized outreach messages:
+   - Reference specific content of theirs you admire
+   - Clear value proposition for both sides
+   - Campaign brief overview
+   - Compensation structure (product exchange, flat fee, commission, affiliate)
+5. **Campaign brief** — Create a detailed brief for selected influencers:
+   - Brand guidelines and messaging
+   - Content requirements (type, number of posts, platforms)
+   - Hashtags and mentions required
+   - Dos and don'ts
+   - Timeline and deadlines
+   - Compensation details
+6. **Contract terms** — Outline key terms: deliverables, timeline, usage rights, exclusivity, payment terms, FTC disclosure requirements.
+7. **ROI tracking** — Define metrics: reach, impressions, engagement, clicks, conversions, CPE (cost per engagement).`,
+    category: "marketing",
+    icon: "🌟",
+    author: "Ottomate",
+    downloads: 10800,
+    rating: 4.6,
+    tags: ["influencer", "marketing", "partnerships", "outreach", "social-media", "campaign"],
+    tools: ["web_search", "scrape_url", "write_file", "send_email"],
+  },
+
+  // ── PR & Media Outreach ───────────────────────────────────────────────
+  {
+    id: "mkt-pr-media-outreach",
+    name: "PR & Media Outreach Pro",
+    description: "Build media lists, write press releases, pitch journalists, and manage press coverage tracking.",
+    instructions: `Execute a PR campaign:
+
+1. **Story angle development** — Craft 3-5 newsworthy angles:
+   - What makes this story interesting to journalists?
+   - Timeliness, impact, novelty, conflict, human interest
+   - Data-driven hooks (statistics, research, trends)
+2. **Media list building** — Research journalists covering your topic:
+   - Use web_search to find relevant journalists, editors, and publications
+   - Build a media list: name, publication, beat, email, recent articles
+   - Categorize: tier 1 (top publications), tier 2 (industry), tier 3 (niche blogs)
+   - Target 30-50 journalists
+3. **Press release writing** — Create an AP-style press release:
+   - Headline (clear, newsworthy, no hype)
+   - Dateline and lead paragraph (who, what, when, where, why)
+   - Body quotes from leadership
+   - Boilerplate company description
+   - Contact information
+   - Multimedia assets (images, data)
+4. **Pitch writing** — Personalized pitch emails:
+   - Reference journalist's recent article
+   - Hook with the story angle most relevant to their beat
+   - Brief summary (3-4 sentences)
+   - Offer exclusives to tier 1
+   - Include key data points in the pitch
+5. **Send pitches** — Use send_email or connector_call to send personalized pitches.
+6. **Follow-up sequence** — 3-touch follow-up:
+   - Day 3: Brief check-in
+   - Day 7: New angle or additional data
+   - Day 14: Final follow-up with deadline urgency
+7. **Coverage tracking** — Log: publication, journalist, date, type (feature, mention, quote), URL, reach estimate.`,
+    category: "marketing",
+    icon: "📰",
+    author: "Ottomate",
+    downloads: 9700,
+    rating: 4.6,
+    tags: ["pr", "media", "press-release", "journalism", "outreach", "coverage"],
+    tools: ["web_search", "scrape_url", "write_file", "send_email"],
+  },
+
+  // ── Financial Planning & Analysis ─────────────────────────────────────
+  {
+    id: "mkt-financial-planning",
+    name: "Financial Planning & Forecasting",
+    description: "Build financial models, revenue forecasts, expense tracking, unit economics analysis, and investor-ready financial documents.",
+    instructions: `Build comprehensive financial plans:
+
+1. **Revenue model** — Based on business type, build:
+   - SaaS: MRR projections (new, expansion, churned, net), cohort analysis
+   - E-commerce: Units × price × conversion rate × traffic
+   - Service: Capacity × utilization × rate
+   - Marketplace: GMV × take rate
+2. **Expense forecast** — Categorize and project:
+   - Fixed costs: Rent, salaries, software, insurance
+   - Variable costs: COGS, hosting, transaction fees
+   - Growth costs: Marketing, sales, hiring
+   - One-time costs: Equipment, legal, setup
+3. **Unit economics** — Calculate key metrics:
+   - CAC (Customer Acquisition Cost)
+   - LTV (Lifetime Value)
+   - LTV:CAC ratio (target > 3:1)
+   - Payback period
+   - Gross margin
+   - Contribution margin
+4. **Cash flow projection** — Monthly for 12 months, quarterly for years 2-3:
+   - Revenue — Expenses = Net cash flow
+   - Running cash balance
+   - Identify when cash flow positive
+   - Flag any cash crunch risks
+5. **Financial statements** — Generate:
+   - Income statement (P&L)
+   - Cash flow statement
+   - Balance sheet (simplified)
+6. **Scenario modeling** — Create 3 scenarios:
+   - Conservative (bottom 25% assumptions)
+   - Base case (most likely)
+   - Optimistic (top 25% assumptions)
+7. **Output** — Generate as HTML tables and save as downloadable CSV/HTML.
+8. **Investor metrics** — If for fundraising: ARR growth rate, burn rate, runway, magic number.`,
+    category: "data",
+    icon: "💹",
+    author: "Ottomate",
+    downloads: 12100,
+    rating: 4.7,
+    tags: ["finance", "forecasting", "revenue", "budgeting", "unit-economics", "investor"],
+    tools: ["execute_code", "write_file", "web_search"],
+  },
+
+  // ── Event Planning & Management ───────────────────────────────────────
+  {
+    id: "mkt-event-planner",
+    name: "Event Planning & Management",
+    description: "Plan complete events from concept to execution: venue research, timeline, budget, vendor coordination, marketing, and day-of logistics.",
+    instructions: `Plan and execute events comprehensively:
+
+1. **Event brief** — Define: type (conference, workshop, meetup, product launch, webinar), audience size, budget, date range, location preferences.
+2. **Venue research** — Search for venues:
+   - Capacity, location, amenities, pricing
+   - AV equipment availability
+   - Catering options
+   - Accessibility compliance
+   - Compare top 3 venues in a table
+3. **Budget planning** — Create detailed budget:
+   - Venue and catering (40-50%)
+   - Marketing and promotion (15-20%)
+   - Speakers and entertainment (10-15%)
+   - AV and technology (10-15%)
+   - Miscellaneous and contingency (10%)
+4. **Timeline** — Reverse-plan from event date:
+   - 8 weeks out: Venue booked, speakers confirmed
+   - 6 weeks: Marketing launch, registration open
+   - 4 weeks: Catering finalized, AV confirmed
+   - 2 weeks: Final headcount, run of show
+   - 1 week: Final walkthrough, print materials
+   - Day of: Minute-by-minute run of show
+5. **Marketing plan** — Create promotional campaign:
+   - Event page content
+   - Email invitation sequence (save the date, registration, reminder)
+   - Social media promotion calendar
+   - Partner/sponsor outreach
+6. **Run of show** — Minute-by-minute schedule for event day.
+7. **Post-event** — Survey template, follow-up email, recap content.`,
+    category: "custom",
+    icon: "🎪",
+    author: "Ottomate",
+    downloads: 8900,
+    rating: 4.6,
+    tags: ["events", "planning", "conference", "webinar", "venue", "logistics"],
+    tools: ["web_search", "write_file", "send_email", "connector_call"],
+  },
+
+  // ── Customer Support Automation ───────────────────────────────────────
+  {
+    id: "mkt-support-automation",
+    name: "Customer Support Automation",
+    description: "Build support knowledge bases, automated response templates, ticket triage rules, escalation workflows, and CSAT improvement plans.",
+    instructions: `Build a comprehensive customer support system:
+
+1. **Knowledge base** — Create help articles:
+   - Identify top 20 most common support questions (research or ask user)
+   - Write clear, step-by-step articles for each
+   - Include screenshots/descriptions where helpful
+   - Organize into categories
+   - SEO-optimize titles and content
+2. **Response templates** — Create canned responses for:
+   - Common inquiries (pricing, features, how-to)
+   - Troubleshooting (password reset, billing, bugs)
+   - Escalation acknowledgments
+   - Feature requests
+   - Positive feedback handling
+   - Refund/cancellation
+   - Each template: professional, empathetic, solution-oriented
+3. **Ticket triage rules** — Design auto-routing:
+   - Priority classification (P0-P4) based on keywords
+   - Department routing (billing, technical, sales)
+   - SLA definitions per priority
+   - Escalation triggers
+4. **Automation workflows** — Design chatbot flows:
+   - Welcome → classify intent → self-serve or route to human
+   - Password reset → automated
+   - Status checks → automated
+   - Billing questions → AI-assisted → human fallback
+5. **CSAT improvement plan** — Analyze common pain points and recommend:
+   - Response time targets
+   - First-contact resolution improvements
+   - Proactive outreach triggers
+   - Feedback loop implementation`,
+    category: "automation",
+    icon: "🎧",
+    author: "Ottomate",
+    downloads: 10200,
+    rating: 4.7,
+    tags: ["support", "customer-service", "knowledge-base", "templates", "automation", "chatbot"],
+    tools: ["web_search", "write_file", "memory_store"],
+  },
+
+  // ── Advanced Scraping & Intelligence ──────────────────────────────────
+  {
+    id: "mkt-competitive-intel",
+    name: "Competitive Intelligence Engine",
+    description: "Monitor competitors: pricing changes, feature launches, hiring signals, content strategy, social presence, and market positioning shifts.",
+    instructions: `Build a comprehensive competitive intelligence report:
+
+1. **Competitor identification** — Use web_search to identify:
+   - Direct competitors (same product/market)
+   - Indirect competitors (different approach, same problem)
+   - Emerging threats (new entrants, pivoting companies)
+   - Create a competitor map with positioning
+2. **Product intelligence** — For each competitor:
+   - Feature comparison matrix
+   - Pricing tiers and changes (scrape pricing pages)
+   - Recent product launches (changelog, blog)
+   - Technology stack (BuiltWith, Wappalyzer)
+   - Integration ecosystem
+3. **Hiring signals** — Research job postings:
+   - What roles are they hiring for? (indicates strategic priorities)
+   - Team size growth rate
+   - Key hires / departures
+   - Engineering team composition
+4. **Content & SEO analysis** — Analyze their content strategy:
+   - Top-performing content (most shared/linked)
+   - Content frequency and types
+   - Keyword targets
+   - Backlink profile indicators
+5. **Social & community** — Evaluate presence:
+   - Social media follower counts and engagement
+   - Community size (Discord, Slack, forums)
+   - Sentiment analysis from mentions
+   - Review scores (G2, Capterra, Trustpilot)
+6. **Financial signals** — Research:
+   - Funding rounds, revenue estimates
+   - Customer count estimates
+   - Partnership announcements
+7. **Strategic assessment** — SWOT for each competitor + overall market dynamics.
+8. **Monitoring plan** — Set up recurring checks with scheduled tasks.`,
+    category: "research",
+    icon: "🕵️",
+    author: "Ottomate",
+    downloads: 14500,
+    rating: 4.8,
+    tags: ["competitive", "intelligence", "monitoring", "market-research", "analysis"],
+    tools: ["web_search", "scrape_url", "write_file", "memory_store", "execute_code"],
+    max_steps: 45,
+  },
+
+  // ── Conversion Optimization ───────────────────────────────────────────
+  {
+    id: "mkt-conversion-optimizer",
+    name: "Conversion Rate Optimizer",
+    description: "Audit landing pages, write high-converting copy, design A/B test plans, and optimize funnels for maximum conversion.",
+    instructions: `Optimize conversions across the funnel:
+
+1. **Landing page audit** — If URL provided, scrape and analyze:
+   - Above-the-fold: Is the value proposition clear in 5 seconds?
+   - CTA: Is it prominent, specific, and compelling?
+   - Social proof: Testimonials, logos, stats present?
+   - Friction: How many form fields? Any unnecessary steps?
+   - Loading speed: Any obvious issues?
+   - Mobile experience: Responsive?
+   - Trust signals: Security badges, guarantees, privacy
+   - Score: Rate each element 1-10
+2. **Copy optimization** — Rewrite key elements:
+   - Headline: Clear benefit + specificity (numbers, timeframes)
+   - Subheadline: Supports headline, addresses objection
+   - CTA button text: Action + benefit ("Start Free Trial" vs "Submit")
+   - Bullet points: Feature → Benefit → Proof
+   - Social proof: Customer quotes with specifics
+3. **A/B test plan** — Design 5 high-impact tests:
+   - Hypothesis for each test
+   - Control vs variant description
+   - Primary metric to track
+   - Minimum sample size calculation
+   - Expected impact
+4. **Funnel mapping** — Map the conversion funnel:
+   - Each step with estimated conversion rate
+   - Drop-off analysis: where are users leaving?
+   - Friction points identification
+   - Quick-win recommendations
+5. **Objection handling** — Identify top 5 buyer objections and create copy addressing each one.
+6. **Output** — Full audit report with prioritized recommendations, rewritten copy variants, and A/B test roadmap.`,
+    category: "marketing",
+    icon: "🎯",
+    author: "Ottomate",
+    downloads: 11300,
+    rating: 4.7,
+    tags: ["cro", "conversion", "landing-page", "ab-testing", "copywriting", "funnel"],
+    tools: ["web_search", "scrape_url", "write_file"],
+  },
+
+  // ── Pitch Deck & Presentation Builder ─────────────────────────────────
+  {
+    id: "mkt-pitch-deck-builder",
+    name: "Pitch Deck & Presentation Builder",
+    description: "Create investor pitch decks, sales presentations, and keynote outlines with storytelling frameworks and data visualization specs.",
+    instructions: `Build compelling presentations:
+
+1. **Understand the audience** — Investors, customers, partners, internal team? Tailor depth and focus accordingly.
+2. **Story arc** — Structure using proven frameworks:
+   - Problem → Solution → Market → Traction → Team → Ask (investor pitch)
+   - Situation → Complication → Resolution (consulting)
+   - Hook → Pain → Solution → Proof → CTA (sales)
+3. **Slide-by-slide content** — Write each slide:
+   - **Title slide**: Company name, tagline, presenter
+   - **Problem**: Quantified pain point with empathy
+   - **Solution**: Clear value proposition with demo/visual
+   - **Market**: TAM/SAM/SOM with sources
+   - **Product**: Key features and screenshots/mockups
+   - **Business model**: Revenue streams, pricing, unit economics
+   - **Traction**: Growth metrics, logos, testimonials
+   - **Competitive landscape**: 2x2 matrix positioning
+   - **Team**: Key bios with relevant experience
+   - **Financials**: Revenue projections, burn rate
+   - **Ask**: Specific funding amount and use of proceeds
+4. **Speaker notes** — 2-3 sentences per slide with key talking points and transitions.
+5. **Data visualizations** — Specify chart types and data for each metric:
+   - Revenue growth → Line chart
+   - Market size → Stacked bar
+   - Competitive positioning → 2x2 scatter
+6. **Design directions** — Color palette, font suggestions, layout principles.
+7. **Output** — Generate as HTML slides or Markdown, ready for import into Keynote/Google Slides/PowerPoint.`,
+    category: "writing",
+    icon: "📊",
+    author: "Ottomate",
+    downloads: 16200,
+    rating: 4.8,
+    tags: ["pitch-deck", "presentation", "investor", "sales", "slides", "storytelling"],
+    tools: ["web_search", "write_file", "generate_image"],
+  },
+
+  // ── Automated Reporting & Dashboards ──────────────────────────────────
+  {
+    id: "mkt-automated-reporting",
+    name: "Automated Report Generator",
+    description: "Pull data from multiple sources, compute KPIs, generate visual reports, and email/post them on schedule.",
+    instructions: `Create automated reports from multiple data sources:
+
+1. **Define report scope** — What KPIs, time period, audience? Common report types:
+   - Weekly marketing performance
+   - Monthly revenue report
+   - Sprint/development progress
+   - Customer health dashboard
+   - Social media analytics
+2. **Data collection** — Pull from available sources:
+   - Connectors: Shopify, Stripe, Google Analytics, HubSpot, etc.
+   - Scraping: Dashboard screenshots, public data
+   - Files: CSV uploads, previous reports
+   - API: Direct API calls where available
+3. **Data processing** — Use execute_code to:
+   - Clean and normalize data
+   - Calculate KPIs (growth rates, averages, ratios)
+   - Compare to previous period (WoW, MoM, YoY)
+   - Identify anomalies and trends
+4. **Visualization specs** — Define charts:
+   - Time-series: Line charts for trends
+   - Comparisons: Bar charts for categories
+   - Composition: Pie/donut for breakdowns
+   - Highlight: Big number cards for key metrics
+5. **Generate report** — Create an HTML report with:
+   - Executive summary (3-5 bullet points)
+   - Key metrics dashboard (big numbers with arrows)
+   - Trend charts (described or generated)
+   - Detailed analysis sections
+   - Recommendations based on data
+6. **Distribute** — Email via send_email or post to Slack via connector_call.
+7. **Schedule** — If recurring, create a scheduled task for the next report.`,
+    category: "data",
+    icon: "📋",
+    author: "Ottomate",
+    downloads: 13800,
+    rating: 4.7,
+    tags: ["reporting", "dashboard", "kpi", "analytics", "automated", "data-visualization"],
+    tools: ["connector_call", "execute_code", "write_file", "send_email", "web_search"],
+  },
+
+  // ── Brand Identity Builder ────────────────────────────────────────────
+  {
+    id: "mkt-brand-identity",
+    name: "Brand Identity Builder",
+    description: "Create complete brand identities: naming, visual identity, voice guidelines, messaging framework, and brand book.",
+    instructions: `Build a complete brand identity:
+
+1. **Brand discovery** — Research and define:
+   - Mission, vision, values
+   - Target audience (3 detailed personas)
+   - Competitive positioning
+   - Brand personality traits (5 adjectives)
+   - Brand archetype (Hero, Sage, Explorer, etc.)
+2. **Naming** (if needed):
+   - Generate 20 name candidates using different strategies (compound, invented, metaphor, acronym)
+   - Check domain availability via web_search
+   - Check trademark conflicts
+   - Score each on: memorability, pronunciation, meaning, domain availability
+   - Shortlist top 5
+3. **Visual identity specs**:
+   - Color palette: Primary, secondary, accent (with hex codes)
+   - Typography: Heading and body fonts with pairing rationale
+   - Logo direction: Style, symbol concepts, layout options
+   - Generate sample visuals with generate_image
+4. **Voice & tone guidelines**:
+   - Brand voice characteristics (e.g., "confident but not arrogant")
+   - Vocabulary dos and don'ts
+   - Tone variations by context (marketing, support, social, formal)
+   - Example copy for each context
+5. **Messaging framework**:
+   - Tagline options (3-5)
+   - Elevator pitch (30-second and 2-minute)
+   - Value propositions by audience segment
+   - Key messages for website, ads, social
+   - Boilerplate description
+6. **Brand book** — Compile everything into a cohesive HTML brand guide document.`,
+    category: "custom",
+    icon: "🎨",
+    author: "Ottomate",
+    downloads: 11900,
+    rating: 4.7,
+    tags: ["brand", "identity", "naming", "visual", "voice", "guidelines", "logo"],
+    tools: ["web_search", "generate_image", "write_file"],
+  },
+
+  // ── Legal Document Assistant ──────────────────────────────────────────
+  {
+    id: "mkt-legal-doc-suite",
+    name: "Legal Document Suite",
+    description: "Draft common business legal documents: NDAs, terms of service, privacy policies, contracts, and partnership agreements with jurisdiction-aware language.",
+    instructions: `Draft legal documents with professional structure:
+
+1. **Determine document type** — Identify which document is needed:
+   - NDA (Mutual or One-way)
+   - Terms of Service / Terms of Use
+   - Privacy Policy (GDPR/CCPA compliant)
+   - Service Agreement / Contract
+   - Partnership Agreement
+   - Employment/Contractor Agreement
+   - DMCA Policy
+   - Acceptable Use Policy
+2. **Gather specifics** — Collect: party names, jurisdiction, effective date, specific terms, business type, data handling practices.
+3. **Research current requirements** — Use web_search to verify latest legal requirements for the jurisdiction (GDPR, CCPA, SOC2, etc.)
+4. **Draft the document** — Use standard legal formatting:
+   - Definitions section
+   - Clear section numbering
+   - Plain language where possible
+   - Standard clauses (severability, entire agreement, amendment, governing law)
+   - Specific terms requested by the user
+5. **Compliance checks** — Verify:
+   - GDPR requirements (for EU data): consent, data rights, DPO info
+   - CCPA requirements (for CA): opt-out, data categories, sale disclosure
+   - ADA compliance (for websites)
+   - Industry-specific regulations
+6. **Output** — Generate clean HTML and Markdown versions.
+7. **Disclaimer** — Always include: "This is a template for reference purposes. Have it reviewed by a qualified attorney before use."`,
+    category: "writing",
+    icon: "⚖️",
+    author: "Ottomate",
+    downloads: 14800,
+    rating: 4.6,
+    tags: ["legal", "nda", "terms-of-service", "privacy-policy", "contract", "compliance"],
+    tools: ["web_search", "write_file"],
+  },
+
+  // ── Product Launch Playbook ───────────────────────────────────────────
+  {
+    id: "mkt-product-launch",
+    name: "Product Launch Playbook",
+    description: "Execute a full product launch: pre-launch buzz, launch day execution, post-launch follow-up, across Product Hunt, social media, email, and press.",
+    instructions: `Execute a complete product launch:
+
+1. **Pre-launch (2-4 weeks before)**:
+   - Build a coming-soon landing page (write HTML content)
+   - Create email waitlist capture
+   - Write teaser social media posts (build anticipation)
+   - Prepare press release and media list
+   - Create Product Hunt ship page content
+   - Recruit "hunter" for Product Hunt
+   - Line up beta testers for reviews
+   - Prepare demo video script and assets
+2. **Launch day execution**:
+   - Publish Product Hunt listing (title, tagline, description, images)
+   - Send launch email to waitlist
+   - Post across all social channels simultaneously
+   - Send press release to media list
+   - Engage on Product Hunt comments (first 4 hours critical)
+   - Post in relevant communities (HN, Reddit, Discord, Slack)
+   - Update landing page from "coming soon" to live
+3. **Content blitz**:
+   - Launch blog post (full story, behind-the-scenes)
+   - Twitter/X thread with product story
+   - LinkedIn article
+   - YouTube launch video script
+   - Instagram/TikTok short-form content
+4. **Post-launch (1-2 weeks after)**:
+   - Thank you email to early adopters
+   - Collect and amplify user testimonials
+   - Respond to all reviews and feedback
+   - Create case studies from early users
+   - Retargeting ad copy for website visitors
+5. **Metrics to track**: Sign-ups, PH upvotes, press mentions, social impressions, conversion rate, NPS score.
+6. **Output** — Full playbook as organized HTML with checklists and templates.`,
+    category: "marketing",
+    icon: "🚀",
+    author: "Ottomate",
+    downloads: 18900,
+    rating: 4.9,
+    tags: ["launch", "product-hunt", "go-to-market", "marketing", "campaign", "growth"],
+    tools: ["web_search", "write_file", "send_email", "connector_call", "social_media_post", "generate_image"],
+    max_steps: 50,
+  },
+
+  // ── Data Pipeline & Web Scraping ──────────────────────────────────────
+  {
+    id: "mkt-smart-scraper",
+    name: "Smart Web Scraper & Data Pipeline",
+    description: "Build intelligent scraping workflows: navigate paginated sites, handle auth, extract structured data, clean/transform, and export to CSV/JSON/database.",
+    instructions: `Build and execute intelligent scraping pipelines:
+
+1. **Target analysis** — Analyze the target site:
+   - Use scrape_url or browse_web to examine page structure
+   - Identify data locations (tables, lists, cards, API endpoints)
+   - Check for pagination patterns (next button, infinite scroll, page numbers)
+   - Detect anti-scraping measures (rate limits, CAPTCHAs, JS rendering)
+2. **Strategy selection** — Choose the right approach:
+   - Static HTML: Simple scrape_url with CSS selectors
+   - JS-rendered: browser_browse or computer_use
+   - API-backed: Direct API calls (inspect network tab)
+   - Paginated: Loop with URL pattern or next-page detection
+3. **Data extraction** — For each page/item:
+   - Extract all target fields
+   - Handle missing data gracefully
+   - Follow links for detail pages if needed
+   - Respect rate limits (1-2 second delays between requests)
+4. **Data cleaning** — Use execute_code to:
+   - Remove duplicates
+   - Normalize formats (dates, currencies, phone numbers)
+   - Validate data types
+   - Handle special characters and encoding
+5. **Transform & export** — Output in requested format:
+   - CSV for spreadsheets
+   - JSON for APIs
+   - Markdown tables for reports
+   - HTML for web display
+6. **Quality report** — Include: total records, fields per record, missing data %, data sample.
+7. **Automation** — If recurring, create a scheduled task with the scraping workflow.
+
+Ethics:
+- Respect robots.txt
+- Don't overload servers (reasonable rate limiting)
+- Don't scrape personal data without consent
+- Check terms of service for the target site`,
+    category: "data",
+    icon: "🕸️",
+    author: "Ottomate",
+    downloads: 16700,
+    rating: 4.8,
+    tags: ["scraping", "data-extraction", "pipeline", "csv", "web-scraping", "automation"],
+    tools: ["scrape_url", "browse_web", "execute_code", "write_file"],
+    max_steps: 40,
+  },
+
+  // ── Course & Educational Content ──────────────────────────────────────
+  {
+    id: "mkt-course-creator",
+    name: "Online Course Creator",
+    description: "Design complete online courses: curriculum, lesson plans, quizzes, assignments, and promotional content.",
+    instructions: `Create a complete online course:
+
+1. **Course design** — Define:
+   - Learning objectives (what students will be able to DO after)
+   - Target audience and prerequisite knowledge
+   - Course format (self-paced, cohort, hybrid)
+   - Duration and module structure
+2. **Curriculum architecture** — Build:
+   - Module breakdown (4-8 modules)
+   - Lessons per module (3-5 lessons each)
+   - Learning path with dependencies
+   - Estimated time per lesson
+3. **Lesson content** — For each lesson:
+   - Lesson title and learning objective
+   - Key concepts (3-5 per lesson)
+   - Theory explanation with examples
+   - Practical exercises
+   - Common mistakes to avoid
+4. **Assessments** — Create:
+   - Quiz questions (multiple choice, true/false, short answer) — 5-10 per module
+   - Practical assignments with rubrics
+   - Final project specification
+   - Peer review prompts
+5. **Supporting materials** — Generate:
+   - Cheat sheets / quick reference guides
+   - Glossary of terms
+   - Resource list (tools, books, articles)
+   - Templates and starter files
+6. **Marketing** — Create:
+   - Course description and selling points
+   - Email sequence for launch
+   - Social media promotion plan
+   - Pricing strategy
+7. **Output** — Organized into folders: /modules/, /assessments/, /resources/, /marketing/`,
+    category: "custom",
+    icon: "🎓",
+    author: "Ottomate",
+    downloads: 9600,
+    rating: 4.7,
+    tags: ["course", "education", "curriculum", "e-learning", "teaching", "training"],
+    tools: ["web_search", "write_file"],
+  },
+
+  // ── Workflow Composer (Claude Code / Hermes-inspired) ─────────────────
+  {
+    id: "mkt-workflow-composer",
+    name: "Multi-Step Workflow Composer",
+    description: "Design and execute complex multi-step autonomous workflows with conditional logic, parallel execution, error handling, and human-in-the-loop checkpoints.",
+    instructions: `Compose and execute complex autonomous workflows:
+
+1. **Understand the goal** — Parse the user's request into discrete, actionable steps. Identify:
+   - Sequential dependencies (step B needs output from step A)
+   - Parallel opportunities (steps that can run simultaneously)
+   - Decision points (if X then Y, else Z)
+   - Human review checkpoints (where user approval is needed)
+2. **Design the workflow** — Create a structured plan:
+   - Number each step with clear input/output
+   - Mark dependencies: [depends: step_1, step_3]
+   - Mark parallel groups: [parallel: step_2, step_3, step_4]
+   - Mark checkpoints: [checkpoint: "Review before publishing"]
+3. **Execute with sub-agents** — For each major step:
+   - Delegate to appropriate sub-agent type (research, code, writing, etc.)
+   - Pass context and outputs from previous steps
+   - Collect results and validate before proceeding
+4. **Handle errors** — At each step:
+   - If a step fails, attempt recovery (retry with different approach)
+   - If unrecoverable, log the failure and continue with remaining steps
+   - Report partial results to the user
+5. **Produce deliverables** — At the end:
+   - Compile all outputs into organized deliverables
+   - Generate an execution summary with status per step
+   - Note any steps that need follow-up
+6. **Store learnings** — Use memory_store to save:
+   - Workflow patterns that worked well
+   - Tool combinations that were effective
+   - Timing/performance observations
+
+This is Otto's master orchestration skill — use it when the task involves 5+ distinct steps across different domains.`,
+    category: "automation",
+    icon: "🔄",
+    author: "Ottomate",
+    downloads: 19500,
+    rating: 4.9,
+    tags: ["workflow", "orchestration", "multi-step", "automation", "sub-agents", "pipeline"],
+    tools: ["create_sub_agent", "web_search", "write_file", "memory_store", "execute_code"],
+    max_steps: 60,
+    model: "claude-sonnet-4-6",
+  },
+
+  // ── Autonomous 24/7 Monitor ───────────────────────────────────────────
+  {
+    id: "mkt-autonomous-monitor",
+    name: "Autonomous 24/7 Monitor",
+    description: "Set up continuous monitoring for websites, prices, competitors, news alerts, uptime, and social mentions with automated alerts.",
+    instructions: `Set up autonomous monitoring and alerting:
+
+1. **Define monitors** — Based on user needs:
+   - **Price monitoring**: Track product prices on competitor sites
+   - **Uptime monitoring**: Check if websites/APIs are responding
+   - **News alerts**: Monitor for mentions of specific topics/brands
+   - **Social mentions**: Track brand or keyword mentions
+   - **Job postings**: Watch for specific role types at companies
+   - **Content updates**: Detect changes to specific web pages
+   - **Stock/crypto prices**: Track financial instruments
+2. **Create monitoring tasks** — For each monitor:
+   - Write the check logic (scrape_url or web_search)
+   - Define what constitutes a change/alert
+   - Set the check frequency (hourly, daily, weekly)
+3. **Set up scheduled tasks** — Create scheduled tasks that:
+   - Run the monitoring check at the specified interval
+   - Compare results to previous values (stored in memory)
+   - If change detected: send alert via email/Slack/Discord
+   - Log all checks for historical tracking
+4. **Alert configuration** — Define alert thresholds:
+   - Price drop > X%: Alert immediately
+   - Uptime: Site down for > 5 minutes
+   - News: New article matching keywords
+   - Social: Negative sentiment spike
+5. **Reporting** — Weekly summary of all monitoring activity:
+   - Changes detected
+   - Trends identified
+   - Recommendations based on patterns
+6. **Memory integration** — Store baselines and historical data in memory for comparison.`,
+    category: "automation",
+    icon: "👁️",
+    author: "Ottomate",
+    downloads: 15400,
+    rating: 4.8,
+    tags: ["monitoring", "alerts", "uptime", "price-tracking", "automation", "scheduled"],
+    tools: ["web_search", "scrape_url", "memory_store", "memory_recall", "send_email", "connector_call"],
+  },
+
+  // ── AI-Powered Research Analyst ───────────────────────────────────────
+  {
+    id: "mkt-research-analyst",
+    name: "AI Research Analyst",
+    description: "Conduct deep multi-source research with cross-referencing, source credibility scoring, and structured deliverables (reports, briefs, white papers).",
+    instructions: `Conduct professional-grade research:
+
+1. **Research plan** — Before searching:
+   - Define research questions (primary and secondary)
+   - Identify source types needed (academic, news, industry, government)
+   - Set scope boundaries (time period, geography, exclusions)
+2. **Multi-source gathering** — Execute at least 10-15 searches across:
+   - Academic sources (scholar, arxiv, papers)
+   - News sources (recent, archival)
+   - Industry reports (analyst firms, trade publications)
+   - Government data (census, BLS, SEC filings)
+   - Expert opinions (interviews, podcasts, tweets)
+   - Competing viewpoints (ensure balanced coverage)
+3. **Source credibility scoring** — Rate each source:
+   - Authority: Who wrote it? What are their credentials?
+   - Recency: When was it published? Is it current?
+   - Objectivity: Any conflicts of interest or bias?
+   - Corroboration: Do multiple independent sources agree?
+   - Score each source 1-5 on credibility
+4. **Cross-referencing** — For key claims:
+   - Verify with at least 2 independent sources
+   - Note any contradictions between sources
+   - Quantify confidence levels (high/medium/low)
+5. **Synthesis** — Compile findings into:
+   - Executive summary (1 page)
+   - Key findings with evidence and source citations
+   - Data tables and comparisons
+   - Implications and recommendations
+   - Methodology section
+6. **Deliverable format** — Output as professional HTML report with:
+   - Table of contents
+   - Numbered citations
+   - Charts/data described for visualization
+   - Appendix with full source list
+7. **Store insights** — Save key findings in memory for future reference.`,
+    category: "research",
+    icon: "🔬",
+    author: "Ottomate",
+    downloads: 17600,
+    rating: 4.9,
+    tags: ["research", "analysis", "deep-research", "report", "academic", "sourcing"],
+    tools: ["web_search", "scrape_url", "write_file", "memory_store", "execute_code"],
+    max_steps: 50,
+    model: "claude-sonnet-4-6",
+  },
+
+  // ── Real Estate Analysis ──────────────────────────────────────────────
+  {
+    id: "mkt-real-estate-analyst",
+    name: "Real Estate Investment Analyst",
+    description: "Analyze real estate opportunities: market research, property valuation, rent comparables, ROI calculations, and investment summaries.",
+    instructions: `Analyze real estate investment opportunities:
+
+1. **Market research** — For the target area:
+   - Median home prices and trends (1yr, 5yr)
+   - Rent prices by property type
+   - Population and job growth
+   - School ratings and neighborhood quality
+   - Crime statistics
+   - Development projects planned
+2. **Property analysis** — For a specific property:
+   - Price per square foot comparison
+   - Estimated market value (comp analysis)
+   - Property condition assessment (from listing)
+   - Renovation cost estimates if needed
+3. **Financial analysis** — Calculate:
+   - Cap rate = (NOI / Purchase Price)
+   - Cash-on-cash return
+   - Monthly cash flow (rent - mortgage - expenses)
+   - 1% rule check (monthly rent >= 1% of purchase price)
+   - Operating expense ratio
+   - Debt service coverage ratio
+4. **Rent comparables** — Research comparable rentals:
+   - Similar properties within 1 mile
+   - Current asking rents
+   - Occupancy rates
+   - Rental trend (increasing/stable/declining)
+5. **Scenario modeling** — Model 3 scenarios:
+   - Conservative (lower rent, higher vacancy, more repairs)
+   - Base case (market average assumptions)
+   - Optimistic (above-market rent, low vacancy)
+6. **Investment summary** — One-page summary with:
+   - Go/No-go recommendation with reasoning
+   - Key metrics dashboard
+   - Risk factors and mitigants
+   - Appreciation forecast`,
+    category: "data",
+    icon: "🏠",
+    author: "Community",
+    downloads: 8400,
+    rating: 4.6,
+    tags: ["real-estate", "investment", "property", "analysis", "roi", "rental"],
+    tools: ["web_search", "scrape_url", "execute_code", "write_file"],
+  },
+
+  // ── Shopify Store Builder ─────────────────────────────────────────────
+  {
+    id: "mkt-shopify-store-builder",
+    name: "Shopify Store Builder",
+    description: "Set up and optimize a complete Shopify store: product listings, collections, blog, SEO, email flows, and analytics via the Shopify connector.",
+    instructions: `Build and optimize a complete Shopify store:
+
+1. **Store audit** (if existing) or **Store setup** (if new):
+   - Review current products, collections, pages
+   - Identify gaps in product info, SEO, cross-sells
+2. **Product optimization** — For each product:
+   - SEO title (keyword + brand/descriptor, under 70 chars)
+   - Description: benefit-driven HTML with features, specs, use cases
+   - Tags for collection filtering
+   - Generate product images if needed
+   - Variant setup (size, color, material)
+   - connector_call(shopify, create_product/update_product)
+3. **Collection strategy** — Create smart collections:
+   - By category, price range, season, best-sellers
+   - Collection descriptions with SEO keywords
+   - connector_call(shopify, create_collection)
+4. **Blog content** — Write 5-10 SEO blog posts:
+   - Related to products/niche
+   - Internal links to product pages
+   - connector_call(shopify, create_blog_post)
+5. **SEO setup** — For all pages:
+   - Meta titles and descriptions
+   - URL handle optimization
+   - Alt text for images
+   - Schema markup recommendations
+6. **Email flows** — Write templates for:
+   - Welcome series (3 emails)
+   - Abandoned cart recovery (3 emails)
+   - Post-purchase follow-up
+   - Win-back for inactive customers
+7. **Analytics recommendations** — Set up tracking:
+   - Conversion tracking setup guide
+   - KPI dashboard specification
+   - Weekly review checklist`,
+    category: "ecommerce",
+    icon: "🛒",
+    author: "Ottomate",
+    downloads: 14100,
+    rating: 4.8,
+    tags: ["shopify", "ecommerce", "store", "products", "seo", "email", "setup"],
+    tools: ["connector_call", "web_search", "write_file", "generate_image"],
+    max_steps: 50,
+  },
+
+  // ── Personal Branding Engine ──────────────────────────────────────────
+  {
+    id: "mkt-personal-brand",
+    name: "Personal Branding Engine",
+    description: "Build a complete personal brand: positioning, content strategy, LinkedIn/Twitter presence, thought leadership plan, and speaking opportunities.",
+    instructions: `Build a powerful personal brand:
+
+1. **Brand audit** — Analyze current online presence:
+   - Google search results for the person's name
+   - LinkedIn profile completeness and engagement
+   - Twitter/X presence and follower quality
+   - Other platforms (GitHub, Medium, YouTube, podcast)
+   - Identify gaps and inconsistencies
+2. **Positioning** — Define:
+   - Unique positioning statement: "I help [audience] achieve [outcome] through [approach]"
+   - 3-5 topic pillars they're the expert on
+   - Differentiators from others in the space
+   - Personal story arc (origin, struggles, transformation)
+3. **Content strategy** — Create a 90-day plan:
+   - Weekly content cadence by platform
+   - Content themes rotating through pillars
+   - Format mix (posts, threads, articles, videos)
+   - Engagement strategy (comments, connections, communities)
+4. **LinkedIn plan** — Specific to LinkedIn:
+   - Profile optimization (headline, about, experience)
+   - 30 post ideas with hooks
+   - Comment templates for thought leaders in the space
+   - Connection strategy
+5. **Twitter/X plan** — Specific to Twitter:
+   - Bio optimization
+   - 20 tweet ideas and thread concepts
+   - Engagement targets and strategy
+   - List of accounts to engage with
+6. **Thought leadership** — Plan for:
+   - Speaking opportunity targets (conferences, podcasts, webinars)
+   - Outreach templates for event organizers
+   - Article pitches for industry publications
+   - Book/ebook concept outline
+7. **Metrics** — Track: follower growth, engagement rate, inbound opportunities, speaking invitations.`,
+    category: "marketing",
+    icon: "👤",
+    author: "Ottomate",
+    downloads: 10500,
+    rating: 4.7,
+    tags: ["personal-brand", "thought-leadership", "linkedin", "twitter", "content-strategy"],
+    tools: ["web_search", "scrape_url", "write_file"],
+  },
+
+  // ── Autonomous Task Chains (Hermes AGENT patterns) ────────────────────
+  {
+    id: "mkt-task-chain-executor",
+    name: "Task Chain Executor",
+    description: "Break complex goals into a chain of tasks that execute sequentially, passing outputs between steps. Self-correcting with retry logic and checkpoints.",
+    instructions: `Execute complex multi-task chains autonomously:
+
+1. **Goal decomposition** — Break the user's goal into 3-15 discrete tasks:
+   - Each task has clear inputs, outputs, and success criteria
+   - Identify dependencies between tasks
+   - Identify which tasks can use sub-agents
+2. **Chain setup** — For each task in the chain:
+   - Assign the best agent type (research, code, writing, etc.)
+   - Define expected output format
+   - Define quality threshold (what "done" looks like)
+   - Set timeout and retry limits
+3. **Execute chain** — Run tasks in dependency order:
+   - Pass outputs from completed tasks as inputs to the next
+   - Use create_sub_agent for parallelizable tasks
+   - Store intermediate results in task files
+   - After each task, validate output quality
+4. **Self-correction** — If a task produces poor output:
+   - Identify what went wrong
+   - Retry with modified approach (different search terms, different prompt angle)
+   - Maximum 2 retries per task
+   - If still failing, flag for user intervention
+5. **Checkpoint reporting** — After every 3 tasks or at major milestones:
+   - Report progress summary
+   - Display completed deliverables
+   - Ask for direction if ambiguity arose
+6. **Final assembly** — Compile all task outputs into cohesive deliverable:
+   - Ensure consistency across outputs
+   - Add transitions and cross-references
+   - Generate executive summary
+7. **Post-mortem** — Log what worked and what didn't in memory for future improvement.`,
+    category: "automation",
+    icon: "⛓️",
+    author: "Ottomate",
+    downloads: 16300,
+    rating: 4.8,
+    tags: ["task-chain", "orchestration", "autonomous", "multi-step", "self-correcting"],
+    tools: ["create_sub_agent", "write_file", "memory_store", "memory_recall", "web_search", "execute_code"],
+    max_steps: 60,
+  },
 ];
 
 export const MARKETPLACE_CATEGORIES = [
@@ -3281,9 +5069,12 @@ export const MARKETPLACE_CATEGORIES = [
   { id: "data", label: "Data & AI", icon: "📊" },
   { id: "automation", label: "Automation & Agents", icon: "⚙️" },
   { id: "ecommerce", label: "E-Commerce & Marketing", icon: "🛍️" },
+  { id: "marketing", label: "Marketing & Growth", icon: "📈" },
+  { id: "career", label: "Career & Job Hunting", icon: "🎯" },
   { id: "architecture", label: "Architecture & Design", icon: "🏛️" },
   { id: "security", label: "Security", icon: "🔒" },
   { id: "testing", label: "Testing & QA", icon: "🧪" },
   { id: "infrastructure", label: "DevOps & Infrastructure", icon: "🐳" },
   { id: "custom", label: "Creative & Specialized", icon: "🎨" },
+  { id: "video", label: "Video & Media Production", icon: "🎬" },
 ];

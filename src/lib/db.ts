@@ -9,7 +9,7 @@ const FILES_DIR = "./task-files";
 
 let _db: Database.Database | null = null;
 
-function getDb(): Database.Database {
+export function getDb(): Database.Database {
   if (_db) return _db;
   
   // Ensure parent directory exists
@@ -179,21 +179,6 @@ function initSchema(db: Database.Database): void {
       updated_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS task_templates (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      prompt TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT 'general',
-      icon TEXT NOT NULL DEFAULT '📋',
-      model TEXT NOT NULL DEFAULT 'auto',
-      tags TEXT DEFAULT '[]',
-      is_builtin INTEGER NOT NULL DEFAULT 0,
-      use_count INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS agent_learnings (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -270,6 +255,36 @@ function initSchema(db: Database.Database): void {
       db.exec("CREATE UNIQUE INDEX idx_task_files_unique ON task_files(task_id, name)");
     }
   } catch { /* index already exists or migration already ran */ }
+
+  // Migrate: add self-improvement columns to skills table
+  try { db.exec("ALTER TABLE skills ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN failure_count INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN auto_generated INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN source_task_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN performance_score REAL NOT NULL DEFAULT 0.5"); } catch { /* exists */ }
+
+  // Migrate: add memory-engine columns to memory table
+  try { db.exec("ALTER TABLE memory ADD COLUMN importance_score REAL NOT NULL DEFAULT 0.5"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE memory ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE memory ADD COLUMN last_accessed_at TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE memory ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'semantic'"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE memory ADD COLUMN compressed INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+
+  // Create skill_performance tracking table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_performance (
+      id TEXT PRIMARY KEY,
+      skill_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      outcome TEXT NOT NULL DEFAULT 'success',
+      tool_count INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )
+  `);
 
   // Clean orphaned file records (files in DB but deleted from disk)
   try {
@@ -840,9 +855,44 @@ export function listSkills(): Skill[] {
     tools: r.tools ? JSON.parse(r.tools as string) : undefined,
     max_steps: (r.max_steps as number) || undefined,
     max_tokens: (r.max_tokens as number) || undefined,
+    usage_count: (r.usage_count as number) || 0,
+    success_count: (r.success_count as number) || 0,
+    failure_count: (r.failure_count as number) || 0,
+    auto_generated: ((r.auto_generated as number) || 0) === 1,
+    source_task_id: (r.source_task_id as string) || undefined,
+    performance_score: (r.performance_score as number) ?? 0.5,
     created_at: r.created_at as string,
     updated_at: r.updated_at as string,
   }));
+}
+
+export function getSkill(id: string): Skill | undefined {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM skills WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string,
+    instructions: row.instructions as string,
+    category: (row.category as string) || "custom",
+    triggers: JSON.parse((row.triggers as string) || "[]"),
+    is_active: !!(row.is_active as number),
+    preset_type: ((row.preset_type as string) || "custom") as PresetType,
+    model: (row.model as ModelId) || undefined,
+    tools: row.tools ? JSON.parse(row.tools as string) : undefined,
+    max_steps: row.max_steps as number | undefined,
+    max_tokens: row.max_tokens as number | undefined,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+export function getSkillByName(name: string): Skill | undefined {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM skills WHERE LOWER(name) = LOWER(?)").get(name) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  return getSkill(row.id as string);
 }
 
 export function createSkill(skill: Omit<Skill, "created_at" | "updated_at">): Skill {
@@ -850,9 +900,9 @@ export function createSkill(skill: Omit<Skill, "created_at" | "updated_at">): Sk
   const now = new Date().toISOString();
   db.prepare(`
     INSERT INTO skills (id, name, description, instructions, category, triggers, is_active,
-      preset_type, model, tools, max_steps, max_tokens, created_at, updated_at)
+      preset_type, model, tools, max_steps, max_tokens, auto_generated, source_task_id, created_at, updated_at)
     VALUES (@id, @name, @description, @instructions, @category, @triggers, @is_active,
-      @preset_type, @model, @tools, @max_steps, @max_tokens, @created_at, @updated_at)
+      @preset_type, @model, @tools, @max_steps, @max_tokens, @auto_generated, @source_task_id, @created_at, @updated_at)
   `).run({
     ...skill,
     category: skill.category || "custom",
@@ -863,6 +913,8 @@ export function createSkill(skill: Omit<Skill, "created_at" | "updated_at">): Sk
     tools: skill.tools ? JSON.stringify(skill.tools) : null,
     max_steps: skill.max_steps || null,
     max_tokens: skill.max_tokens || null,
+    auto_generated: (skill as Record<string, unknown>).auto_generated ? 1 : 0,
+    source_task_id: (skill as Record<string, unknown>).source_task_id || null,
     created_at: now,
     updated_at: now,
   });
@@ -897,6 +949,155 @@ export function updateSkill(id: string, updates: Partial<Skill>): void {
 export function deleteSkill(id: string): void {
   const db = getDb();
   db.prepare("DELETE FROM skills WHERE id = ?").run(id);
+}
+
+// ─── Skill Performance Tracking (Hermes-inspired) ─────────────────────────────
+
+export function incrementSkillUsage(skillId: string, outcome: "success" | "failure"): void {
+  const db = getDb();
+  const field = outcome === "success" ? "success_count" : "failure_count";
+  db.prepare(`UPDATE skills SET usage_count = usage_count + 1, ${field} = ${field} + 1, updated_at = ? WHERE id = ?`)
+    .run(new Date().toISOString(), skillId);
+  // Recompute performance score
+  const row = db.prepare("SELECT usage_count, success_count FROM skills WHERE id = ?").get(skillId) as { usage_count: number; success_count: number } | undefined;
+  if (row && row.usage_count > 0) {
+    const score = row.success_count / row.usage_count;
+    db.prepare("UPDATE skills SET performance_score = ? WHERE id = ?").run(score, skillId);
+  }
+}
+
+export function findSimilarSkill(name: string): boolean {
+  const db = getDb();
+  const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const skills = db.prepare("SELECT name FROM skills").all() as Array<{ name: string }>;
+  return skills.some(s => {
+    const sNorm = s.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return sNorm === normalized || levenshteinDistance(sNorm, normalized) < 3;
+  });
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+export function recordSkillPerf(perf: {
+  skill_id: string; task_id: string; outcome: "success" | "failure"; tool_count: number; duration_ms: number; created_at: string;
+}): void {
+  const db = getDb();
+  const { v4: uuidv4 } = require("uuid");
+  try {
+    db.prepare(`
+      INSERT INTO skill_performance (id, skill_id, task_id, outcome, tool_count, duration_ms, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), perf.skill_id, perf.task_id, perf.outcome, perf.tool_count, perf.duration_ms, perf.created_at);
+  } catch (e) {
+    console.error("[skill-perf] Error recording:", e);
+  }
+}
+
+export function getSkillSuccessRateFromDb(skillId: string): { total: number; successes: number; rate: number } {
+  const db = getDb();
+  try {
+    const rows = db.prepare(
+      "SELECT outcome FROM skill_performance WHERE skill_id = ? ORDER BY created_at DESC LIMIT 20"
+    ).all(skillId) as Array<{ outcome: string }>;
+    const total = rows.length;
+    const successes = rows.filter(r => r.outcome === "success").length;
+    return { total, successes, rate: total > 0 ? successes / total : 0 };
+  } catch {
+    return { total: 0, successes: 0, rate: 0 };
+  }
+}
+
+export function identifyUnderperformingSkillsFromDb(): Array<{ skill_id: string; name: string; rate: number; total: number }> {
+  const db = getDb();
+  try {
+    const skills = db.prepare("SELECT id, name FROM skills WHERE is_active = 1").all() as Array<{ id: string; name: string }>;
+    const underperforming: Array<{ skill_id: string; name: string; rate: number; total: number }> = [];
+    for (const skill of skills) {
+      const perf = getSkillSuccessRateFromDb(skill.id);
+      if (perf.total >= 3 && perf.rate < 0.6) {
+        underperforming.push({ skill_id: skill.id, name: skill.name, rate: perf.rate, total: perf.total });
+      }
+    }
+    return underperforming;
+  } catch {
+    return [];
+  }
+}
+
+export function listSkillPerformance(skillId?: string, limit = 20): Array<{
+  id: string; skill_id: string; task_id: string; outcome: string; tool_count: number; duration_ms: number; created_at: string;
+}> {
+  const db = getDb();
+  if (skillId) {
+    return db.prepare("SELECT * FROM skill_performance WHERE skill_id = ? ORDER BY created_at DESC LIMIT ?").all(skillId, limit) as Array<{ id: string; skill_id: string; task_id: string; outcome: string; tool_count: number; duration_ms: number; created_at: string }>;
+  }
+  return db.prepare("SELECT * FROM skill_performance ORDER BY created_at DESC LIMIT ?").all(limit) as Array<{ id: string; skill_id: string; task_id: string; outcome: string; tool_count: number; duration_ms: number; created_at: string }>;
+}
+
+// ─── Enhanced Memory with Importance/Type (Hermes-inspired) ───────────────────
+
+export function updateMemoryAccess(id: string): void {
+  const db = getDb();
+  db.prepare("UPDATE memory SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?")
+    .run(new Date().toISOString(), id);
+}
+
+export function listMemoryWithMeta(limit = 50): Array<MemoryEntry & { importance_score: number; access_count: number; memory_type: string; compressed: boolean }> {
+  const db = getDb();
+  const rows = db.prepare("SELECT * FROM memory ORDER BY importance_score DESC, updated_at DESC LIMIT ?").all(limit) as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    id: r.id as string,
+    key: r.key as string,
+    value: r.value as string,
+    source_task_id: r.source_task_id as string | undefined,
+    tags: JSON.parse((r.tags as string) || "[]"),
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+    importance_score: (r.importance_score as number) ?? 0.5,
+    access_count: (r.access_count as number) ?? 0,
+    memory_type: (r.memory_type as string) ?? "semantic",
+    compressed: ((r.compressed as number) ?? 0) === 1,
+  }));
+}
+
+export function getSelfImprovementStats(): {
+  total_memories: number;
+  compressed_memories: number;
+  auto_skills: number;
+  avg_skill_performance: number;
+  total_learnings: number;
+  high_confidence_learnings: number;
+} {
+  const db = getDb();
+  const memCount = (db.prepare("SELECT COUNT(*) as c FROM memory").get() as { c: number }).c;
+  const compCount = (db.prepare("SELECT COUNT(*) as c FROM memory WHERE compressed = 1").get() as { c: number }).c;
+  const autoSkills = (db.prepare("SELECT COUNT(*) as c FROM skills WHERE auto_generated = 1").get() as { c: number }).c;
+  const avgPerf = (db.prepare("SELECT AVG(performance_score) as a FROM skills WHERE usage_count > 0").get() as { a: number | null })?.a ?? 0;
+  const learnCount = (db.prepare("SELECT COUNT(*) as c FROM agent_learnings").get() as { c: number }).c;
+  const highConf = (db.prepare("SELECT COUNT(*) as c FROM agent_learnings WHERE confidence > 0.7").get() as { c: number }).c;
+  return {
+    total_memories: memCount,
+    compressed_memories: compCount,
+    auto_skills: autoSkills,
+    avg_skill_performance: avgPerf,
+    total_learnings: learnCount,
+    high_confidence_learnings: highConf,
+  };
 }
 
 // ─── Gallery CRUD ─────────────────────────────────────────────────────────────
@@ -1195,8 +1396,8 @@ export function getGlobalTokenUsage(): { total_tokens: number; estimated_cost_us
 
 // ─── Scheduled Tasks (OpenClaw Cron-inspired) ─────────────────────────────────
 
-import type { ScheduledTask, TaskTemplate } from "./types";
-export type { ScheduledTask, TaskTemplate };
+import type { ScheduledTask } from "./types";
+export type { ScheduledTask };
 
 export function createScheduledTask(task: Omit<ScheduledTask, "created_at" | "updated_at">): ScheduledTask {
   const db = getDb();
@@ -1248,159 +1449,6 @@ export function deleteScheduledTask(id: string): void {
 export function toggleScheduledTask(id: string, enabled: boolean): void {
   const db = getDb();
   db.prepare("UPDATE scheduled_tasks SET enabled = ?, updated_at = ? WHERE id = ?").run(enabled ? 1 : 0, new Date().toISOString(), id);
-}
-
-// ─── Task Templates (OpenClaw/Community-inspired) ─────────────────────────────
-
-function hydrateTemplate(row: Record<string, unknown>): TaskTemplate {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    description: (row.description as string) || "",
-    prompt: row.prompt as string,
-    category: (row.category as string) || "general",
-    icon: (row.icon as string) || "📋",
-    model: (row.model as string) || "auto",
-    tags: JSON.parse((row.tags as string) || "[]"),
-    is_builtin: !!(row.is_builtin as number),
-    use_count: (row.use_count as number) || 0,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-  };
-}
-
-export function listTemplates(): TaskTemplate[] {
-  const db = getDb();
-  const rows = db.prepare("SELECT * FROM task_templates ORDER BY use_count DESC, name ASC").all() as Array<Record<string, unknown>>;
-  // Seed built-in templates on first access if table is empty
-  if (rows.length === 0) {
-    seedTemplates(db);
-    return (db.prepare("SELECT * FROM task_templates ORDER BY use_count DESC, name ASC").all() as Array<Record<string, unknown>>).map(hydrateTemplate);
-  }
-  return rows.map(hydrateTemplate);
-}
-
-export function getTemplate(id: string): TaskTemplate | null {
-  const db = getDb();
-  const row = db.prepare("SELECT * FROM task_templates WHERE id = ?").get(id) as Record<string, unknown> | undefined;
-  return row ? hydrateTemplate(row) : null;
-}
-
-export function createTemplate(t: Omit<TaskTemplate, "is_builtin" | "use_count" | "created_at" | "updated_at">): TaskTemplate {
-  const db = getDb();
-  const now = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO task_templates (id, name, description, prompt, category, icon, model, tags, is_builtin, use_count, created_at, updated_at)
-    VALUES (@id, @name, @description, @prompt, @category, @icon, @model, @tags, 0, 0, @created_at, @updated_at)
-  `).run({ ...t, tags: JSON.stringify(t.tags || []), created_at: now, updated_at: now });
-  return getTemplate(t.id)!;
-}
-
-export function deleteTemplate(id: string): void {
-  const db = getDb();
-  db.prepare("DELETE FROM task_templates WHERE id = ? AND is_builtin = 0").run(id);
-}
-
-export function incrementTemplateUseCount(id: string): void {
-  const db = getDb();
-  db.prepare("UPDATE task_templates SET use_count = use_count + 1, updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
-}
-
-function seedTemplates(db: Database.Database): void {
-  const templates = [
-    {
-      id: "tpl-research",
-      name: "Deep Research Report",
-      description: "Research a topic thoroughly using web search, then produce a well-structured report with citations.",
-      prompt: "Research the following topic in depth. Search the web for the latest information, cross-reference multiple sources, and produce a comprehensive report with sections, key findings, and source citations.\n\nTopic: ",
-      category: "research",
-      icon: "🔬",
-      model: "auto",
-      tags: ["research", "report", "web-search"],
-    },
-    {
-      id: "tpl-code-review",
-      name: "Code Review & Refactor",
-      description: "Analyze code for quality, performance, security, and best practices. Suggest improvements.",
-      prompt: "Perform a thorough code review on the following code. Check for:\n- Bugs and edge cases\n- Performance issues\n- Security vulnerabilities\n- Best practices and naming conventions\n- Opportunities for refactoring\n\nProvide specific, actionable feedback with code examples.\n\nCode to review:\n",
-      category: "development",
-      icon: "🔍",
-      model: "auto",
-      tags: ["code", "review", "quality"],
-    },
-    {
-      id: "tpl-data-analysis",
-      name: "Data Analysis & Visualization",
-      description: "Analyze a dataset, compute statistics, and generate visualizations with Python.",
-      prompt: "Analyze the following data. Compute descriptive statistics, identify patterns and outliers, and generate clear visualizations (charts/graphs) using Python matplotlib or seaborn. Save the charts as image files.\n\nData description: ",
-      category: "data",
-      icon: "📊",
-      model: "auto",
-      tags: ["data", "analysis", "visualization", "python"],
-    },
-    {
-      id: "tpl-email-draft",
-      name: "Professional Email Draft",
-      description: "Draft a professional email with the right tone, structure, and clarity.",
-      prompt: "Draft a professional email based on the following details. Use appropriate tone, clear structure, and concise language. Include a subject line suggestion.\n\nDetails: ",
-      category: "writing",
-      icon: "✉️",
-      model: "auto",
-      tags: ["email", "writing", "professional"],
-    },
-    {
-      id: "tpl-competitive",
-      name: "Competitive Analysis",
-      description: "Research competitors, compare features, pricing, and market positioning.",
-      prompt: "Conduct a competitive analysis. Search the web for the latest information on each competitor. Compare:\n- Features and capabilities\n- Pricing and plans\n- Market positioning and target audience\n- Strengths and weaknesses\n- Recent news and developments\n\nPresent findings in a structured comparison with a recommendation.\n\nCompany/Product to analyze: ",
-      category: "research",
-      icon: "⚔️",
-      model: "auto",
-      tags: ["competitive", "analysis", "market-research"],
-    },
-    {
-      id: "tpl-summarize",
-      name: "Summarize URL / Article",
-      description: "Fetch a web page and produce a concise summary with key takeaways.",
-      prompt: "Fetch the following URL, read the content, and produce:\n1. A one-paragraph summary\n2. 5-7 key takeaways as bullet points\n3. Any actionable insights\n\nURL: ",
-      category: "research",
-      icon: "📝",
-      model: "auto",
-      tags: ["summary", "url", "web"],
-    },
-    {
-      id: "tpl-script",
-      name: "Write & Run Script",
-      description: "Write a Python/JS/Bash script for a specific task, execute it, and return results.",
-      prompt: "Write a script to accomplish the following task. Execute the script and return the results. If any errors occur, debug and fix them.\n\nTask: ",
-      category: "development",
-      icon: "🖥️",
-      model: "auto",
-      tags: ["code", "script", "automation"],
-    },
-    {
-      id: "tpl-meeting-notes",
-      name: "Meeting Notes → Action Items",
-      description: "Transform meeting notes into structured action items with owners and deadlines.",
-      prompt: "Transform these meeting notes into:\n1. A brief meeting summary (2-3 sentences)\n2. Key decisions made\n3. Action items table (Task | Owner | Deadline | Priority)\n4. Open questions / follow-ups\n\nMeeting notes:\n",
-      category: "productivity",
-      icon: "📋",
-      model: "auto",
-      tags: ["meeting", "action-items", "productivity"],
-    },
-  ];
-
-  const insert = db.prepare(`
-    INSERT OR REPLACE INTO task_templates (id, name, description, prompt, category, icon, model, tags, is_builtin, use_count, created_at, updated_at)
-    VALUES (@id, @name, @description, @prompt, @category, @icon, @model, @tags, 1, 0, @created_at, @updated_at)
-  `);
-  const now = new Date().toISOString();
-  const insertMany = db.transaction(() => {
-    for (const t of templates) {
-      insert.run({ ...t, tags: JSON.stringify(t.tags), created_at: now, updated_at: now });
-    }
-  });
-  insertMany();
 }
 
 // ─── Tasks by Source (Session Isolation) ──────────────────────────────────────
@@ -1464,7 +1512,7 @@ export function getSystemHealth(): {
 } {
   const providers = [
     { name: "Anthropic (Claude)", configured: !!process.env.ANTHROPIC_API_KEY },
-    { name: "OpenAI (GPT-4o)", configured: !!process.env.OPENAI_API_KEY },
+    { name: "OpenAI (GPT-5.4)", configured: !!process.env.OPENAI_API_KEY },
     { name: "Google (Gemini)", configured: !!process.env.GOOGLE_AI_API_KEY },
     { name: "Replicate", configured: !!process.env.REPLICATE_API_TOKEN || !!getConnectorConfig("replicate")?.api_key },
   ];
@@ -1843,84 +1891,6 @@ export function updateSession(id: string, updates: { name?: string; description?
 export function deleteSession(id: string): void {
   const db = getDb();
   db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
-}
-
-// ─── Pipelines (Task DAG) ─────────────────────────────────────────────────────
-
-export function createPipeline(name: string, description?: string): string {
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pipelines (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      nodes TEXT DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  const id = uuidv4();
-  const now = new Date().toISOString();
-  db.prepare(
-    "INSERT INTO pipelines (id, name, description, nodes, created_at, updated_at) VALUES (?, ?, ?, '[]', ?, ?)"
-  ).run(id, name, description || "", now, now);
-  return id;
-}
-
-export function getPipelines(): Array<{
-  id: string; name: string; description: string; nodes: unknown[];
-  created_at: string; updated_at: string;
-}> {
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pipelines (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      nodes TEXT DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  const rows = db.prepare("SELECT * FROM pipelines ORDER BY updated_at DESC").all() as Array<{
-    id: string; name: string; description: string; nodes: string;
-    created_at: string; updated_at: string;
-  }>;
-  return rows.map(r => ({
-    ...r,
-    nodes: JSON.parse(r.nodes || "[]") as unknown[],
-  }));
-}
-
-export function getPipeline(id: string) {
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pipelines (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      nodes TEXT DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  const row = db.prepare("SELECT * FROM pipelines WHERE id = ?").get(id) as {
-    id: string; name: string; description: string; nodes: string;
-    created_at: string; updated_at: string;
-  } | undefined;
-  if (!row) return null;
-  return { ...row, nodes: JSON.parse(row.nodes || "[]") as unknown[] };
-}
-
-export function updatePipelineNodes(id: string, nodes: unknown[]): void {
-  const db = getDb();
-  db.prepare("UPDATE pipelines SET nodes = ?, updated_at = ? WHERE id = ?")
-    .run(JSON.stringify(nodes), new Date().toISOString(), id);
-}
-
-export function deletePipeline(id: string): void {
-  const db = getDb();
-  db.prepare("DELETE FROM pipelines WHERE id = ?").run(id);
 }
 
 // ─── Documents (Docs & Spreadsheets) ─────────────────────────────────────────

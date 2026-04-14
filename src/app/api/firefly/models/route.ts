@@ -59,7 +59,7 @@ const CATEGORY_CONFIG: Record<Category, CategoryConfig> = {
       { id: "black-forest-labs/flux-2-pro", label: "FLUX 2 Pro", provider: "replicate", description: "Highest quality FLUX model", tag: "Ultra" },
       { id: "stability-ai/sdxl", label: "SDXL", provider: "replicate", description: "Stable Diffusion XL, versatile & fast", tag: "Popular" },
       { id: "bytedance/sdxl-lightning-4step", label: "SDXL Lightning", provider: "replicate", description: "4-step distilled SDXL, ultra fast", tag: "Instant" },
-      { id: "dall-e-3", label: "DALL-E 3", provider: "openai", description: "OpenAI's latest image model", tag: "OpenAI" },
+      { id: "gpt-image-1", label: "GPT Image 1", provider: "openai", description: "OpenAI's latest image model", tag: "OpenAI" },
       { id: "ideogram-ai/ideogram-v2-turbo", label: "Ideogram v2 Turbo", provider: "replicate", description: "Excellent text rendering in images", tag: "Text" },
       { id: "recraft-ai/recraft-v3", label: "Recraft v3", provider: "replicate", description: "Vector & raster design generation", tag: "Design" },
     ],
@@ -99,7 +99,7 @@ const CATEGORY_CONFIG: Record<Category, CategoryConfig> = {
     replicateCollections: ["text-to-video"],
     hfPipelineTags: ["text-to-video"],
     featured: [
-      { id: "minimax/video-01", label: "Minimax Video-01", provider: "replicate", description: "High quality text-to-video", tag: "Best" },
+      { id: "minimax/video-01-live", label: "Minimax Video-01-Live", provider: "replicate", description: "High quality text-to-video", tag: "Best" },
       { id: "tencent/hunyuan-video", label: "Hunyuan Video", provider: "replicate", description: "Tencent's video generation model", tag: "Quality" },
       { id: "wavespeedai/wan-2.1-t2v-480p", label: "Wan 2.1", provider: "replicate", description: "Fast video gen by WaveSpeed", tag: "Fast" },
       { id: "kwaivgi/kling-v2.0-master-text-to-video", label: "Kling v2.0", provider: "replicate", description: "Cinematic text-to-video", tag: "Cinematic" },

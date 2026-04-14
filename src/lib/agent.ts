@@ -17,9 +17,10 @@ import path from "path";
 import * as cheerio from "cheerio";
 import type { AgentStep, ToolName, ModelId, Modality } from "./types";
 import { formatBytes } from "./utils";
-import { autoSelectSkills, buildSkillContext, getSkillsForTask } from "./structured-skills";
-import { semanticRecall, computeImportance, classifyMemoryType, compressMemories, identifyCompressible } from "./memory-engine";
+import { autoSelectSkills, buildSkillContext, getSkillsForTask, setSkillPerformanceHints } from "./structured-skills";
+import { semanticRecall, computeImportance, classifyMemoryType, compressMemories, identifyCompressible, primeMemoriesForTask } from "./memory-engine";
 import { scopeToolsForRole, buildScopedSystemPrompt, SUBAGENT_ROLES } from "./subagent-roles";
+import { routeModelForTask, routeSubAgentModel, recordModelOutcome, assessComplexity as assessTaskComplexity, inferTaskPhase, planMultiPhaseExecution, serializeRoutingDecision, detectModalityFromText, type ModelSelection, type TaskPhase } from "./model-router";
 import { executeConnectorAction, listConnectorActions, EXECUTABLE_CONNECTORS } from "./executable-connectors";
 import { observePageElements, buildExtractionPrompt, processBrowseResult, formatBrowserResultForAgent, type ActAction, type ExtractAction, type ObserveAction } from "./stagehand-browser";
 import { executeSandboxed, validateCodeSecurity, formatSandboxResult } from "./sandbox-executor";
@@ -48,17 +49,43 @@ import {
   updateLearningConfidence,
   recordAnalyticsEvent,
   trackTaskTokens,
+  incrementSkillUsage,
+  findSimilarSkill,
+  updateMemoryAccess,
+  createSkill as dbCreateSkill,
+  updateSkill as dbUpdateSkill,
+  deleteSkill as dbDeleteSkill,
+  getSkill as dbGetSkill,
+  getSkillByName as dbGetSkillByName,
+  listSkills as dbListSkills,
+  recordSkillPerf,
 } from "./db";
+import {
+  runBackgroundReview,
+  enhancedMemoryRecall,
+  reinforceLearning,
+  type BackgroundReviewResult,
+} from "./self-improvement";
 
 const execAsync = promisify(exec);
 
 // ─── Multi-Model Clients ──────────────────────────────────────────────────────
+// Lazy getters so SDK instances always use the current process.env value,
+// even if the key was set at runtime via the Connectors page.
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
-const googleAI = process.env.GOOGLE_AI_API_KEY
-  ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
-  : null;
+function getAnthropic(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+}
+
+function getOpenAI(): OpenAI {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+}
+
+function getGoogleAI(): GoogleGenerativeAI | null {
+  return process.env.GOOGLE_AI_API_KEY
+    ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+    : null;
+}
 
 // ─── Model Failover (OpenClaw-inspired) ───────────────────────────────────────
 // Automatic retry with exponential backoff and provider fallback
@@ -67,13 +94,24 @@ const TRANSIENT_ERROR_PATTERNS = [
   /rate.?limit/i, /429/i, /overloaded/i, /503/i, /502/i,
   /timeout/i, /ETIMEDOUT/i, /ECONNRESET/i, /server.?error/i,
   /500/i, /capacity/i, /too many requests/i, /resource.?exhausted/i,
-  /credit.?balance/i, /insufficient.?funds/i, /billing/i, /quota.?exceeded/i,
+  /quota.?exceeded/i,
+];
+
+// Billing/auth errors should NOT be retried with the same provider — they won't resolve
+const BILLING_ERROR_PATTERNS = [
+  /credit.?balance/i, /insufficient.?funds/i, /billing/i,
   /payment.?required/i, /402/i, /plan.?limit/i,
+  /authentication/i, /invalid.?api.?key/i, /unauthorized/i, /401/i,
 ];
 
 function isTransientError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return TRANSIENT_ERROR_PATTERNS.some((p) => p.test(msg));
+}
+
+function isBillingOrAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return BILLING_ERROR_PATTERNS.some((p) => p.test(msg));
 }
 
 const FAILOVER_BACKOFF_MS = [2000, 5000, 15000]; // exponential backoff delays
@@ -92,10 +130,10 @@ function getFailoverChain(primary: { provider: string; modelName: string }): Fai
     fallbacks.push({ provider: "anthropic", modelName: "claude-sonnet-4-6" });
   }
   if (primary.provider !== "openai" && process.env.OPENAI_API_KEY) {
-    fallbacks.push({ provider: "openai", modelName: "gpt-4o" });
+    fallbacks.push({ provider: "openai", modelName: "gpt-5.4" });
   }
   if (primary.provider !== "google" && process.env.GOOGLE_AI_API_KEY) {
-    fallbacks.push({ provider: "google", modelName: "gemini-1.5-pro" });
+    fallbacks.push({ provider: "google", modelName: "gemini-2.5-pro" });
   }
   // OpenRouter as last-resort free fallback
   if (primary.provider !== "openrouter" && process.env.OPENROUTER_API_KEY) {
@@ -121,21 +159,22 @@ interface TokenUsage {
   model: string;
 }
 
-// Approximate pricing per 1M tokens (input/output) as of 2025
+// Approximate pricing per 1M tokens (input/output) — updated April 2026
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-opus-4-6": { input: 15, output: 75 },
+  "claude-opus-4-6": { input: 5, output: 25 },
   "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-3.5-haiku": { input: 0.8, output: 4 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "gpt-4.1": { input: 2, output: 8 },
-  "gpt-4.1-mini": { input: 0.4, output: 1.6 },
-  "gpt-4.1-nano": { input: 0.1, output: 0.4 },
-  "gemini-1.5-pro": { input: 1.25, output: 5 },
-  "gemini-1.5-flash": { input: 0.075, output: 0.3 },
-  "gemini-2.0-flash": { input: 0.1, output: 0.4 },
+  "claude-haiku-4-5": { input: 1, output: 5 },
+  "gpt-5.4": { input: 2.5, output: 15 },
+  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
+  "gpt-5.4-nano": { input: 0.2, output: 1.25 },
+  "gemini-2.5-pro": { input: 1.25, output: 10 },
+  "gemini-2.5-flash": { input: 0.15, output: 0.6 },
+  "gemini-2.5-flash-lite": { input: 0.02, output: 0.1 },
+  "gemini-2.5-nano": { input: 0.01, output: 0.04 },
+  "sonar": { input: 1, output: 1 },
   "sonar-pro": { input: 3, output: 15 },
   "sonar-reasoning-pro": { input: 2, output: 8 },
+  "sonar-deep-research": { input: 5, output: 20 },
 };
 
 function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
@@ -423,6 +462,82 @@ class ToolCallCache {
   }
 }
 
+// ─── Loop Detection & Circuit Breaker ─────────────────────────────────────────
+// Tracks recent tool calls to detect repetitive patterns and consecutive errors.
+// When the agent appears stuck, injects a nudge message to break the cycle.
+
+const LOOP_WINDOW = 8;            // Look at last N tool calls for pattern detection
+const REPEAT_THRESHOLD = 3;       // Same tool name N times in window → likely stuck
+const CONSEC_ERROR_LIMIT = 3;     // N consecutive errors → force break
+const SIMILAR_QUERY_THRESHOLD = 3; // N similar queries (same tool) → likely stuck
+
+class LoopDetector {
+  private recentCalls: Array<{ name: string; inputKey: string; error: boolean }> = [];
+  private consecutiveErrors = 0;
+  private _loopWarningIssued = false;
+
+  /** Record a tool call outcome */
+  record(name: string, input: Record<string, unknown>, error: boolean): void {
+    // Lightweight input fingerprint for similarity (just tool name + first string value)
+    const firstStr = Object.values(input).find(v => typeof v === "string") as string | undefined;
+    const inputKey = `${name}:${(firstStr || "").toLowerCase().split(/\s+/).sort().slice(0, 5).join(" ")}`;
+    this.recentCalls.push({ name, inputKey, error });
+    if (this.recentCalls.length > LOOP_WINDOW * 2) this.recentCalls = this.recentCalls.slice(-LOOP_WINDOW);
+
+    if (error) this.consecutiveErrors++;
+    else this.consecutiveErrors = 0;
+  }
+
+  /** Check if the agent appears stuck in a loop */
+  isStuck(): { stuck: boolean; reason: string } {
+    const window = this.recentCalls.slice(-LOOP_WINDOW);
+    if (window.length < REPEAT_THRESHOLD) return { stuck: false, reason: "" };
+
+    // Check consecutive errors
+    if (this.consecutiveErrors >= CONSEC_ERROR_LIMIT) {
+      return { stuck: true, reason: `${this.consecutiveErrors} consecutive tool errors — the approach isn't working` };
+    }
+
+    // Check same tool name repeated
+    const nameCounts = new Map<string, number>();
+    for (const c of window) nameCounts.set(c.name, (nameCounts.get(c.name) || 0) + 1);
+    for (const [name, count] of nameCounts) {
+      if (count >= REPEAT_THRESHOLD && name !== "create_sub_agent") {
+        // Check if queries are also similar (not just same tool with different intents)
+        const toolCalls = window.filter(c => c.name === name);
+        const uniqueKeys = new Set(toolCalls.map(c => c.inputKey));
+        if (uniqueKeys.size <= Math.ceil(toolCalls.length / 2)) {
+          return { stuck: true, reason: `called "${name}" ${count} times in last ${LOOP_WINDOW} steps with similar inputs — likely repeating yourself` };
+        }
+      }
+    }
+
+    // Check identical input keys repeating
+    const keyCounts = new Map<string, number>();
+    for (const c of window) keyCounts.set(c.inputKey, (keyCounts.get(c.inputKey) || 0) + 1);
+    for (const [key, count] of keyCounts) {
+      if (count >= SIMILAR_QUERY_THRESHOLD) {
+        return { stuck: true, reason: `nearly-identical tool call repeated ${count} times: "${key.slice(0, 80)}"` };
+      }
+    }
+
+    return { stuck: false, reason: "" };
+  }
+
+  /** Generate a nudge message to inject into the conversation */
+  getNudgeMessage(reason: string): string {
+    this._loopWarningIssued = true;
+    return `⚠️ LOOP DETECTED: ${reason}. You are repeating actions without making progress. STOP and change strategy:\n` +
+      `1. If the task is already complete enough, call complete_task NOW with what you have.\n` +
+      `2. If a tool keeps failing, try a completely different approach (different tool, different query, or skip that sub-task).\n` +
+      `3. If you're searching for something you can't find, summarize what you DO have and complete the task.\n` +
+      `Do NOT repeat the same tool calls. Your next action must be different from your recent actions.`;
+  }
+
+  get loopWarningIssued(): boolean { return this._loopWarningIssued; }
+  get errorStreak(): number { return this.consecutiveErrors; }
+}
+
 // ─── Tool Definitions ─────────────────────────────────────────────────────────
 
 const TOOLS: Anthropic.Tool[] = [
@@ -551,13 +666,13 @@ const TOOLS: Anthropic.Tool[] = [
         title: { type: "string", description: "Title of the sub-task" },
         agent_type: {
           type: "string",
-          enum: ["research", "code", "writing", "data_analysis", "web_scraper", "reviewer", "planner", "general"],
+          enum: ["research", "code", "writing", "data_analysis", "web_scraper", "reviewer", "planner", "general", "job_hunter", "video_producer", "marketing_strategist", "form_filler", "social_media_manager", "outreach_specialist", "seo_specialist", "ecommerce_operator"],
         },
         instructions: { type: "string", description: "Detailed instructions for the sub-agent" },
         context: { type: "string", description: "Relevant context and data" },
         model: {
           type: "string",
-          enum: ["claude-opus-4-6", "claude-sonnet-4-6", "gpt-4o", "gpt-4o-mini", "gemini-1.5-pro", "auto"],
+          enum: ["claude-opus-4-6", "claude-sonnet-4-6", "gpt-5.4", "gpt-5.4-mini", "gemini-2.5-pro", "auto"],
           description: "Model for the sub-agent (auto = best for task type)",
         },
       },
@@ -648,6 +763,28 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "skill_manage",
+    description: `Create, view, patch, or delete skills. Use this to capture successful workflows as reusable skills, fix outdated skills, or inspect a skill's full instructions.
+
+WHEN TO USE:
+- After completing a complex task (5+ tool calls): create a skill capturing the workflow
+- When a skill you used had outdated or incorrect instructions: patch it immediately
+- To inspect a skill's full instructions before using its approach: view it
+- To remove a skill that's no longer useful: delete it`,
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["create", "view", "patch", "delete"], description: "Action to perform on the skill" },
+        name: { type: "string", description: "Skill name (required for create, view, patch, delete)" },
+        description: { type: "string", description: "Short description of what the skill does (for create/patch)" },
+        instructions: { type: "string", description: "Full skill instructions — the workflow steps, tools used, tips (for create/patch)" },
+        category: { type: "string", description: "Skill category (for create/patch)", enum: ["research", "coding", "writing", "creative", "automation", "marketing", "communication", "finance", "general"] },
+        triggers: { type: "array", items: { type: "string" }, description: "Trigger phrases that activate this skill (for create/patch)" },
+      },
+      required: ["action", "name"],
+    },
+  },
+  {
     name: "organize_files",
     description: "Organize files in the global file system. Create folders, move files into folders, or list files across all tasks. Files are visible in the Files page (macOS Finder-style browser).",
     input_schema: {
@@ -664,13 +801,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "generate_image",
-    description: "Generate an image using DALL-E 3. Use for illustrations, diagrams, logos, concept art. Image is saved to task files.",
+    description: "Generate an image using OpenAI's gpt-image-1. Use for illustrations, diagrams, logos, concept art. Image is saved to task files.",
     input_schema: {
       type: "object",
       properties: {
         prompt: { type: "string", description: "Detailed image description" },
         size: { type: "string", enum: ["1024x1024", "1792x1024", "1024x1792"], default: "1024x1024" },
-        style: { type: "string", enum: ["vivid", "natural"], default: "vivid" },
+        quality: { type: "string", enum: ["low", "medium", "high"], default: "medium", description: "Image quality level" },
         filename: { type: "string", description: "Output filename", default: "generated_image.png" },
       },
       required: ["prompt"],
@@ -1019,15 +1156,15 @@ function detectModality(text: string): Modality {
   return bestModality;
 }
 
-/** Model routing table per modality — ordered by preference */
+/** Model routing table per modality — ordered by preference, 3+ fallbacks each */
 const MODALITY_MODEL_MAP: Record<Modality, Array<{ provider: string; modelName: string }>> = {
-  image:    [{ provider: "openai", modelName: "gpt-4o" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }],
-  email:    [{ provider: "openai", modelName: "gpt-4.1-mini" }, { provider: "anthropic", modelName: "claude-3.5-haiku" }],
-  code:     [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-4.1" }],
-  data:     [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-4o" }],
-  research: [{ provider: "google", modelName: "gemini-2.0-flash" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }],
-  writing:  [{ provider: "openai", modelName: "gpt-4.1-mini" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }],
-  general:  [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-4.1-mini" }],
+  image:    [{ provider: "openai", modelName: "gpt-5.4" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "google", modelName: "gemini-2.5-pro" }],
+  email:    [{ provider: "openai", modelName: "gpt-5.4-mini" }, { provider: "anthropic", modelName: "claude-haiku-4-5" }, { provider: "google", modelName: "gemini-2.5-flash" }],
+  code:     [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-5.4" }, { provider: "google", modelName: "gemini-2.5-pro" }],
+  data:     [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-5.4" }, { provider: "google", modelName: "gemini-2.5-pro" }],
+  research: [{ provider: "google", modelName: "gemini-2.5-flash" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-5.4" }],
+  writing:  [{ provider: "openai", modelName: "gpt-5.4-mini" }, { provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "google", modelName: "gemini-2.5-flash" }],
+  general:  [{ provider: "anthropic", modelName: "claude-sonnet-4-6" }, { provider: "openai", modelName: "gpt-5.4-mini" }, { provider: "google", modelName: "gemini-2.5-flash" }],
 };
 
 function selectModelForTask(
@@ -1050,26 +1187,38 @@ function selectModelForTask(
   }
   // OpenRouter special handling
   if (requestedModel === "openrouter") {
-    const orModel = process.env.OPENROUTER_DEFAULT_MODEL || "anthropic/claude-3.5-haiku";
+    const orModel = process.env.OPENROUTER_DEFAULT_MODEL || "anthropic/claude-haiku-4-5";
     return { provider: "openrouter", modelName: orModel };
   }
   const modelMap: Record<string, { provider: string; modelName: string }> = {
     "claude-opus-4-6": { provider: "anthropic", modelName: "claude-opus-4-6" },
     "claude-sonnet-4-6": { provider: "anthropic", modelName: "claude-sonnet-4-6" },
-    "claude-3.5-haiku": { provider: "anthropic", modelName: "claude-3.5-haiku" },
+    "claude-haiku-4-5": { provider: "anthropic", modelName: "claude-haiku-4-5" },
+    // Legacy aliases → map to current models
     "claude-opus-4-5": { provider: "anthropic", modelName: "claude-opus-4-6" },
     "claude-sonnet-4-5": { provider: "anthropic", modelName: "claude-sonnet-4-6" },
-    "gpt-4o": { provider: "openai", modelName: "gpt-4o" },
-    "gpt-4o-mini": { provider: "openai", modelName: "gpt-4o-mini" },
-    "gpt-4.1": { provider: "openai", modelName: "gpt-4.1" },
-    "gpt-4.1-mini": { provider: "openai", modelName: "gpt-4.1-mini" },
-    "gpt-4.1-nano": { provider: "openai", modelName: "gpt-4.1-nano" },
-    "gemini-1.5-pro": { provider: "google", modelName: "gemini-1.5-pro" },
-    "gemini-1.5-flash": { provider: "google", modelName: "gemini-1.5-flash" },
-    "gemini-2.0-flash": { provider: "google", modelName: "gemini-2.0-flash" },
+    "claude-3.5-haiku": { provider: "anthropic", modelName: "claude-haiku-4-5" },
+    "gpt-5.4": { provider: "openai", modelName: "gpt-5.4" },
+    "gpt-5.4-mini": { provider: "openai", modelName: "gpt-5.4-mini" },
+    "gpt-5.4-nano": { provider: "openai", modelName: "gpt-5.4-nano" },
+    // Legacy aliases → map to current models
+    "gpt-4o": { provider: "openai", modelName: "gpt-5.4" },
+    "gpt-4o-mini": { provider: "openai", modelName: "gpt-5.4-mini" },
+    "gpt-4.1": { provider: "openai", modelName: "gpt-5.4" },
+    "gpt-4.1-mini": { provider: "openai", modelName: "gpt-5.4-mini" },
+    "gpt-4.1-nano": { provider: "openai", modelName: "gpt-5.4-nano" },
+    "gemini-2.5-pro": { provider: "google", modelName: "gemini-2.5-pro" },
+    "gemini-2.5-flash": { provider: "google", modelName: "gemini-2.5-flash" },
+    "gemini-2.5-flash-lite": { provider: "google", modelName: "gemini-2.5-flash-lite" },
+    "gemini-2.5-nano": { provider: "google", modelName: "gemini-2.5-nano" },
+    // Legacy aliases → map to current models
+    "gemini-1.5-pro": { provider: "google", modelName: "gemini-2.5-pro" },
+    "gemini-1.5-flash": { provider: "google", modelName: "gemini-2.5-flash-lite" },
+    "gemini-2.0-flash": { provider: "google", modelName: "gemini-2.5-flash" },
     "sonar": { provider: "perplexity", modelName: "sonar-pro" },
     "sonar-pro": { provider: "perplexity", modelName: "sonar-pro" },
     "sonar-reasoning-pro": { provider: "perplexity", modelName: "sonar-reasoning-pro" },
+    "sonar-deep-research": { provider: "perplexity", modelName: "sonar-deep-research" },
   };
   const mapped = modelMap[requestedModel];
   // If Perplexity provider selected but no API key, fall back to Anthropic
@@ -1083,7 +1232,7 @@ function selectModelForTask(
 
 // Built-in presets matching Perplexity Agent API
 const BUILTIN_PRESETS: Record<string, { model: string; max_steps: number; max_tokens: number }> = {
-  "fast-search":               { model: "gpt-4.1-mini",       max_steps: 3,  max_tokens: 4096 },
+  "fast-search":               { model: "gpt-5.4-mini",        max_steps: 3,  max_tokens: 4096 },
   "pro-search":                { model: "claude-sonnet-4-6",   max_steps: 10, max_tokens: 8192 },
   "deep-research":             { model: "claude-sonnet-4-6",   max_steps: 25, max_tokens: 16384 },
   "advanced-deep-research":    { model: "claude-opus-4-6",     max_steps: 50, max_tokens: 16384 },
@@ -1100,6 +1249,19 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
   try {
     const { listSkills } = await import("./db");
     const activeSkills = listSkills().filter(s => s.is_active);
+    
+    // Provide performance hints to the skill selection engine
+    try {
+      const performanceHints = activeSkills
+        .filter(s => s.usage_count)
+        .map(s => ({
+          skill_id: s.id,
+          performance_score: s.performance_score ?? 0.5,
+          usage_count: s.usage_count ?? 0,
+        }));
+      setSkillPerformanceHints(performanceHints);
+    } catch { /* best-effort */ }
+
     for (const skill of activeSkills) {
       if (skill.triggers && skill.triggers.length > 0) {
         const matches = skill.triggers.some(trigger =>
@@ -1119,8 +1281,26 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
     }
 
     // Feature 1: Auto-select relevant marketplace skills (Superpowers-inspired)
+    // Now passes DB skills for unified pool matching
     if (!matchedSkill) {
-      const autoSkillContext = getSkillsForTask(userMessage);
+      const dbSkillsAsMarketplace = activeSkills.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description || "",
+        instructions: s.instructions || "",
+        category: s.category || "general",
+        icon: "🔧",
+        author: "user",
+        downloads: 0,
+        rating: 4,
+        tags: (s.triggers || []).flatMap((t: string) => t.split("|")),
+        preset_type: s.preset_type || "custom",
+        model: s.model || undefined,
+        tools: s.tools || undefined,
+        max_steps: s.max_steps || undefined,
+        max_tokens: s.max_tokens || undefined,
+      }));
+      const autoSkillContext = getSkillsForTask(userMessage, undefined, dbSkillsAsMarketplace);
       if (autoSkillContext) {
         skillInstructions = skillInstructions
           ? `${skillInstructions}\n\n${autoSkillContext}`
@@ -1198,11 +1378,35 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
   // ─── Auto-recall relevant memories ─────────────────────────────────────────
   // Proactively pull in relevant cross-task memories so the agent has context
   // without needing to explicitly call memory_recall on the first turn.
+  // v2: Uses primeMemoriesForTask for preference-aware priming + enhanced recall
   let memoryContext = "";
   try {
-    const relevantMemories = memoryRecall(userMessage, 5);
+    const keywordResults = memoryRecall(userMessage, 10);
+    const allMem = listMemory(500);
+    
+    // Use primeMemoriesForTask for preference-first context building
+    const primedMemories = primeMemoriesForTask(userMessage, allMem, 8);
+    // Merge primed + enhanced recall for comprehensive context
+    const enhancedResults = enhancedMemoryRecall(userMessage, allMem, keywordResults, 5);
+    
+    // Deduplicate: primed memories first, then enhanced results
+    const seenMemIds = new Set<string>();
+    const allRelevant: typeof primedMemories = [];
+    for (const m of [...primedMemories, ...enhancedResults]) {
+      if (!seenMemIds.has(m.id)) { seenMemIds.add(m.id); allRelevant.push(m); }
+    }
+    const relevantMemories = allRelevant.slice(0, 8);
+    
     if (relevantMemories.length > 0) {
-      const memLines = relevantMemories.map((m, i) => `${i + 1}. **${m.key}**: ${m.value}${m.tags && m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : ""}`);
+      // Track access for recalled memories
+      for (const m of relevantMemories) {
+        try { updateMemoryAccess(m.id); } catch { /* best-effort */ }
+      }
+      
+      const memLines = relevantMemories.map((m, i) => {
+        const typeLabel = m.memory_type ? ` (${m.memory_type})` : "";
+        return `${i + 1}. **${m.key}**${typeLabel}: ${m.value}${m.tags && m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : ""}`;
+      });
       memoryContext = `\n\n## Relevant Memories (auto-recalled)\nThese memories from previous tasks may be relevant:\n${memLines.join("\n")}\n\nUse these as context. Store new findings with memory_store. Update stale memories with memory_update. Delete incorrect ones with memory_delete. List all memories with memory_list.`;
     }
   } catch { /* best-effort */ }
@@ -1253,16 +1457,47 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
   // Inject learned insights from past similar tasks (Otto self-improvement)
   const learnedInsights = getLearnedInsights(userMessage);
   const systemPrompt = buildSystemPrompt(skillInstructions) + learnedInsights + uploadedFilesContext + memoryContext + globalFilesContext;
-  const primary = selectModelForTask(effectiveModel, userMessage);
 
-  // Track model call in analytics
+  // ─── Perplexity Computer-style Model Delegation ────────────────────────
+  // Uses capability scoring, complexity assessment, phase detection, and
+  // performance learning to auto-select the optimal model for this task.
+  const taskComplexity = assessTaskComplexity(userMessage);
+  const taskPhase = inferTaskPhase(userMessage);
+  const routingDecision = routeModelForTask({
+    requestedModel: effectiveModel,
+    taskText: userMessage,
+    phase: taskPhase,
+    complexity: taskComplexity,
+    needsVision: /\b(image|screenshot|picture|photo|visual|look at)\b/i.test(userMessage),
+    needsSearch: /\b(search|find|latest|current|news|research)\b/i.test(userMessage),
+  });
+  const primary = { provider: routingDecision.provider, modelName: routingDecision.modelName };
+
+  // Log routing decision for transparency
+  console.log(`[model-router] Task ${taskId.slice(0, 8)}: ${routingDecision.modelName} (${taskPhase}/${taskComplexity}, confidence=${routingDecision.confidence.toFixed(2)}) — ${routingDecision.reasoning.slice(0, 120)}`);
+  if (routingDecision.alternatives.length > 0) {
+    console.log(`[model-router]   alternatives: ${routingDecision.alternatives.map(a => a.modelName).join(", ")}`);
+  }
+
+  // For expert-level tasks, log the full multi-phase plan
+  if (taskComplexity === "expert" || taskComplexity === "complex") {
+    const phasePlan = planMultiPhaseExecution(userMessage, effectiveModel);
+    console.log(`[model-router]   multi-phase plan: ${phasePlan.phases.map(p => `${p.phase}→${p.model.modelName}`).join(" | ")} (est. $${phasePlan.totalEstimatedCost.toFixed(4)})`);
+  }
+
+  // Track model call in analytics with routing metadata
+  const routingStartTime = Date.now();
   try {
     recordAnalyticsEvent({
       id: uuidv4(),
       event_type: "model_call",
       model: primary.modelName,
       success: true,
-      metadata: { provider: primary.provider, modality: detectModality(userMessage) },
+      metadata: {
+        provider: primary.provider,
+        modality: detectModalityFromText(userMessage),
+        routing: serializeRoutingDecision(routingDecision, { requestedModel: effectiveModel, taskText: userMessage }),
+      },
     });
   } catch { /* best-effort */ }
 
@@ -1272,15 +1507,26 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
   // Model failover chain: try primary, then fallback providers
   const failoverChain = getFailoverChain(primary);
   let lastError: unknown = null;
+  // Track providers with billing/auth errors — skip them in future attempts
+  const disabledProviders = new Set<string>();
 
   for (let attempt = 0; attempt < failoverChain.length; attempt++) {
     const { provider, modelName: mName } = failoverChain[attempt];
+
+    // Skip providers that had billing/auth errors — they won't recover
+    if (disabledProviders.has(provider)) {
+      console.error(`[agent-failover] Skipping ${provider}/${mName} — billing/auth error previously detected`);
+      continue;
+    }
+
     if (attempt > 0) {
-      // Log failover step
+      // Log failover step with the actual error so users can debug
+      const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
+      const shortErr = errMsg.length > 200 ? errMsg.slice(0, 200) + "…" : errMsg;
       const failoverStep: AgentStep = {
         id: uuidv4(), task_id: taskId, type: "reasoning",
         title: `Failover: switching to ${mName}`,
-        content: `Previous model failed (${lastError instanceof Error ? lastError.message : String(lastError)}). Retrying with ${mName}...`,
+        content: `Previous model failed: ${shortErr}`,
         status: "completed", created_at: new Date().toISOString(),
       };
       addAgentStep(failoverStep);
@@ -1299,24 +1545,36 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       if (provider === "openai" && process.env.OPENAI_API_KEY) {
         return await runWithOpenAI(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
       }
-      if (provider === "google" && googleAI) {
+      if (provider === "google" && getGoogleAI()) {
         return await runWithGoogle(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
       }
       return await runWithAnthropic(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
     } catch (err) {
       lastError = err;
+      const errMsg = err instanceof Error ? err.message : String(err);
+
+      // Disable this provider if it has billing/auth issues
+      if (isBillingOrAuthError(err)) {
+        disabledProviders.add(provider);
+        console.error(`[agent-failover] ${provider}/${mName} disabled — billing/auth error: ${errMsg.slice(0, 150)}`);
+      }
+
       // If we've exhausted all fallbacks, handle the error and give up
       if (attempt === failoverChain.length - 1) {
         handleAgentError(err, taskId, onStep);
         return;
       }
-      // For any error (transient or not), try the next provider
-      // This ensures maximum resilience — the goal is "always get a response"
       console.error(
         `[agent-failover] ${provider}/${mName} failed (attempt ${attempt + 1}/${failoverChain.length}):`,
-        err instanceof Error ? err.message : String(err),
+        errMsg.slice(0, 200),
       );
     }
+  }
+
+  // If we reach here, all providers were disabled by billing/auth errors
+  if (disabledProviders.size > 0) {
+    const errMsg = `All available AI providers failed due to billing or authentication issues. Disabled providers: ${[...disabledProviders].join(", ")}. Please check your API keys and billing status in Settings.`;
+    handleAgentError(new Error(errMsg), taskId, onStep);
   }
 }
 
@@ -1336,6 +1594,8 @@ async function runWithAnthropic(
 ): Promise<void> {
   // Per-run tool dedup cache — prevents re-executing identical tool calls
   const toolCache = new ToolCallCache();
+  // Loop detector — catches repetitive tool call patterns and consecutive errors
+  const loopDetector = new LoopDetector();
 
   // Build messages with conversation history
   const messages: Anthropic.MessageParam[] = [];
@@ -1401,7 +1661,7 @@ async function runWithAnthropic(
         { type: "text_editor_20250728", name: "str_replace_based_edit_tool" },
         ...TOOLS.filter(t => t.name !== "computer_use"),
       ];
-      const stream = anthropic.messages.stream({
+      const stream = getAnthropic().messages.stream({
         model: modelName, max_tokens: 8192, system: liveSystemPrompt,
         tools: betaTools, messages: prunedMessages,
         tool_choice: toolChoice,
@@ -1485,6 +1745,7 @@ async function runWithAnthropic(
           const duration = Date.now() - ts;
           updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+          loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
           return { type: "tool_result" as const, tool_use_id: toolUse.id, content: result };
         }));
         toolResults.push(...parallelResults);
@@ -1514,6 +1775,7 @@ async function runWithAnthropic(
           const duration = Date.now() - ts;
           updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+          loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
           toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: result });
         }
       }
@@ -1576,9 +1838,31 @@ async function runWithAnthropic(
         if (toolUse.name === "complete_task") continueLoop = false;
         if (toolUse.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
+        loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
       }
       messages.push({ role: "user", content: toolResults });
       if (response.stop_reason === "end_turn" && toolUses.length === 0) continueLoop = false;
+
+      // ─── Loop detection: inject nudge if agent appears stuck ───
+      if (continueLoop) {
+        const loopCheck = loopDetector.isStuck();
+        if (loopCheck.stuck) {
+          console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
+          if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
+            // Hard break: too many consecutive errors, force completion
+            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            continueLoop = false;
+          } else {
+            // Soft nudge: inject a user message to break the pattern
+            messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
+          }
+        }
+      }
+    }
+    // ─── Graceful maxSteps exhaust: mark completed but log the truncation ───
+    if (iterations >= maxSteps) {
+      console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
+      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
     const t = getTask(taskId);
@@ -1607,6 +1891,7 @@ async function runWithOpenAI(
   ];
   // Per-run tool dedup cache
   const toolCache = new ToolCallCache();
+  const loopDetector = new LoopDetector();
   // Add conversation history (already compacted by compactHistory)
   if (history && history.length > 0) {
     for (const msg of history) {
@@ -1644,8 +1929,8 @@ async function runWithOpenAI(
       const startTime = Date.now(); let fullText = "";
       // Apply two-phase tool result pruning before each LLM call
       const prunedMessages = pruneOpenAIMessages(messages);
-      const stream = await openai.chat.completions.create({
-        model: modelName, max_tokens: 8192, messages: prunedMessages, tools, stream: true,
+      const stream = await getOpenAI().chat.completions.create({
+        model: modelName, max_completion_tokens: 8192, messages: prunedMessages, tools, stream: true,
         // Force tool use on the first iteration so the agent can't just write a plan and stop
         tool_choice: iterations === 1 ? "required" : "auto",
       });
@@ -1709,6 +1994,7 @@ async function runWithOpenAI(
         const duration = Date.now() - ts;
         updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        loopDetector.record(tc.name, input, toolError);
         return { id: tc.id, name: tc.name, result };
       };
 
@@ -1739,6 +2025,24 @@ async function runWithOpenAI(
         if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
+
+      // ─── Loop detection ───
+      if (continueLoop) {
+        const loopCheck = loopDetector.isStuck();
+        if (loopCheck.stuck) {
+          console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
+          if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
+            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            continueLoop = false;
+          } else {
+            messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
+          }
+        }
+      }
+    }
+    if (iterations >= maxSteps) {
+      console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
+      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
     const t = getTask(taskId);
@@ -1762,8 +2066,9 @@ async function runWithGoogle(
   history?: Array<{ role: string; content: string }>,
   maxSteps = 50
 ): Promise<void> {
-  if (!googleAI) return runWithAnthropic(taskId, userMessage, systemPrompt, "claude-opus-4-6", filesDir, onStep, onToken, signal, history, maxSteps);
-  const gmodel = googleAI.getGenerativeModel({ model: modelName, systemInstruction: systemPrompt });
+  const _googleAI = getGoogleAI();
+  if (!_googleAI) throw new Error("Google AI not configured (GOOGLE_AI_API_KEY missing or invalid)");
+  const gmodel = _googleAI.getGenerativeModel({ model: modelName, systemInstruction: systemPrompt });
   const googleTools = [{
     functionDeclarations: TOOLS.map((t) => ({
       name: t.name, description: t.description, parameters: stripAdditionalProperties(t.input_schema),
@@ -1780,6 +2085,7 @@ async function runWithGoogle(
     }
   }
   const toolCache = new ToolCallCache();
+  const loopDetector = new LoopDetector();
   const chat = gmodel.startChat({ tools: googleTools as never, history: chatHistory as never });
   let continueLoop = true; let iterations = 0; let currentMessage = userMessage;
   try {
@@ -1820,6 +2126,7 @@ async function runWithGoogle(
         catch (err) { toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         updateAgentStep(stepId, { tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
         onStep?.({ ...toolStep, tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
+        loopDetector.record(fc.name, input, toolError);
         return { name: fc.name, result: toolResult };
       };
 
@@ -1853,6 +2160,25 @@ async function runWithGoogle(
       currentMessage = funcResponses.map(fr => ({
         functionResponse: { name: fr.name, response: fr.response }
       })) as never;
+
+      // ─── Loop detection ───
+      if (continueLoop) {
+        const loopCheck = loopDetector.isStuck();
+        if (loopCheck.stuck) {
+          console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
+          if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
+            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            continueLoop = false;
+          } else {
+            // For Google, prepend nudge to the next message
+            currentMessage = loopDetector.getNudgeMessage(loopCheck.reason) as never;
+          }
+        }
+      }
+    }
+    if (iterations >= maxSteps) {
+      console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
+      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
     const t = getTask(taskId);
@@ -1890,6 +2216,7 @@ async function runWithOpenRouter(
   ];
   // Per-run tool dedup cache
   const toolCache = new ToolCallCache();
+  const loopDetector = new LoopDetector();
   if (history && history.length > 0) {
     for (const msg of history) {
       if (msg.role === "user" || msg.role === "assistant") {
@@ -1930,7 +2257,7 @@ async function runWithOpenRouter(
       // Apply two-phase tool result pruning before each LLM call
       const prunedMessages = pruneOpenAIMessages(messages);
       const stream = await orClient.chat.completions.create({
-        model: modelName, max_tokens: 8192, messages: prunedMessages, tools, stream: true,
+        model: modelName, max_completion_tokens: 8192, messages: prunedMessages, tools, stream: true,
         // Force tool use on the first iteration so the agent can't just write a plan and stop
         tool_choice: iterations === 1 ? "required" : "auto",
       });
@@ -1993,6 +2320,7 @@ async function runWithOpenRouter(
         const duration = Date.now() - ts;
         updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        loopDetector.record(tc.name, input, toolError);
         return { id: tc.id, name: tc.name, result };
       };
 
@@ -2023,6 +2351,24 @@ async function runWithOpenRouter(
         if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
+
+      // ─── Loop detection ───
+      if (continueLoop) {
+        const loopCheck = loopDetector.isStuck();
+        if (loopCheck.stuck) {
+          console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
+          if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
+            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            continueLoop = false;
+          } else {
+            messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
+          }
+        }
+      }
+    }
+    if (iterations >= maxSteps) {
+      console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
+      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
     const t = getTask(taskId);
@@ -2138,17 +2484,8 @@ async function runWithPerplexity(
       return runWithAnthropic(taskId, enrichedMessage, systemPrompt, "claude-sonnet-4-6", filesDir, onStep, onToken, signal, [], maxSteps);
     }
   } catch (err) {
-    // If Perplexity fails, fall back to Anthropic
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const failoverStep: AgentStep = {
-      id: uuidv4(), task_id: taskId, type: "reasoning",
-      title: "Perplexity unavailable, falling back",
-      content: `Perplexity API error: ${errMsg}. Falling back to Claude...`,
-      status: "completed", created_at: new Date().toISOString(),
-    };
-    addAgentStep(failoverStep);
-    onStep?.(failoverStep);
-    return runWithAnthropic(taskId, userMessage, systemPrompt, "claude-sonnet-4-6", filesDir, onStep, onToken, signal, history, maxSteps);
+    // Let the outer failover loop handle provider switching
+    throw err;
   }
 }
 
@@ -2183,6 +2520,18 @@ function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentSte
           success: false,
           metadata: { error: msg.slice(0, 200) },
         });
+        // Record model failure for the routing engine's learning loop
+        try {
+          const modality = detectModalityFromText(task.prompt);
+          const complexity = assessTaskComplexity(task.prompt);
+          const phase = inferTaskPhase(task.prompt);
+          recordModelOutcome(task.model, phase, modality, complexity, false, 0, 0);
+        } catch { /* best-effort */ }
+        // Track skill failure if a skill was used (Hermes-inspired)
+        const matchedSkillId = (task as unknown as Record<string, string>).matchedSkillId;
+        if (matchedSkillId) {
+          incrementSkillUsage(matchedSkillId, "failure");
+        }
       }
     }).catch(() => { /* ignore */ });
   } catch { /* best-effort */ }
@@ -2355,8 +2704,9 @@ async function executeToolInner(name: ToolName, input: Record<string, unknown>, 
     case "memory_delete": return executeMemoryDelete(input.id as string, (input.reason as string) || "");
     case "memory_update": return executeMemoryUpdate(input.key as string, input.value as string, (input.tags as string[]) || undefined);
     case "list_skills": return executeListSkills((input.active_only as boolean) !== false);
+    case "skill_manage": return executeSkillManage(input.action as string, input.name as string, input.description as string | undefined, input.instructions as string | undefined, input.category as string | undefined, input.triggers as string[] | undefined);
     case "organize_files": return executeOrganizeFiles(input.action as string, input.folder_name as string | undefined, input.parent_folder_id as string | undefined, input.file_names as string[] | undefined, input.target_folder_id as string | undefined, ctx);
-    case "generate_image": return executeGenerateImage(input.prompt as string, (input.size as string) || "1024x1024", (input.style as string) || "vivid", (input.filename as string) || "generated_image.png", ctx);
+    case "generate_image": return executeGenerateImage(input.prompt as string, (input.size as string) || "1024x1024", (input.quality as string) || "medium", (input.filename as string) || "generated_image.png", ctx);
     case "replicate_run": return executeReplicateRun(input.prompt as string, input.model as string | undefined, input.params as Record<string, unknown> | undefined, ctx);
     case "dream_machine": return executeDreamMachine(input.board_name as string, input.shots as DreamShot[], (input.provider as string) || "auto", ctx);
     case "send_email": return executeSendEmail(input.to as string, input.subject as string, input.body as string, input.from as string | undefined, ctx);
@@ -2551,6 +2901,13 @@ async function executeWebSearch(query: string, numResults: number, filters?: Sea
 // ─── URL Scraper ──────────────────────────────────────────────────────────────
 
 const SCRAPE_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+
+// Multiple user agents for rotation when sites block the primary one
+const FALLBACK_USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+];
 const SCRAPE_HEADERS: Record<string, string> = {
   "User-Agent": SCRAPE_USER_AGENT,
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -2647,21 +3004,46 @@ async function executeScrapeUrl(url: string, selector?: string): Promise<string>
     try {
       const resp = await fetchWithRetry(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(20000) });
       if (!resp.ok) {
-        // For bot-protection errors (403, 429, 503), go straight to Jina
+        // For bot-protection errors (403, 429, 503):
+        // 1. Retry with rotated user agents
+        // 2. Try Jina AI Reader
+        // 3. Try Playwright headless rendering as last resort
         if ([403, 429, 503].includes(resp.status)) {
-          const jinaResult = await fetchViaJina(url);
-          if (jinaResult) return jinaResult.slice(0, 20000);
+          // Try different user agents first (cheap/fast)
+          for (const ua of FALLBACK_USER_AGENTS) {
+            try {
+              const retryHeaders = { ...SCRAPE_HEADERS, "User-Agent": ua };
+              const retryResp = await fetch(url, { headers: retryHeaders, signal: AbortSignal.timeout(15000) });
+              if (retryResp.ok) {
+                html = await retryResp.text();
+                break;
+              }
+            } catch { /* try next UA */ }
+          }
+          if (!html) {
+            const jinaResult = await fetchViaJina(url);
+            if (jinaResult) return jinaResult.slice(0, 20000);
+            // Last resort: Playwright headless rendering
+            const pwResult = await fetchViaPlaywright(url, selector);
+            if (pwResult) return pwResult;
+          }
+          if (!html) return `Failed to fetch ${url}: HTTP ${resp.status} ${resp.statusText} (tried multiple user agents, Jina, and Playwright)`;
+        } else {
+          return `Failed to fetch ${url}: HTTP ${resp.status} ${resp.statusText}`;
         }
-        return `Failed to fetch ${url}: HTTP ${resp.status} ${resp.statusText}`;
       }
-      const ct = resp.headers.get("content-type") || "";
-      if (ct.includes("application/json")) { isJson = true; rawText = JSON.stringify(await resp.json(), null, 2); }
-      else if (ct.includes("text/plain")) { isText = true; rawText = await resp.text(); }
-      else { html = await resp.text(); }
+      if (!html) {
+        const ct = resp.headers.get("content-type") || "";
+        if (ct.includes("application/json")) { isJson = true; rawText = JSON.stringify(await resp.json(), null, 2); }
+        else if (ct.includes("text/plain")) { isText = true; rawText = await resp.text(); }
+        else { html = await resp.text(); }
+      }
     } catch (fetchErr) {
-      // Network error — try Jina as fallback
+      // Network error — try Jina as fallback, then Playwright
       const jinaResult = await fetchViaJina(url);
       if (jinaResult) return jinaResult.slice(0, 20000);
+      const pwResult = await fetchViaPlaywright(url, selector);
+      if (pwResult) return pwResult;
       return `Failed to fetch ${url}: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`;
     }
 
@@ -2671,10 +3053,12 @@ async function executeScrapeUrl(url: string, selector?: string): Promise<string>
     const $ = cheerio.load(html!);
     const { title, metaDesc, content, links } = extractTextFromCheerio($, selector, url);
 
-    // If we got very little content, the page is probably JS-rendered — fall back to Jina
+    // If we got very little content, the page is probably JS-rendered — fall back to Jina, then Playwright
     if (content.length < 200 && !selector) {
       const jinaResult = await fetchViaJina(url);
       if (jinaResult) return jinaResult.slice(0, 20000);
+      const pwResult = await fetchViaPlaywright(url, selector);
+      if (pwResult) return pwResult;
     }
 
     let result = "";
@@ -2687,7 +3071,108 @@ async function executeScrapeUrl(url: string, selector?: string): Promise<string>
   } catch (err) { return `Failed to scrape ${url}: ${err instanceof Error ? err.message : String(err)}`; }
 }
 
-// ─── Auto-Login Detection for browse_web ──────────────────────────────────────
+// Playwright headless rendering fallback for JS-heavy pages that block fetch + Jina
+async function fetchViaPlaywright(url: string, selector?: string): Promise<string | null> {
+  if (!isUrlSafe(url)) return null;
+  try {
+    const pw = await import("playwright");
+    const browser = await pw.chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage({
+        userAgent: FALLBACK_USER_AGENTS[0],
+      });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
+      await page.waitForLoadState("networkidle").catch(() => {});
+
+      const title = await page.title();
+      let content: string;
+      if (selector) {
+        content = await page.locator(selector).first().innerText({ timeout: 5000 }).catch(() => "");
+      } else {
+        content = await page.evaluate(() => document.body?.innerText?.slice(0, 15000) || "");
+      }
+
+      if (content.length < 100) return null;
+
+      let result = "";
+      if (title) result += `Title: ${title}\n`;
+      result += `URL: ${url}\n\n${content.slice(0, 15000)}`;
+      if (content.length > 15000) result += "\n\n... (content truncated)";
+      return result;
+    } finally {
+      await browser.close();
+    }
+  } catch {
+    return null; // Playwright not installed or failed — give up
+  }
+}
+
+// ─── Multi-Provider Vision Analysis Fallback ──────────────────────────────────
+// Analyzes an image (screenshot/photo) using the best available vision provider.
+// Falls back across: Anthropic → OpenAI → Google Gemini.
+// Used by computer use, browse_web screenshots, and other visual analysis tasks.
+
+export async function analyzeImageWithFallback(
+  base64Image: string,
+  prompt: string,
+  mimeType: "image/png" | "image/jpeg" | "image/gif" | "image/webp" = "image/png"
+): Promise<string> {
+  // 1. Try Anthropic Claude (best for detailed visual analysis)
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const resp = await getAnthropic().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mimeType, data: base64Image } },
+            { type: "text", text: prompt },
+          ],
+        }],
+      });
+      const text = resp.content.find((b: { type: string }) => b.type === "text");
+      if (text && "text" in text) return text.text as string;
+    } catch { /* fall through to OpenAI */ }
+  }
+
+  // 2. Try OpenAI GPT-5.4 (strong vision)
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const resp = await getOpenAI().chat.completions.create({
+        model: "gpt-5.4",
+        max_tokens: 2048,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}`, detail: "high" } },
+            { type: "text", text: prompt },
+          ],
+        }],
+      });
+      const text = resp.choices[0]?.message?.content;
+      if (text) return text;
+    } catch { /* fall through to Google */ }
+  }
+
+  // 3. Try Google Gemini (good vision, often has generous free tier)
+  if (process.env.GOOGLE_AI_API_KEY) {
+    try {
+      const gai = getGoogleAI();
+      if (gai) {
+        const model = gai.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent([
+          { inlineData: { mimeType, data: base64Image } },
+          { text: prompt },
+        ] as never);
+        const text = result.response?.text?.();
+        if (text) return text;
+      }
+    } catch { /* all providers failed */ }
+  }
+
+  return "Vision analysis unavailable: no AI provider could process the image.";
+}
 // When Steel is configured, uses Steel's Credentials API for native credential
 // injection (handles shadow DOM, SPAs, CAPTCHAs, mutation observers, etc.).
 // Falls back to manual Playwright-based login when Steel is not available.
@@ -3347,18 +3832,34 @@ async function executeBrowseWeb(
     }
 
     // ── Fallback: no Playwright available ────────────────────────────────────
-    // Use fetch+cheerio (limited: no click/type/JS execution)
-    const fallbackResp = await fetchWithRetry(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(20000) });
-    if (!fallbackResp.ok) {
+    // Use fetch+cheerio (limited: no click/type/JS execution), with user-agent
+    // rotation and Jina/Playwright rendering as escalation fallbacks.
+    let fallbackHtml: string | null = null;
+    const primaryResp = await fetchWithRetry(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(20000) }).catch(() => null);
+    if (primaryResp?.ok) {
+      fallbackHtml = await primaryResp.text();
+    } else {
+      // Retry with rotated user agents
+      for (const ua of FALLBACK_USER_AGENTS) {
+        try {
+          const resp = await fetch(url, { headers: { ...SCRAPE_HEADERS, "User-Agent": ua }, signal: AbortSignal.timeout(15000) });
+          if (resp.ok) { fallbackHtml = await resp.text(); break; }
+        } catch { /* try next */ }
+      }
+    }
+
+    if (!fallbackHtml) {
+      // Try Jina and Playwright headless as escalation
       const jinaResult = await fetchViaJina(url);
       if (jinaResult) {
         return `URL: ${url}\n\nPage content (via Jina reader):\n${jinaResult.slice(0, 8000)}`;
       }
-      return `Failed to browse ${url}: HTTP ${fallbackResp.status}`;
+      const pwResult = await fetchViaPlaywright(url, extractSelector);
+      if (pwResult) return pwResult;
+      return `Failed to browse ${url}: all fallback methods exhausted (fetch, user-agent rotation, Jina, Playwright)`;
     }
 
-    const html = await fallbackResp.text();
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(fallbackHtml);
     $("script, style, nav, footer, iframe, noscript").remove();
 
     const results: string[] = [];
@@ -3494,12 +3995,91 @@ async function executeListSkills(activeOnly: boolean): Promise<string> {
     const skills = listSkills();
     const filtered = activeOnly ? skills.filter(s => s.is_active) : skills;
     if (filtered.length === 0) return activeOnly ? "No active skills configured." : "No skills configured.";
+    // Progressive disclosure: show name + truncated description only (Hermes-style)
+    // Agent uses skill_manage(action='view') to load full instructions
     return `Available Skills (${filtered.length}${activeOnly ? " active" : ""}):\n\n${filtered.map((s, i) => {
-      const triggers = s.triggers && s.triggers.length > 0 ? `Triggers: ${s.triggers.join(", ")}` : "No triggers (always active)";
-      return `${i + 1}. **${s.name}** [${s.is_active ? "✅ active" : "❌ inactive"}]\n   ${s.description || "No description"}\n   Category: ${s.category} | Preset: ${s.preset_type}\n   ${triggers}\n   Model: ${s.model || "auto"} | Max steps: ${s.max_steps || "default"}`;
-    }).join("\n\n")}`;
+      const desc = s.description ? (s.description.length > 60 ? s.description.slice(0, 60) + "…" : s.description) : "No description";
+      const triggers = s.triggers && s.triggers.length > 0 ? `Triggers: ${s.triggers.join(", ")}` : "";
+      return `${i + 1}. **${s.name}** — ${desc}${triggers ? `\n   ${triggers}` : ""}`;
+    }).join("\n")}
+
+Use skill_manage(action='view', name='...') to load a skill's full instructions.`;
   } catch (err) {
     return `Error listing skills: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ─── Skill Manage (Hermes-Inspired) ──────────────────────────────────────────
+// Allows the agent to create, view, patch, and delete skills during task execution.
+// This is the CORE of Hermes's self-improvement loop — the agent itself decides
+// when to capture a workflow as a skill, fix outdated skills, or remove bad ones.
+
+async function executeSkillManage(
+  action: string,
+  name: string,
+  description?: string,
+  instructions?: string,
+  category?: string,
+  triggers?: string[],
+): Promise<string> {
+  try {
+    switch (action) {
+      case "create": {
+        if (!instructions) return "Error: instructions are required to create a skill.";
+        // Check for duplicates
+        const exists = findSimilarSkill(name);
+        if (exists) return `A skill with a similar name already exists. Use skill_manage(action='patch', name='${name}') to update it instead.`;
+
+        const skillId = uuidv4();
+        dbCreateSkill({
+          id: skillId,
+          name,
+          description: description || "",
+          instructions,
+          category: category || "general",
+          triggers: triggers || [],
+          is_active: true,
+          preset_type: "custom",
+          auto_generated: false, // Agent explicitly created this
+        } as Parameters<typeof dbCreateSkill>[0]);
+
+        return `✅ Skill "${name}" created successfully (id: ${skillId}). It will activate on future tasks matching its triggers.`;
+      }
+
+      case "view": {
+        const skill = dbGetSkillByName(name);
+        if (!skill) return `No skill found with name "${name}". Use list_skills to see available skills.`;
+        return `## Skill: ${skill.name}\n**Category:** ${skill.category}\n**Status:** ${skill.is_active ? "Active" : "Inactive"}\n**Triggers:** ${skill.triggers?.join(", ") || "None"}\n**Created:** ${skill.created_at}\n\n### Instructions\n${skill.instructions}`;
+      }
+
+      case "patch": {
+        const skill = dbGetSkillByName(name);
+        if (!skill) return `No skill found with name "${name}". Use list_skills to see available skills, or create a new one with action='create'.`;
+
+        const updates: Record<string, unknown> = {};
+        if (description) updates.description = description;
+        if (instructions) updates.instructions = instructions;
+        if (category) updates.category = category;
+        if (triggers) updates.triggers = triggers;
+
+        if (Object.keys(updates).length === 0) return "Error: provide at least one field to update (description, instructions, category, or triggers).";
+
+        dbUpdateSkill(skill.id, updates);
+        return `✅ Skill "${name}" patched successfully. Updated: ${Object.keys(updates).join(", ")}.`;
+      }
+
+      case "delete": {
+        const skill = dbGetSkillByName(name);
+        if (!skill) return `No skill found with name "${name}".`;
+        dbDeleteSkill(skill.id);
+        return `✅ Skill "${name}" deleted.`;
+      }
+
+      default:
+        return `Unknown action "${action}". Use: create, view, patch, or delete.`;
+    }
+  } catch (err) {
+    return `Error managing skill: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3757,20 +4337,26 @@ async function executeDreamMachine(
 // ─── Image Generation ──────────────────────────────────────────────────────────
 
 async function executeGenerateImage(
-  prompt: string, size: string, style: string, filename: string, ctx: ToolContext
+  prompt: string, size: string, quality: string, filename: string, ctx: ToolContext
 ): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) return "Image generation requires OPENAI_API_KEY (uses DALL-E 3).";
+  if (!process.env.OPENAI_API_KEY) return "Image generation requires OPENAI_API_KEY (uses gpt-image-1).";
   try {
-    const resp = await openai.images.generate({
-      model: "dall-e-3", prompt, n: 1,
+    const resp = await getOpenAI().images.generate({
+      model: "gpt-image-1", prompt, n: 1,
       size: size as "1024x1024" | "1792x1024" | "1024x1792",
-      style: style as "vivid" | "natural", response_format: "url",
+      quality: quality as "low" | "medium" | "high",
     });
-    const imageUrl = resp.data?.[0]?.url;
-    if (!imageUrl) return "Image generation failed: no URL returned.";
-    const imgResp = await fetch(imageUrl);
-    if (!imgResp.ok) return `Failed to download image: HTTP ${imgResp.status}`;
-    const buf = Buffer.from(await imgResp.arrayBuffer());
+    const imageData = resp.data?.[0];
+    let buf: Buffer;
+    if (imageData?.b64_json) {
+      buf = Buffer.from(imageData.b64_json, "base64");
+    } else if (imageData?.url) {
+      const imgResp = await fetch(imageData.url);
+      if (!imgResp.ok) return `Failed to download image: HTTP ${imgResp.status}`;
+      buf = Buffer.from(await imgResp.arrayBuffer());
+    } else {
+      return "Image generation failed: no image data returned.";
+    }
     const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, "_");
     const filePath = path.join(ctx.filesDir, safeName);
     fs.writeFileSync(filePath, buf);
@@ -4157,8 +4743,8 @@ Return ONLY a JSON array of strings, no other text.`;
 
   let searchQueries: string[] = [];
   try {
-    const queryResp = await anthropic.messages.create({
-      model: "claude-3.5-haiku", max_tokens: 1024,
+    const queryResp = await getAnthropic().messages.create({
+      model: "claude-haiku-4-5", max_tokens: 1024,
       messages: [{ role: "user", content: queryGenPrompt }],
     });
     const queryText = queryResp.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map(b => b.text).join("");
@@ -4233,7 +4819,7 @@ ${outputFormat === "report" ? `Write a structured research report with:
 Be thorough, data-driven, and cite sources. Cross-reference claims across multiple sources.`;
 
   try {
-    const synthesisResp = await anthropic.messages.create({
+    const synthesisResp = await getAnthropic().messages.create({
       model: "claude-sonnet-4-6", max_tokens: 8192,
       messages: [{ role: "user", content: synthesisPrompt }],
     });
@@ -4327,17 +4913,18 @@ async function executeFinanceData(queryType: string, symbol: string, query: stri
 // ─── Sub-Agent ────────────────────────────────────────────────────────────────
 
 function selectSubAgentModel(agentType: string, requested: string): { provider: string; modelName: string } {
-  // If free mode is requested, all sub-agents also use free models
-  if (requested === "free") return { provider: "openrouter", modelName: "openrouter/free" };
-  if (requested && requested !== "auto") return selectModelForTask(requested as ModelId, "");
-  switch (agentType) {
-    case "research": return process.env.GOOGLE_AI_API_KEY ? { provider: "google", modelName: "gemini-2.0-flash" } : { provider: "anthropic", modelName: "claude-sonnet-4-6" };
-    case "writing": return process.env.OPENAI_API_KEY ? { provider: "openai", modelName: "gpt-4o" } : { provider: "anthropic", modelName: "claude-sonnet-4-6" };
-    case "code": case "reviewer": case "data_analysis": return { provider: "anthropic", modelName: "claude-sonnet-4-6" };
-    case "web_scraper": return process.env.OPENAI_API_KEY ? { provider: "openai", modelName: "gpt-4.1-mini" } : { provider: "anthropic", modelName: "claude-3.5-haiku" };
-    case "planner": return process.env.OPENAI_API_KEY ? { provider: "openai", modelName: "gpt-4.1-mini" } : { provider: "anthropic", modelName: "claude-sonnet-4-6" };
-    default: return { provider: "anthropic", modelName: "claude-sonnet-4-6" };
-  }
+  // Perplexity Computer-style delegation: use model-router for sub-agents too.
+  // This replaces the old hardcoded switch-case with capability-scored routing
+  // that respects each role's preferred_model from SUBAGENT_ROLES.
+  const roleConfig = SUBAGENT_ROLES[agentType as keyof typeof SUBAGENT_ROLES];
+  const selection = routeSubAgentModel(
+    agentType,
+    "", // task text is added by the caller
+    requested,
+    roleConfig?.preferred_model,
+  );
+  console.log(`[model-router] Sub-agent "${agentType}": ${selection.modelName} — ${selection.reasoning.slice(0, 100)}`);
+  return { provider: selection.provider, modelName: selection.modelName };
 }
 
 /** Run a sub-agent loop using the OpenAI-compatible SDK (works for OpenAI and OpenRouter) */
@@ -4361,7 +4948,7 @@ async function runSubAgentOpenAICompat(
   while (iterations < maxIterations) {
     iterations++;
     const resp = await client.chat.completions.create({
-      model: modelName, max_tokens: 4096, messages, tools: oaiTools,
+      model: modelName, max_completion_tokens: 4096, messages, tools: oaiTools,
       tool_choice: iterations === 1 ? "required" : "auto",
     });
     const msg = resp.choices[0]?.message;
@@ -4412,7 +4999,7 @@ async function runSubAgentAnthropic(
 
   while (iterations < maxIterations) {
     iterations++;
-    const resp = await anthropic.messages.create({
+    const resp = await getAnthropic().messages.create({
       model: modelName, max_tokens: 4096, system: subSystemPrompt, tools: subTools, messages,
       tool_choice: iterations === 1 ? { type: "any" as const } : { type: "auto" as const },
     });
@@ -4484,7 +5071,7 @@ async function createSubAgent(
 
       try {
         if (provider === "openai" && process.env.OPENAI_API_KEY) {
-          result = await runSubAgentOpenAICompat(openai, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
+          result = await runSubAgentOpenAICompat(getOpenAI(), mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
         } else if (provider === "openrouter" && process.env.OPENROUTER_API_KEY) {
           const orClient = new OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
@@ -5292,12 +5879,12 @@ async function dispatchConnectorAction(
     case "openai": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "chat_completion") {
-        const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "gpt-4o-mini", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1000 }) });
+        const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "gpt-5.4-mini", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_completion_tokens: (params.max_tokens as number) || 1000 }) });
         const d = await r.json() as { choices?: Array<{ message: { content: string } }> };
         return d.choices?.[0]?.message?.content || `OpenAI error: ${JSON.stringify(d).slice(0, 200)}`;
       }
       if (action === "image_generation") {
-        const r = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: h, body: JSON.stringify({ model: "dall-e-3", prompt: params.prompt, n: 1, size: (params.size as string) || "1024x1024" }) });
+        const r = await fetch("https://api.openai.com/v1/images/generations", { method: "POST", headers: h, body: JSON.stringify({ model: "gpt-image-1", prompt: params.prompt, n: 1, size: (params.size as string) || "1024x1024" }) });
         const d = await r.json() as { data?: Array<{ url: string }> };
         return d.data?.[0]?.url || `OpenAI image error: ${JSON.stringify(d).slice(0, 200)}`;
       }
@@ -5311,7 +5898,7 @@ async function dispatchConnectorAction(
     case "huggingface": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "inference") {
-        const model = (params.model as string) || "meta-llama/Meta-Llama-3-8B-Instruct";
+        const model = (params.model as string) || "meta-llama/Llama-4-Scout-17B-16E-Instruct";
         const r = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, { method: "POST", headers: h, body: JSON.stringify({ inputs: params.inputs || params.prompt || params.text }) });
         const d = await r.json();
         return Array.isArray(d) ? JSON.stringify(d[0], null, 2).slice(0, 1000) : JSON.stringify(d, null, 2).slice(0, 1000);
@@ -5731,14 +6318,14 @@ async function dispatchConnectorAction(
       break;
     }
     case "runway": {
-      const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Runway-Version": "2024-11-06" };
+      const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Runway-Version": "2025-09-15" };
       if (action === "generate_video" || action === "text_to_video") {
-        const r = await fetch("https://api.dev.runwayml.com/v1/image_to_video", { method: "POST", headers: h, body: JSON.stringify({ model: "gen3a_turbo", promptImage: params.image_url, promptText: params.prompt, duration: (params.duration as number) || 5, ratio: (params.ratio as string) || "16:9" }) });
+        const r = await fetch("https://api.runwayml.com/v1/image_to_video", { method: "POST", headers: h, body: JSON.stringify({ model: "gen4_turbo", promptImage: params.image_url, promptText: params.prompt, duration: (params.duration as number) || 5, ratio: (params.ratio as string) || "16:9" }) });
         const d = await r.json() as { id?: string; status?: string };
         return d.id ? `Runway task created: ${d.id} (status: ${d.status})` : `Runway error: ${JSON.stringify(d).slice(0, 300)}`;
       }
       if (action === "get_task") {
-        const r = await fetch(`https://api.dev.runwayml.com/v1/tasks/${params.task_id}`, { headers: h });
+        const r = await fetch(`https://api.runwayml.com/v1/tasks/${params.task_id}`, { headers: h });
         const d = await r.json() as { id?: string; status?: string; output?: string[] };
         return JSON.stringify({ id: d.id, status: d.status, outputs: d.output }, null, 2);
       }
@@ -5780,7 +6367,7 @@ async function dispatchConnectorAction(
     case "minimax_video": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "generate_video") {
-        const r = await fetch("https://api.minimaxi.chat/v1/video_generation", { method: "POST", headers: h, body: JSON.stringify({ model: "video-01", prompt: params.prompt }) });
+        const r = await fetch("https://api.minimaxi.chat/v1/video_generation", { method: "POST", headers: h, body: JSON.stringify({ model: "video-01-live", prompt: params.prompt }) });
         const d = await r.json() as { task_id?: string };
         return d.task_id ? `MiniMax video task: ${d.task_id}` : `Error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -5848,7 +6435,7 @@ async function dispatchConnectorAction(
     case "stability": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" };
       if (action === "generate_image" || action === "text_to_image") {
-        const r = await fetch("https://api.stability.ai/v2beta/stable-image/generate/sd3", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "multipart/form-data" }, body: JSON.stringify({ prompt: params.prompt, negative_prompt: params.negative_prompt || "", aspect_ratio: (params.aspect_ratio as string) || "1:1", output_format: "png" }) });
+        const r = await fetch("https://api.stability.ai/v2beta/stable-image/generate/ultra", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "multipart/form-data" }, body: JSON.stringify({ prompt: params.prompt, negative_prompt: params.negative_prompt || "", aspect_ratio: (params.aspect_ratio as string) || "1:1", output_format: "png" }) });
         if (r.ok) { const d = await r.json() as { image?: string }; return d.image ? `Image generated (base64, ${d.image.length} chars)` : "Image generated"; }
         return `Stability error: ${r.status} ${await r.text().then(t => t.slice(0, 200))}`;
       }
@@ -6052,7 +6639,7 @@ async function dispatchConnectorAction(
     case "anthropic": {
       const h = { "x-api-key": apiKey, "Content-Type": "application/json", "anthropic-version": "2023-06-01" };
       if (action === "chat_completion" || action === "message") {
-        const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "claude-sonnet-4-20250514", max_tokens: (params.max_tokens as number) || 1024, messages: params.messages || [{ role: "user", content: params.prompt || params.message }] }) });
+        const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "claude-sonnet-4-6", max_tokens: (params.max_tokens as number) || 1024, messages: params.messages || [{ role: "user", content: params.prompt || params.message }] }) });
         const d = await r.json() as { content?: Array<{ text: string }> };
         return d.content?.[0]?.text || `Anthropic error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -6060,7 +6647,7 @@ async function dispatchConnectorAction(
     }
     case "google_ai": {
       if (action === "chat_completion" || action === "generate") {
-        const model = (params.model as string) || "gemini-2.0-flash";
+        const model = (params.model as string) || "gemini-2.5-flash";
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: params.prompt || params.message }] }] }) });
         const d = await r.json() as { candidates?: Array<{ content: { parts: Array<{ text: string }> } }> };
         return d.candidates?.[0]?.content?.parts?.[0]?.text || `Google AI error: ${JSON.stringify(d).slice(0, 300)}`;
@@ -6070,7 +6657,7 @@ async function dispatchConnectorAction(
     case "groq": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "chat_completion" || action === "chat") {
-        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "llama-3.1-70b-versatile", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
+        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "llama-4-scout-17b-16e", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
         const d = await r.json() as { choices?: Array<{ message: { content: string } }> };
         return d.choices?.[0]?.message?.content || `Groq error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -6079,7 +6666,7 @@ async function dispatchConnectorAction(
     case "together": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "chat_completion" || action === "chat") {
-        const r = await fetch("https://api.together.xyz/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
+        const r = await fetch("https://api.together.xyz/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "meta-llama/Llama-4-Scout-17B-16E-Instruct-Turbo", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
         const d = await r.json() as { choices?: Array<{ message: { content: string } }> };
         return d.choices?.[0]?.message?.content || `Together error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -6088,7 +6675,7 @@ async function dispatchConnectorAction(
     case "fireworks": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
       if (action === "chat_completion" || action === "chat") {
-        const r = await fetch("https://api.fireworks.ai/inference/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "accounts/fireworks/models/llama-v3p1-70b-instruct", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
+        const r = await fetch("https://api.fireworks.ai/inference/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "accounts/fireworks/models/llama4-scout-instruct-basic", messages: params.messages || [{ role: "user", content: params.prompt || params.message }], max_tokens: (params.max_tokens as number) || 1024 }) });
         const d = await r.json() as { choices?: Array<{ message: { content: string } }> };
         return d.choices?.[0]?.message?.content || `Fireworks error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -6131,7 +6718,7 @@ async function dispatchConnectorAction(
     case "openrouter": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://perplexity-computer.vercel.app" };
       if (action === "chat_completion" || action === "chat") {
-        const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "meta-llama/llama-3.1-70b-instruct", messages: params.messages || [{ role: "user", content: params.prompt || params.message }] }) });
+        const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: h, body: JSON.stringify({ model: (params.model as string) || "meta-llama/llama-4-scout", messages: params.messages || [{ role: "user", content: params.prompt || params.message }] }) });
         const d = await r.json() as { choices?: Array<{ message: { content: string } }> };
         return d.choices?.[0]?.message?.content || `OpenRouter error: ${JSON.stringify(d).slice(0, 300)}`;
       }
@@ -7441,7 +8028,80 @@ async function handleCompleteTask(
       success: true,
       metadata: { summary_preview: summary.slice(0, 100), files: filesCreated.length },
     });
+
+    // Record model performance outcome for the routing engine's learning loop
+    if (task) {
+      try {
+        const durationMs = Date.now() - new Date(task.created_at).getTime();
+        const modality = detectModalityFromText(task.prompt);
+        const complexity = assessTaskComplexity(task.prompt);
+        const phase = inferTaskPhase(task.prompt);
+        const cost = 0; // actual cost tracked separately in token_usage
+        recordModelOutcome(task.model, phase, modality, complexity, true, durationMs, cost);
+      } catch { /* best-effort */ }
+    }
   } catch (e) { console.error("[analytics] Error recording event:", e); }
+
+  // ─── Hermes-Inspired Background Review ─────────────────────────────────
+  // After task completion, runs background review to:
+  // 1. Auto-create skills from complex tasks (5+ tool calls)
+  // 2. Extract & store user preferences from conversation
+  // 3. Track skill performance if a skill was used
+  // 4. Compress memory bank if growing too large
+  try {
+    const { getTask } = await import("./db");
+    const task = getTask(ctx.taskId);
+    if (task) {
+      const bgResult = await runBackgroundReview({
+        taskId: ctx.taskId,
+        taskPrompt: task.prompt,
+        taskSummary: summary,
+        taskOutcome: "success",
+        messages: task.messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
+        steps: task.steps.map(s => ({
+          tool_name: s.tool_name || undefined,
+          tool_input: s.tool_input ? JSON.stringify(s.tool_input) : undefined,
+          tool_result: s.tool_result || undefined,
+          status: s.status,
+          title: s.title || undefined,
+        })),
+        matchedSkillId: (ctx as unknown as Record<string, string>).matchedSkillId,
+        storeMemoryFn: memoryStore,
+        deleteMemoryFn: deleteMemory,
+        listMemoryFn: (limit: number) => listMemory(limit),
+        createSkillFn: (skill) => {
+          dbCreateSkill({
+            ...skill,
+            is_active: true,
+            instructions: skill.instructions,
+            preset_type: "custom",
+            auto_generated: true,
+          } as Parameters<typeof dbCreateSkill>[0]);
+        },
+        findSimilarSkillFn: findSimilarSkill,
+        recordSkillPerfFn: (perf) => {
+          try {
+            recordSkillPerf(perf);
+          } catch { /* best effort */ }
+        },
+        patchSkillFn: (id, updates) => {
+          try {
+            dbUpdateSkill(id, updates);
+          } catch { /* best effort */ }
+        },
+        dbForPatching: (() => { try { const { getDb } = require("./db"); return getDb(); } catch { return undefined; } })(),
+      });
+
+      if (bgResult.skills_created > 0 || bgResult.memories_created > 0 || bgResult.skills_patched > 0) {
+        console.log(`[bg-review] Task ${ctx.taskId.slice(0, 8)}: created ${bgResult.skills_created} skills, patched ${bgResult.skills_patched} skills, ${bgResult.memories_created} memories, deleted ${bgResult.memories_deleted} old memories`);
+      }
+
+      // Track skill performance for matched skill
+      if ((ctx as unknown as Record<string, string>).matchedSkillId) {
+        incrementSkillUsage((ctx as unknown as Record<string, string>).matchedSkillId, "success");
+      }
+    }
+  } catch (e) { console.error("[bg-review] Error running background review:", e); }
 
   // Proactive follow-up suggestions (Otto-inspired)
   const suggestions = generateFollowUpSuggestions(summary, ctx.taskId);
@@ -7653,13 +8313,29 @@ function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir
     .replace(/\n\n## Uploaded Files[\s\S]*?(?=\n\n##|\n\n$|$)/, "")
     .replace(/\n\n## File Contents \(auto-loaded\)[\s\S]*?(?=\n\n##|\n\n$|$)/, "");
 
-  // Re-inject fresh memories
+  // Re-inject fresh memories (hybrid keyword + semantic + primed recall)
   try {
-    const relevantMemories = memoryRecall(userMessage, 5);
+    const keywordResults = memoryRecall(userMessage, 10);
+    const allMem = listMemory(500);
+    const primedMems = primeMemoriesForTask(userMessage, allMem, 8);
+    const enhancedResults = enhancedMemoryRecall(userMessage, allMem, keywordResults, 5);
+    
+    // Deduplicate
+    const seenMemIds = new Set<string>();
+    const allRelevant: typeof primedMems = [];
+    for (const m of [...primedMems, ...enhancedResults]) {
+      if (!seenMemIds.has(m.id)) { seenMemIds.add(m.id); allRelevant.push(m); }
+    }
+    const relevantMemories = allRelevant.slice(0, 8);
+    
     if (relevantMemories.length > 0) {
-      const memLines = relevantMemories.map((m, i) =>
-        `${i + 1}. **${m.key}**: ${m.value}${m.tags && m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : ""}`
-      );
+      for (const m of relevantMemories) {
+        try { updateMemoryAccess(m.id); } catch { /* best-effort */ }
+      }
+      const memLines = relevantMemories.map((m, i) => {
+        const typeLabel = m.memory_type ? ` (${m.memory_type})` : "";
+        return `${i + 1}. **${m.key}**${typeLabel}: ${m.value}${m.tags && m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : ""}`;
+      });
       refreshedPrompt += `\n\n## Relevant Memories (auto-recalled)\nThese memories from previous tasks may be relevant (live refresh):\n${memLines.join("\n")}\n\nUse these as context. Store new findings with memory_store. Update stale memories with memory_update. Delete incorrect ones with memory_delete.`;
     }
   } catch { /* best-effort */ }
@@ -7769,7 +8445,15 @@ Delegate work to specialized sub-agents via create_sub_agent:
 - **reviewer**: Code review, fact-checking, QA, security audit
 - **planner**: Break complex projects into actionable plans with timelines
 - **general**: Flexible agent for tasks that span multiple categories
-Each sub-agent auto-routes to the best model for that task type and has access to tools.
+- **job_hunter**: Autonomous job searching, resume tailoring, cover letter writing, and application submission via browser automation
+- **video_producer**: End-to-end video production — scripting, storyboarding, Luma AI scene generation, thumbnail creation, asset organization
+- **marketing_strategist**: Comprehensive marketing plans, content calendars, SEO strategy, campaign execution, and posting via connectors
+- **form_filler**: Navigate and complete web forms, applications, and registrations via browser automation with stored profile data
+- **social_media_manager**: Create platform-specific content, generate visuals, post via connectors, schedule, and plan engagement
+- **outreach_specialist**: Cold email campaigns, prospect research, personalized sequences, and follow-up tracking
+- **seo_specialist**: Keyword research, SERP analysis, content optimization, technical SEO, and content cluster building
+- **ecommerce_operator**: Manage Shopify/Printify stores — product listings, collections, pricing, inventory, and sales analytics via connectors
+Each sub-agent auto-routes to the best model for that task type and has scoped tool access.
 
 ## Deep Research Protocol
 When the task involves research, investigation, or analysis:
@@ -7797,7 +8481,7 @@ When tasks involve finance, data, or analytics:
 - **browse_web**: Full browser automation — fill forms, click buttons, navigate pages, take screenshots. AUTO-LOGIN: automatically detects login pages and fills credentials from .env.local
 - **execute_code**: Run Python, JavaScript, or Bash. Auto-installs packages (pip/npm). Use for calculations, data processing, chart generation, data visualization, file manipulation.
 - **write_file / read_file / list_files**: Full filesystem access in task working directory
-- **generate_image**: Create images via DALL-E 3
+- **generate_image**: Create images via gpt-image-1
 - **replicate_run**: Run ANY of 1000s of AI models — image gen (Flux, SDXL), video, upscaling, background removal, face swap, music, speech, 3D, and more. Auto-selects the optimal model.
 - **dream_machine**: Multi-shot video/image production — commercials, storyboards, brand films
 - **send_email**: Send emails via Resend or connected services (Gmail, Outlook)
@@ -7808,6 +8492,7 @@ When tasks involve finance, data, or analytics:
 - **deep_research**: Multi-step deep research — searches dozens of queries, reads hundreds of sources, synthesizes a comprehensive cited report
 - **memory_store / memory_recall / memory_list / memory_update / memory_delete**: Full persistent memory system — store, search, list, update, and delete memories. Self-evolving: update stale memories rather than creating duplicates. Delete incorrect memories to keep the bank clean.
 - **list_skills**: List all available skills with their triggers and status. Use to discover what specialized capabilities are configured.
+- **skill_manage**: Create, view, patch, or delete skills. Use to capture successful workflows, fix outdated skills, or inspect full skill instructions.
 - **organize_files**: Manage the global file system — create folders, move files into folders, list all files across tasks. All changes are visible in the Files page.
 - **sandbox_execute**: Run code in an isolated sandbox (Docker when available, VM fallback) — for untrusted or experimental code
 - **computer_use / computer**: Screenshot the screen, click, type, press keys — full GUI automation
@@ -7827,7 +8512,6 @@ You run inside the Ottomate app at **http://localhost:3000**. Every section of t
 | Task Manager | /computer/tasks | Browse, filter, resume, delete tasks |
 | Files | /computer/files | Finder-style browser for all generated files |
 | Memory | /computer/memory | Browse + manage persistent memories |
-| Gallery | /computer/gallery | View generated images + media |
 | Documents | /computer/documents | Create and organize rich documents |
 | Image Studio | /computer/image-studio | Adobe Firefly + Replicate image generation |
 | Video Studio | /computer/dreamscape/studio | Luma Dream Machine video production |
@@ -7844,7 +8528,7 @@ You run inside the Ottomate app at **http://localhost:3000**. Every section of t
 The internal REST API is available at \`/api/*\` — you can call it from \`execute_code\` fetch or \`bash\` curl:
 - \`GET /api/tasks\` — list all tasks; \`POST /api/tasks\` — create a task
 - \`GET /api/files/{taskId}/{filename}\` — download any generated file
-- \`GET /api/memory\` — list memories; \`GET /api/gallery\` — browse gallery
+- \`GET /api/memory\` — list memories
 - \`GET /api/connectors\` — list connectors and their status
 - \`GET /api/usage\` — token usage stats
 
@@ -7868,35 +8552,67 @@ The internal REST API is available at \`/api/*\` — you can call it from \`exec
 9. **Generate files**: Create downloadable deliverables (HTML, PDF, CSV, JSON, images) — not just text.
 10. **Complete with summary**: ALWAYS call complete_task with a comprehensive summary of what was accomplished.
 
+## Self-Improvement (Hermes-Inspired)
+You are a self-improving agent with the ability to create and maintain your own skills.
+
+### Skills Guidance
+- **After completing a complex task** (5+ tool calls), fixing a tricky error, or discovering a non-trivial workflow, **save the approach as a skill** with skill_manage(action='create') so you can reuse it next time.
+- **When using a skill and finding it outdated, incomplete, or wrong**, patch it immediately with skill_manage(action='patch') — don't wait to be asked. Skills that aren't maintained become liabilities.
+- **Before replying**, scan the available skills in your context. If a relevant skill exists, load its full instructions with skill_manage(action='view'). If you used a skill and found issues, patch it immediately.
+- Only proceed without loading a skill if genuinely none are relevant to the current task.
+- Skills you create persist across sessions and activate on future tasks matching their triggers.
+
+### Memory Guidance
+- **DO NOT** save task progress, session outcomes, completed-work logs, or temporary TODO state to memory.
+- **DO** save user preferences, project facts, and cross-task context with memory_store.
+- If you've discovered a new way to do something or solved a problem that could be necessary later, **save it as a skill** with skill_manage — not as a memory.
+- Memory is for facts about the user and their world. Skills are for reusable workflows and approaches.
+
+Your goal is to get better at every task you complete. The background system also auto-creates skills from complex tasks, tracks performance, extracts preferences, and compresses old memories — but YOU should actively create and maintain skills during task execution too.
+
 ## Workflow Patterns
 - **Research Report**: web_search → scrape_url (multiple) → create_sub_agent(research) → execute_code(format) → write_file
 - **Data Dashboard**: web_search(data) → execute_code(process+visualize) → write_file(HTML dashboard)
 - **Code Project**: plan → create_sub_agent(code) → create_sub_agent(reviewer) → write_file(all files)
 - **Email Campaign**: research → create_sub_agent(writing) → send_email or write_file
-- **Video Production**: plan shots → dream_machine(storyboard) → complete_task
+- **Video Production**: plan shots → create_sub_agent(video_producer) → dream_machine(scenes) → generate_image(thumbnails) → write_file(EDL + all assets)
 - **API Integration**: connector_call → process → write_file or connector_call
-- **Social Media Campaign**: research → create_sub_agent(writing) → social_media_post(post) → social_media_post(read_feed) to verify
+- **Social Media Campaign**: create_sub_agent(social_media_manager) → generate_image(visuals) → connector_call(twitter/linkedin/instagram) → schedule follow-ups
 - **Social Media Monitoring**: social_media_post(search, query) → analyze results → memory_store findings
 - **Print-on-Demand**: generate_image → connector_call(printify, upload_image) → search_blueprints → get_provider_variants → create_product → publish_product
-- **Blog Publishing**: write content → connector_call(shopify, create_blog_post, {title, body_html, tags})
+- **Blog Publishing**: create_sub_agent(seo_specialist) → write SEO content → connector_call(shopify, create_blog_post, {title, body_html, tags})
+- **Job Hunting**: create_sub_agent(job_hunter) → web_search(jobs) → write_file(tailored resume) → browse_web(apply) → memory_store(tracking)
+- **Form Filling**: create_sub_agent(form_filler) → memory_recall(profile) → browse_web(navigate) → computer_use(fill fields) → screenshot(review) → submit
+- **Marketing Plan**: create_sub_agent(marketing_strategist) → web_search(market research) → write_file(strategy) → create_sub_agent(social_media_manager) → schedule posts
+- **Cold Outreach**: create_sub_agent(outreach_specialist) → web_search(prospects) → write_file(sequences) → send_email(personalized) → memory_store(tracking)
+- **SEO Content Cluster**: create_sub_agent(seo_specialist) → web_search(keywords) → write_file(pillar + cluster articles) → connector_call(publish)
+- **Product Launch**: create_sub_agent(marketing_strategist) → write_file(press release + social posts + emails) → connector_call(publish) → send_email(press) → social_media_post(launch)
+- **E-Commerce Setup**: create_sub_agent(ecommerce_operator) → connector_call(shopify, create_product) → generate_image → connector_call(shopify, create_collection) → write_file(email templates)
+- **Podcast Production**: create_sub_agent(research) → write_file(questions) → create_sub_agent(writing, show notes) → generate_image(artwork) → write_file(all assets)
+- **Newsletter**: web_search(curate) → create_sub_agent(writing) → write_file(HTML email) → connector_call(sendgrid/gmail, send)
+- **Financial Model**: create_sub_agent(data_analysis) → execute_code(model) → write_file(projections + charts) → create_sub_agent(reviewer, validate)
+- **Competitive Intel**: create_sub_agent(research, competitors) → scrape_url(pricing pages) → web_search(hiring signals) → write_file(SWOT + report)
+- **Website Login + Extract**: create_sub_agent(form_filler) → browse_web(login) → scrape_url(dashboard) → execute_code(process) → write_file(report)
 
 ## Memory System — Self-Evolving
-Your memory is a living, evolving knowledge base that grows smarter with every task:
+Your memory is a living knowledge base for **facts about the user and their world** — NOT for task logs or session outcomes.
 - Relevant memories are **auto-recalled and injected into your context** at task start — do NOT call memory_recall at task start, jump straight to work
 - **Store** user preferences, project details, and key findings with memory_store
 - **Update** existing memories with memory_update when you discover new/corrected information — NEVER leave stale data
 - **Delete** incorrect or outdated memories with memory_delete — clean memory = accurate memory
 - **List** all memories with memory_list to audit and maintain the memory bank
 - **Recall** specific context with memory_recall before making assumptions
-- Task results are auto-stored in memory for cross-session continuity
 - Use specific, descriptive keys for memory entries
 - When you find a memory that contradicts current reality, DELETE it immediately
+- **Do NOT store**: task progress, session outcomes, completed-work logs, temporary state. If you've discovered a reusable workflow, save it as a **skill** with skill_manage instead.
 - Memories are automatically refreshed during long tasks so you always have the latest state
 
 ## Skills & Capabilities
-- Active skills are pre-loaded in your context above. Use list_skills only if you need to inspect skill metadata mid-task — not at task start.
-- Skills provide specialized instructions and model routing for specific task types
-- Active skills automatically activate when their triggers match the user's request${skills ? `\n\n## Custom Skills\n${skills}` : ""}`;
+- Active skills are pre-loaded in your context above. Use list_skills to discover available skills, then skill_manage(action='view') to load full instructions.
+- Use skill_manage(action='create') to save successful workflows as reusable skills.
+- Use skill_manage(action='patch') to fix outdated or incorrect skill instructions.
+- Skills provide specialized instructions and model routing for specific task types.
+- Active skills automatically activate when their triggers match the user's request.${skills ? `\n\n## Custom Skills\n${skills}` : ""}`;
 }
 
 function getSubAgentSystemPrompt(agentType: string): string {
@@ -7924,7 +8640,7 @@ function toolUseTypeToStepType(toolName: ToolName): AgentStep["type"] {
     request_user_input: "waiting", complete_task: "output",
     memory_store: "reasoning", memory_recall: "reasoning",
     memory_list: "reasoning", memory_delete: "reasoning", memory_update: "reasoning",
-    list_skills: "reasoning",
+    list_skills: "reasoning", skill_manage: "reasoning",
     organize_files: "file_operation",
     generate_image: "file_operation", replicate_run: "file_operation",
     send_email: "connector_call",

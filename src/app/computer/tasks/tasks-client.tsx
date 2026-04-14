@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, LayoutTemplate, ArrowUpCircle, ArrowDownCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
+import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, ArrowUpCircle, ArrowDownCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
 import { cn, formatRelativeTime, getStatusBgColor, truncate } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
 import type { Task } from "@/lib/types";
@@ -177,6 +177,8 @@ export function TasksClientPage({ initialTasks }: Props) {
             { label: "Pending", value: statusCounts["pending"] || 0, key: "pending" },
             { label: "Completed", value: statusCounts["completed"] || 0, key: "completed" },
             { label: "Failed", value: statusCounts["failed"] || 0, key: "failed" },
+            { label: "Paused", value: statusCounts["paused"] || 0, key: "paused" },
+            { label: "Waiting", value: statusCounts["waiting_for_input"] || 0, key: "waiting_for_input" },
             { label: "Queued", value: statusCounts["queued"] || 0, key: "queued" },
           ].filter(s => s.key === "all" || s.value > 0).map((stat) => (
             <button
@@ -392,11 +394,6 @@ function TaskCard({
                 {(task.metadata as Record<string, unknown> | undefined)?.webhook_source ? (
                   <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 text-[10px] font-medium border border-orange-500/20">
                     <Webhook size={9} /> webhook
-                  </span>
-                ) : null}
-                {(task.metadata as Record<string, unknown> | undefined)?.template_id ? (
-                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 text-[10px] font-medium border border-blue-500/20">
-                    <LayoutTemplate size={9} /> template
                   </span>
                 ) : null}
                 {task.tags && task.tags.length > 0 && task.tags.map(tag => (

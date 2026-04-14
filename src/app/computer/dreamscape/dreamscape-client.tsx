@@ -2705,24 +2705,6 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
                       <a href={selectedShot.imageUrl} download target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 text-white text-xs hover:text-violet-300">
                         <Download size={13} /> Download
                       </a>
-                      {/* Handoff: edit generated image in Image Studio */}
-                      <button
-                        onClick={() => {
-                          const item = addToShelf({
-                            url: selectedShot.imageUrl!,
-                            name: `dreamscape-image-${Date.now()}.png`,
-                            mimeType: "image/png",
-                            mimeCategory: "image",
-                            source: "dreamscape",
-                            prompt: selectedShot.prompt,
-                          });
-                          sendToStudio(item, "image-studio");
-                        }}
-                        className="flex items-center gap-1.5 bg-pink-500/20 backdrop-blur-sm rounded-lg px-3 py-1.5 text-pink-300 text-xs hover:bg-pink-500/30 transition-colors"
-                        title="Edit in Image Studio"
-                      >
-                        <Sparkles size={12} /> Edit in Image Studio
-                      </button>
                     </div>
                   </>
                 ) : selectedShot?.audioUrl ? (

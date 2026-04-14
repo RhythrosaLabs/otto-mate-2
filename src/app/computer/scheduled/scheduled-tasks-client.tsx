@@ -182,9 +182,9 @@ export default function ScheduledTasksClient() {
                   <option value="auto">Auto (Recommended)</option>
                   <option value="claude-opus-4-6">Claude Opus 4.6</option>
                   <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  <option value="gpt-5.4">GPT-5.4</option>
+                  <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 </select>
               </div>
             </div>

@@ -4,8 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, Suspense } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUp, Shuffle, Loader2, Monitor, Paperclip, X, Command, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
-import type { GalleryItem, SlashCommand } from "@/lib/types";
+import type { SlashCommand } from "@/lib/types";
 
 // ─── Slash Commands (Otto-inspired) ───────────────────────────────────────────
 // Power-user shortcuts for common modalities
@@ -161,7 +160,7 @@ function ComputerPageInner() {
   const [shuffleIndex, setShuffleIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashHighlight, setSlashHighlight] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -213,20 +212,9 @@ function ComputerPageInner() {
     }
   }, [searchParams]);
 
-  // Fetch gallery items for "From the gallery" category
-  useEffect(() => {
-    fetch("/api/gallery")
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((items: GalleryItem[]) => {
-        setGalleryItems(items);
-      })
-      .catch((err) => console.error("Failed to load gallery:", err));
-  }, []);
 
-  // "From the gallery" is the FIRST category (index 0), matching Perplexity
-  const GALLERY_CATEGORY_INDEX = 0;
+
   const ALL_CATEGORIES = [
-    { label: "From the gallery", icon: "🖼️", prompts: galleryItems.map((i) => i.prompt).slice(0, 6) },
     ...GALLERY_EXAMPLES,
   ];
 
@@ -238,9 +226,8 @@ function ComputerPageInner() {
 
   function handleShuffle() {
     setActiveCategory(null);
-    const maxGalleryPages = Math.max(1, Math.ceil(galleryItems.length / 6));
     const maxPromptPages = Math.max(1, Math.ceil(ALL_PROMPTS.length / 3));
-    setShuffleIndex((i) => (i + 1) % Math.max(maxGalleryPages, maxPromptPages));
+    setShuffleIndex((i) => (i + 1) % maxPromptPages);
   }
 
   async function handleSubmit(e?: React.FormEvent) {
@@ -562,74 +549,38 @@ function ComputerPageInner() {
         </div>
       </div>
 
-      {/* Example prompts / Gallery items */}
+      {/* Example prompts */}
       <div className="w-full max-w-2xl mt-8 animate-fade-in">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-pplx-muted font-medium">
-            {activeCategory !== null ? ALL_CATEGORIES[activeCategory].label : "From the gallery"}
+            {activeCategory !== null ? ALL_CATEGORIES[activeCategory].label : "Try these"}
           </span>
-          {(activeCategory === null || activeCategory === GALLERY_CATEGORY_INDEX) ? (
-            <div className="flex items-center gap-3">
-              <Link
-                href="/computer/gallery"
-                className="text-xs text-pplx-accent hover:underline"
-              >
-                View all
-              </Link>
-              <button
-                onClick={handleShuffle}
-                className="flex items-center gap-1.5 text-xs text-pplx-muted hover:text-pplx-text transition-colors"
-              >
-                <Shuffle size={12} />
-                Shuffle
-              </button>
-            </div>
-          ) : null}
+          <button
+            onClick={handleShuffle}
+            className="flex items-center gap-1.5 text-xs text-pplx-muted hover:text-pplx-text transition-colors"
+          >
+            <Shuffle size={12} />
+            Shuffle
+          </button>
         </div>
 
-        {/* Gallery visual cards (when "From the gallery" or default) */}
-        {(activeCategory === null || activeCategory === GALLERY_CATEGORY_INDEX) && galleryItems.length > 0 ? (
-          <div className="grid gap-2">
-            {(() => {
-              const start = (shuffleIndex * 6) % galleryItems.length;
-              const items = galleryItems.slice(start, start + 6).length >= 6
-                ? galleryItems.slice(start, start + 6)
-                : [...galleryItems.slice(start), ...galleryItems.slice(0, 6 - (galleryItems.length - start))].slice(0, 6);
-              return items;
-            })().map((item, i) => (
-              <button
-                key={`gallery-${item.id}-${i}`}
-                onClick={() => setPrompt(item.prompt)}
-                className="text-left px-4 py-3 rounded-xl border border-pplx-border bg-pplx-card hover:border-pplx-muted/50 hover:bg-pplx-card/80 transition-all text-sm group animate-fade-in flex items-center gap-3"
-                style={{ animationDelay: `${i * 0.05}s` }}
-              >
-                <span className="text-base shrink-0 opacity-70">
-                  {({ coding: "💻", research: "🔍", writing: "✍️", data_analysis: "📊", business: "💼", creative: "🎨" } as Record<string,string>)[item.category] ?? "✦"}
-                </span>
-                <span className="text-pplx-muted group-hover:text-pplx-text transition-colors line-clamp-1">{item.title}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          /* Text prompt buttons (for non-gallery categories) */
-          <div className="grid gap-2">
-            {currentExamples.slice(0, 4).map((ex, i) => (
-              <button
-                key={`${shuffleIndex}-${i}`}
-                onClick={() => setPrompt(ex)}
-                className="text-left px-4 py-3 rounded-xl border border-pplx-border bg-pplx-card hover:border-pplx-muted/50 hover:bg-pplx-card/80 transition-all text-sm text-pplx-muted hover:text-pplx-text group animate-fade-in"
-                style={{ animationDelay: `${i * 0.05}s` }}
-              >
-                <span className="line-clamp-2">{ex}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="grid gap-2">
+          {currentExamples.slice(0, 4).map((ex, i) => (
+            <button
+              key={`${shuffleIndex}-${i}`}
+              onClick={() => setPrompt(ex)}
+              className="text-left px-4 py-3 rounded-xl border border-pplx-border bg-pplx-card hover:border-pplx-muted/50 hover:bg-pplx-card/80 transition-all text-sm text-pplx-muted hover:text-pplx-text group animate-fade-in"
+              style={{ animationDelay: `${i * 0.05}s` }}
+            >
+              <span className="line-clamp-2">{ex}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Footer */}
       <p className="mt-12 text-xs text-pplx-muted/60 text-center">
-        Ottomate · Multi-Agent AI · Powered by Claude, GPT-4o &amp; Gemini
+        Ottomate · Multi-Agent AI · Powered by Claude, GPT-5.4 &amp; Gemini
       </p>
     </div>
   );

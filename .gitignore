@@ -87,3 +87,5 @@ blockbench/
 # test artifacts
 test-results/
 playwright-report/
+.vscode/
+*.bak

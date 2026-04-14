@@ -177,7 +177,7 @@ const HF_TASK_PATTERNS: HFTaskPattern[] = [
     patterns: /\b(llm|language.?model|generate.?text|chat.?model|gpt|llama|mistral|write|story|essay|poem|explain|answer|tell.?me|summarize|summarise|translate|rewrite|paragraph|sentence|lyrics|script|blog|article|code|program|function|convert.?text|list|describe(?!.*(image|photo|picture)))\b/i,
     priority: 7,
     searchFilter: "text-generation",
-    defaultModel: "Qwen/Qwen2.5-7B-Instruct",
+    defaultModel: "Qwen/Qwen3-8B",
   },
 ];
 
@@ -689,7 +689,7 @@ export async function runHFTask(options: {
           // Second try: use a known-good model for this task type
           const knownGoodModels: Record<string, string[]> = {
             "text-to-image": ["stabilityai/stable-diffusion-xl-base-1.0", "runwayml/stable-diffusion-v1-5", "CompVis/stable-diffusion-v1-4"],
-            "text-generation": ["Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"],
+            "text-generation": ["Qwen/Qwen3-8B", "Qwen/Qwen3-1.7B", "meta-llama/Llama-4-Scout-17B-16E-Instruct"],
             "text-to-speech": ["facebook/mms-tts-eng", "espnet/kan-bayashi_ljspeech_vits"],
             "text-to-audio": ["facebook/musicgen-small"],
             "summarization": ["facebook/bart-large-cnn"],
