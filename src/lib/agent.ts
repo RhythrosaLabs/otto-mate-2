@@ -393,10 +393,19 @@ registerBeforeToolHook(async (ctx) => {
   return { allow: true };
 });
 
+const HOOK_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Hook timeout (${label}, ${ms}ms)`)), ms)),
+  ]);
+}
+
 async function runBeforeHooks(ctx: ToolHookContext): Promise<{ allow: boolean; reason?: string; input: Record<string, unknown> }> {
   let currentInput = { ...ctx.toolInput };
   for (const hook of _beforeToolHooks) {
-    const result = await hook({ ...ctx, toolInput: currentInput });
+    const result = await withTimeout(hook({ ...ctx, toolInput: currentInput }), HOOK_TIMEOUT_MS, "before");
     if (!result.allow) {
       return { allow: false, reason: result.reason, input: currentInput };
     }
@@ -408,7 +417,7 @@ async function runBeforeHooks(ctx: ToolHookContext): Promise<{ allow: boolean; r
 async function runAfterHooks(ctx: ToolHookContext): Promise<void> {
   for (const hook of _afterToolHooks) {
     try {
-      await hook(ctx);
+      await withTimeout(hook(ctx), HOOK_TIMEOUT_MS, "after");
     } catch (err) {
       console.error(`[hook:after] Hook error:`, err);
     }
@@ -1980,7 +1989,10 @@ async function runWithOpenAI(
 
       const execOAITool = async (tc: { id: string; name: string; arguments: string }) => {
         let input: Record<string, unknown> = {};
-        try { input = JSON.parse(tc.arguments); } catch { /* empty */ }
+        try { input = JSON.parse(tc.arguments); } catch {
+          // Return parse error to the LLM instead of executing with empty input
+          return { id: tc.id, name: tc.name, result: `Error: Failed to parse tool arguments as JSON: ${tc.arguments?.slice(0, 200)}` };
+        }
         const stepId = uuidv4();
         const toolStep: AgentStep = {
           id: stepId, task_id: taskId, type: toolUseTypeToStepType(tc.name as ToolName),
@@ -2306,7 +2318,9 @@ async function runWithOpenRouter(
 
       const execORTool = async (tc: { id: string; name: string; arguments: string }) => {
         let input: Record<string, unknown> = {};
-        try { input = JSON.parse(tc.arguments); } catch { /* empty */ }
+        try { input = JSON.parse(tc.arguments); } catch {
+          return { id: tc.id, name: tc.name, result: `Error: Failed to parse tool arguments as JSON: ${tc.arguments?.slice(0, 200)}` };
+        }
         const stepId = uuidv4();
         const toolStep: AgentStep = {
           id: stepId, task_id: taskId, type: toolUseTypeToStepType(tc.name as ToolName),
@@ -2962,12 +2976,20 @@ async function fetchWithRetry(url: string, options: RequestInit, maxAttempts = 2
   throw lastErr;
 }
 
+function isPrivateIp(ip: string): boolean {
+  // Check for private/reserved IP ranges (IPv4 and IPv6)
+  return /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|localhost$|\[?::1\]?$|::ffff:(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.))/.test(ip);
+}
+
 function isUrlSafe(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) return false;
     const hostname = parsed.hostname;
-    if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|localhost$|\[?::1\]?)/.test(hostname)) return false;
+    if (isPrivateIp(hostname)) return false;
+    // Block octal/decimal IP notations (e.g. 0177.0.0.1, 2130706433)
+    if (/^\d+$/.test(hostname)) return false; // decimal IP like 2130706433
+    if (/^0\d/.test(hostname.split(".")[0])) return false; // octal IP like 0177.0.0.1
     return true;
   } catch { return false; }
 }
@@ -3003,6 +3025,11 @@ async function executeScrapeUrl(url: string, selector?: string): Promise<string>
 
     try {
       const resp = await fetchWithRetry(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(20000) });
+      // Guard against excessively large responses (10MB max)
+      const contentLength = parseInt(resp.headers.get("content-length") || "0", 10);
+      if (contentLength > 10 * 1024 * 1024) {
+        return `Blocked: Response too large (${Math.round(contentLength / 1024 / 1024)}MB). Max 10MB.`;
+      }
       if (!resp.ok) {
         // For bot-protection errors (403, 429, 503):
         // 1. Retry with rotated user agents
@@ -5282,7 +5309,7 @@ async function dispatchConnectorAction(
     case "github": {
       const h = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" };
       if (action === "create_issue") {
-        const r = await fetch(`https://api.github.com/repos/${params.owner}/${params.repo}/issues`, { method: "POST", headers: h, body: JSON.stringify({ title: params.title, body: params.body }) });
+        const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(String(params.owner))}/${encodeURIComponent(String(params.repo))}/issues`, { method: "POST", headers: h, body: JSON.stringify({ title: params.title, body: params.body }) });
         const d = await r.json() as { html_url?: string; message?: string }; return d.html_url ? `Issue created: ${d.html_url}` : `Error: ${d.message}`;
       }
       if (action === "list_repos") {
@@ -5291,11 +5318,11 @@ async function dispatchConnectorAction(
         return repos.map((r) => `- ${r.full_name}: ${r.description || "No description"}`).join("\n");
       }
       if (action === "create_pr") {
-        const r = await fetch(`https://api.github.com/repos/${params.owner}/${params.repo}/pulls`, { method: "POST", headers: h, body: JSON.stringify({ title: params.title, body: params.body, head: params.head, base: params.base || "main" }) });
+        const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(String(params.owner))}/${encodeURIComponent(String(params.repo))}/pulls`, { method: "POST", headers: h, body: JSON.stringify({ title: params.title, body: params.body, head: params.head, base: params.base || "main" }) });
         const d = await r.json() as { html_url?: string; message?: string }; return d.html_url ? `PR created: ${d.html_url}` : `Error: ${d.message}`;
       }
       if (action === "get_file") {
-        const r = await fetch(`https://api.github.com/repos/${params.owner}/${params.repo}/contents/${params.path}`, { headers: h });
+        const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(String(params.owner))}/${encodeURIComponent(String(params.repo))}/contents/${String(params.path).split('/').map(encodeURIComponent).join('/')}`, { headers: h });
         const d = await r.json() as { content?: string; message?: string };
         return d.content ? Buffer.from(d.content, "base64").toString("utf-8") : `Error: ${d.message || "File not found"}`;
       }

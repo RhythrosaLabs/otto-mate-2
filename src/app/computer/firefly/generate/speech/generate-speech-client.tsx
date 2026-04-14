@@ -100,7 +100,6 @@ export function GenerateSpeechClient() {
 
       // Response is audio/mpeg stream
       const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
 
       // Convert blob to data URL so it persists across navigation
       const persistentUrl: string = await new Promise((resolve) => {

@@ -348,12 +348,13 @@ export function ImageEditorClient() {
       }
 
       if (data.result?.url) {
-        setResultUrl(data.result.url);
+        // Save current imageUrl (pre-edit) to history so undo restores correctly
         setHistory(prev => [{
-          imageUrl: resultUrl || imageUrl,
+          imageUrl,
           operation,
           prompt: prompt || undefined,
         }, ...prev].slice(0, 20));
+        setResultUrl(data.result.url);
 
         // Save to gallery
         saveToGallery({

@@ -89,6 +89,21 @@ export async function POST(req: NextRequest) {
     let resolvedName: string;
 
     if (url) {
+      // Validate URL to prevent SSRF
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+      }
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return NextResponse.json({ error: "Only http/https URLs allowed" }, { status: 400 });
+      }
+      const hostname = parsed.hostname;
+      if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|localhost|\[::1\])/i.test(hostname)) {
+        return NextResponse.json({ error: "Internal URLs not allowed" }, { status: 400 });
+      }
+
       // Download from external URL
       const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
       if (!res.ok) {

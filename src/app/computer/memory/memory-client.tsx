@@ -34,6 +34,8 @@ export default function MemoryClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { entries: MemoryEntry[] };
       setEntries(data.entries || []);
+    } catch (err) {
+      console.error("Failed to fetch memory:", err);
     } finally {
       setLoading(false);
     }
@@ -43,7 +45,7 @@ export default function MemoryClient() {
     void fetchMemory();
     // Fetch self-improvement stats
     fetch("/api/self-improvement")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => setMemoryStats(data.stats))
       .catch(() => { /* best effort */ });
   }, [fetchMemory]);

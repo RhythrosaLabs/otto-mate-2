@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, FileText, Table2, Sparkles, Maximize, Minimize,
@@ -24,6 +24,18 @@ export function DocumentEditorClient({ initialDoc }: { initialDoc: DocumentRow }
   const [wordStats, setWordStats] = useState({ words: 0, chars: 0, readingTime: 0 });
   const [showExport, setShowExport] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+
+  // Close export dropdown on outside click
+  useEffect(() => {
+    if (!showExport) return;
+    function handleClick(e: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setShowExport(false);
+      }
+    }
+    document.addEventListener("pointerdown", handleClick);
+    return () => document.removeEventListener("pointerdown", handleClick);
+  }, [showExport]);
 
   const saveTitle = useCallback(async (newTitle: string) => {
     setTitle(newTitle);

@@ -12,11 +12,36 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
+
+/**
+ * Verify Discord interaction signature using Ed25519.
+ * See: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
+ */
+function verifyDiscordSignature(
+  body: string,
+  signature: string | null,
+  timestamp: string | null
+): boolean {
+  if (!PUBLIC_KEY || !signature || !timestamp) return false;
+  try {
+    const publicKeyBuffer = Buffer.from(PUBLIC_KEY, "hex");
+    const signatureBuffer = Buffer.from(signature, "hex");
+    const message = Buffer.from(timestamp + body);
+    // Ed25519 DER-encoded SPKI prefix for a 32-byte public key
+    const ed25519Prefix = Buffer.from("302a300506032b6570032100", "hex");
+    const derKey = Buffer.concat([ed25519Prefix, publicKeyBuffer]);
+    const key = crypto.createPublicKey({ key: derKey, format: "der", type: "spki" });
+    return crypto.verify(null, message, key, signatureBuffer);
+  } catch {
+    return false;
+  }
+}
 
 interface DiscordInteraction {
   type: number; // 1=PING, 2=APPLICATION_COMMAND, 3=MESSAGE_COMPONENT
@@ -63,8 +88,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "DISCORD_BOT_TOKEN not configured" }, { status: 503 });
   }
 
+  // Read raw body for signature verification
+  const rawBody = await req.text();
+
+  // Verify Discord Ed25519 signature (required when PUBLIC_KEY is configured)
+  if (PUBLIC_KEY) {
+    const signature = req.headers.get("x-signature-ed25519");
+    const timestamp = req.headers.get("x-signature-timestamp");
+    if (!verifyDiscordSignature(rawBody, signature, timestamp)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  }
+
   try {
-    const interaction = (await req.json()) as DiscordInteraction;
+    const interaction = JSON.parse(rawBody) as DiscordInteraction;
 
     // Handle Discord PING verification
     if (interaction.type === 1) {

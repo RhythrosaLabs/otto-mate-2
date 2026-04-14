@@ -44,6 +44,11 @@ async function toReplicateUrl(imageUrl: string, apiKey: string): Promise<string>
     const { ensureFilesDir } = await import("@/lib/db");
     const stripped = imageUrl.replace(/^\/api\/files\//, "");
     const diskPath = path.join(ensureFilesDir(), stripped);
+    // Prevent path traversal
+    const resolved = path.resolve(diskPath);
+    if (!resolved.startsWith(path.resolve(ensureFilesDir()))) {
+      throw new Error("Path traversal not allowed");
+    }
     buf = fs.readFileSync(diskPath);
     const ext = path.extname(diskPath).toLowerCase();
     if (ext === ".jpg" || ext === ".jpeg") mimeType = "image/jpeg";

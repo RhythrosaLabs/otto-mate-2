@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 // GET /api/memory?q=search+query
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") || "";
-  const limit = parseInt(req.nextUrl.searchParams.get("limit") || "50", 10);
+  const limit = Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "50", 10) || 50);
   try {
     const entries = q ? memoryRecall(q, limit) : listMemory(limit);
     return Response.json({ entries });

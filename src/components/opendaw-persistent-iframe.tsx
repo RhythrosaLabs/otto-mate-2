@@ -9,23 +9,21 @@ import {
   ExternalLink,
   RotateCcw,
   Loader2,
-  ArrowLeft,
 } from "lucide-react";
-import Link from "next/link";
 
-const BLOCKBENCH_URL = "http://localhost:3001";
+const OPENDAW_URL = "http://localhost:8080";
 
 /**
- * Persistent Blockbench iframe that lives in the Computer layout.
+ * Persistent openDAW iframe that lives in the Computer layout.
  *
- * - Only mounts the iframe after the user first visits /computer/3d-studio
- * - When on 3d-studio: visible overlay with toolbar + iframe
+ * - Only mounts the iframe after the user first visits /computer/audio-studio
+ * - When on audio-studio: visible overlay with toolbar + iframe
  * - When on other pages: iframe moves off-screen (keeps state alive)
- * - Handles fallback UI when Blockbench isn't running
+ * - Handles fallback UI when openDAW isn't running on port 8080
  */
-export function BlenderPersistentIframe() {
+export function OpenDAWPersistentIframe() {
   const pathname = usePathname();
-  const isActive = pathname === "/computer/3d-studio";
+  const isActive = pathname === "/computer/audio-studio";
 
   const [hasVisited, setHasVisited] = useState(false);
   const [status, setStatus] = useState<"checking" | "running" | "stopped">(
@@ -34,6 +32,7 @@ export function BlenderPersistentIframe() {
   const [retrying, setRetrying] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const prevActiveRef = useRef(false);
 
   // Activate on first visit
   useEffect(() => {
@@ -42,13 +41,13 @@ export function BlenderPersistentIframe() {
     }
   }, [isActive, hasVisited]);
 
-  // Check if Blockbench is reachable
+  // Check if openDAW is reachable
   const checkServer = useCallback(async () => {
     setRetrying(true);
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
-      await fetch(BLOCKBENCH_URL, {
+      await fetch(OPENDAW_URL, {
         mode: "no-cors",
         signal: controller.signal,
       });
@@ -69,6 +68,14 @@ export function BlenderPersistentIframe() {
     }
   }, [hasVisited, status, checkServer]);
 
+  // Auto-retry when user navigates back to the page and service was stopped
+  useEffect(() => {
+    if (isActive && !prevActiveRef.current && hasVisited && status === "stopped") {
+      checkServer();
+    }
+    prevActiveRef.current = isActive;
+  }, [isActive, hasVisited, status, checkServer]);
+
   // Force-reload: destroy and recreate the iframe
   const handleForceReload = useCallback(() => {
     setFrozen(false);
@@ -76,7 +83,7 @@ export function BlenderPersistentIframe() {
       iframeRef.current.src = "about:blank";
       setTimeout(() => {
         if (iframeRef.current) {
-          iframeRef.current.src = BLOCKBENCH_URL;
+          iframeRef.current.src = OPENDAW_URL;
         }
       }, 200);
     }
@@ -84,11 +91,11 @@ export function BlenderPersistentIframe() {
 
   const handleRefresh = useCallback(() => {
     if (iframeRef.current) {
-      iframeRef.current.src = BLOCKBENCH_URL;
+      iframeRef.current.src = OPENDAW_URL;
     }
   }, []);
 
-  // Don't render anything until user has visited 3d-studio
+  // Don't render anything until user has visited audio-studio
   if (!hasVisited) return null;
 
   return (
@@ -96,7 +103,7 @@ export function BlenderPersistentIframe() {
       <div
         className={
           isActive
-            ? "absolute inset-0 top-14 md:top-0 z-20 flex flex-col bg-[#282c34]"
+            ? "absolute inset-0 top-14 md:top-0 z-20 flex flex-col bg-[#1a1a2e]"
             : ""
         }
         style={
@@ -111,20 +118,19 @@ export function BlenderPersistentIframe() {
               }
             : undefined
         }
+        {...(!isActive ? { inert: true } : {})}
       >
         {status === "checking" && isActive ? (
-          <div className="flex items-center justify-center h-full bg-[#282c34]">
+          <div className="flex items-center justify-center h-full bg-[#1a1a2e]">
             <div className="flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-              <p className="text-zinc-400 text-sm">
-                Connecting to Blockbench...
-              </p>
+              <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+              <p className="text-zinc-400 text-sm">Connecting to Audio Studio...</p>
             </div>
           </div>
         ) : status === "running" ? (
           <>
             {isActive && (
-              <div className="flex items-center justify-between px-3 py-1.5 bg-[#282c34] border-b border-zinc-700 shrink-0">
+              <div className="flex items-center justify-between px-3 py-1.5 bg-[#1a1a2e] border-b border-zinc-800 shrink-0">
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
@@ -132,10 +138,10 @@ export function BlenderPersistentIframe() {
                     }`}
                   />
                   <span className="text-xs font-medium">
-                    <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
-                      Blockbench
+                    <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                      openDAW
                     </span>
-                    <span className="text-zinc-400"> — 3D Studio</span>
+                    <span className="text-zinc-400"> — Audio Studio</span>
                     {frozen && (
                       <span className="text-amber-400 ml-2">
                         (unresponsive)
@@ -148,24 +154,24 @@ export function BlenderPersistentIframe() {
                     <button
                       onClick={handleForceReload}
                       className="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium flex items-center gap-1 transition-colors mr-1"
-                      title="Force reload Blockbench"
+                      title="Force reload openDAW"
                     >
                       <RotateCcw className="w-3 h-3" />
                       Reload
                     </button>
                   )}
                   <a
-                    href={BLOCKBENCH_URL}
+                    href={OPENDAW_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
                     title="Open in new tab"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
                   </a>
                   <button
                     onClick={handleRefresh}
-                    className="p-1.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
                     title="Refresh"
                   >
                     <RefreshCw
@@ -178,20 +184,20 @@ export function BlenderPersistentIframe() {
 
             <iframe
               ref={iframeRef}
-              src={BLOCKBENCH_URL}
+              src={OPENDAW_URL}
               style={{ flex: 1, width: "100%", border: "none" }}
-              allow="clipboard-read; clipboard-write; webgl; fullscreen"
+              allow="clipboard-read; clipboard-write; autoplay; microphone; midi"
               onLoad={() => {
-                console.log("[Blockbench] iframe loaded");
+                console.log("[openDAW] iframe loaded");
               }}
               onError={() => {
-                console.error("[Blockbench] iframe failed to load");
+                console.error("[openDAW] iframe failed to load");
                 setStatus("stopped");
               }}
             />
           </>
         ) : status === "stopped" && isActive ? (
-          <BlockbenchFallback retrying={retrying} onRetry={checkServer} />
+          <OpenDAWFallback retrying={retrying} onRetry={checkServer} />
         ) : null}
       </div>
     </>
@@ -199,10 +205,10 @@ export function BlenderPersistentIframe() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Fallback screen when Blockbench isn't running                      */
+/*  Fallback screen when openDAW isn't running                        */
 /* ------------------------------------------------------------------ */
 
-function BlockbenchFallback({
+function OpenDAWFallback({
   retrying,
   onRetry,
 }: {
@@ -210,18 +216,18 @@ function BlockbenchFallback({
   onRetry: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full bg-[#282c34] text-white">
+    <div className="flex flex-col items-center justify-center h-full bg-[#1a1a2e] text-white">
       <AlertTriangle className="w-12 h-12 text-amber-400 mb-4" />
-      <h2 className="text-xl font-semibold mb-2">Blockbench 3D Studio Not Running</h2>
+      <h2 className="text-xl font-semibold mb-2">Audio Studio Not Running</h2>
       <p className="text-zinc-400 text-sm text-center max-w-md mb-6">
-        Blockbench isn&apos;t running on port 3001.
+        openDAW isn&apos;t running on port 8080.
         <br />
         Start it with the command below:
       </p>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-6 font-mono text-sm max-w-lg w-full">
         <div className="text-zinc-500 text-xs mb-2"># From the project root:</div>
-        <div className="text-green-400">cd blockbench &amp;&amp; npm run serve</div>
+        <div className="text-green-400">npm run dev:opendaw</div>
       </div>
 
       <div className="flex gap-3">
@@ -234,7 +240,7 @@ function BlockbenchFallback({
           {retrying ? "Checking…" : "Retry Connection"}
         </button>
         <a
-          href={BLOCKBENCH_URL}
+          href={OPENDAW_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
@@ -242,28 +248,12 @@ function BlockbenchFallback({
           <ExternalLink className="w-4 h-4" />
           Open Directly
         </a>
-        <Link
-          href="/computer"
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </Link>
       </div>
 
-      <div className="mt-8 text-zinc-500 text-xs text-center max-w-md">
-        <p>
-          <strong className="text-zinc-400">First time?</strong> Run{" "}
-          <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">
-            cd blockbench &amp;&amp; npm install &amp;&amp; npm run serve
-          </code>
-        </p>
-        <p className="mt-2">
-          <strong className="text-zinc-400">About Blockbench:</strong> A free, open-source
-          3D model editor for low-poly models with pixel art textures. Supports modeling,
-          texturing, animation, and plugin extensions.
-        </p>
-      </div>
+      <p className="text-zinc-600 text-xs mt-6">
+        First time? Run{" "}
+        <code className="text-zinc-400">cd opendaw &amp;&amp; npm install &amp;&amp; npm run dev:studio</code>
+      </p>
     </div>
   );
 }

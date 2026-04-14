@@ -8,6 +8,7 @@ import {
   deleteScheduledTask,
   toggleScheduledTask,
   createTask,
+  updateTaskStatus,
 } from "@/lib/db";
 import { runAgent } from "@/lib/agent";
 import { safeErrorMessage } from "@/lib/constants";
@@ -89,7 +90,10 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Fire and forget the agent run
-        runAgent({ taskId, userMessage: st.prompt, model: st.model as "auto" }).catch(() => {});
+        runAgent({ taskId, userMessage: st.prompt, model: st.model as "auto" }).catch((err) => {
+          console.error(`[scheduled] Agent run failed for task ${taskId}:`, err);
+          updateTaskStatus(taskId, "failed");
+        });
 
         results.push({ id: st.id, name: st.name, task_id: taskId });
       }

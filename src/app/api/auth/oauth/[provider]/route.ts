@@ -145,5 +145,14 @@ export async function GET(
       );
   }
 
-  return NextResponse.redirect(authUrl);
+  const res = NextResponse.redirect(authUrl);
+  // Store the CSRF nonce in an HTTP-only cookie for validation in the callback
+  res.cookies.set("oauth_nonce", nonce, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/auth/callback",
+    maxAge: 600, // 10 minutes
+  });
+  return res;
 }

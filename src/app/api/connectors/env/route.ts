@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { ALLOWED_ENV_KEYS } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -122,12 +123,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "keys object is required" }, { status: 400 });
     }
 
-    // Filter out empty values
+    // Filter out empty values and enforce allowlist
     const validKeys: Record<string, string> = {};
+    const rejected: string[] = [];
     for (const [k, v] of Object.entries(body.keys)) {
-      if (k && v && v.trim()) {
-        validKeys[k] = v.trim();
+      if (!k || !v || !v.trim()) continue;
+      if (!ALLOWED_ENV_KEYS.has(k)) {
+        rejected.push(k);
+        continue;
       }
+      // Sanitize newlines to prevent env file injection
+      validKeys[k] = v.trim().replace(/[\r\n]/g, "");
+    }
+
+    if (rejected.length > 0) {
+      return NextResponse.json(
+        { error: `Keys not allowed: ${rejected.join(", ")}` },
+        { status: 400 }
+      );
     }
 
     if (Object.keys(validKeys).length === 0) {
@@ -156,6 +169,10 @@ export async function DELETE(req: NextRequest) {
     const body = (await req.json()) as { key: string };
     if (!body.key) {
       return NextResponse.json({ error: "key is required" }, { status: 400 });
+    }
+
+    if (!ALLOWED_ENV_KEYS.has(body.key)) {
+      return NextResponse.json({ error: `Key "${body.key}" is not allowed` }, { status: 400 });
     }
 
     removeEnvKey(body.key);

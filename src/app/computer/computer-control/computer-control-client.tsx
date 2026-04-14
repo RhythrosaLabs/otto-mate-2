@@ -30,7 +30,6 @@ import {
   Terminal,
   FileEdit,
 } from "lucide-react";
-import Image from "next/image";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -218,7 +217,7 @@ export function ComputerControlClient() {
       const resp = await fetch("/api/computer-control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task: task.trim(), blockedApps, model, maxIterations }),
+        body: JSON.stringify({ task: task.trim(), blockedApps, model, maxIterations: maxIterations }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -340,7 +339,7 @@ export function ComputerControlClient() {
       setStatusMsg(msg);
       addLog({ kind: "error", content: msg });
     }
-  }, [task, blockedApps, model, isRunning]);
+  }, [task, blockedApps, model, isRunning, maxIterations]);
 
   // Keyboard shortcut: Cmd+Enter to run
   useEffect(() => {

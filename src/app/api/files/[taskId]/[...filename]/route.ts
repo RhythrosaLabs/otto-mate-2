@@ -39,12 +39,15 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const isDownload = searchParams.get("download") === "1";
 
+  // Sanitize filename for Content-Disposition header
+  const escapedName = safeName.replace(/["\\]/g, '\\$&');
+
   return new NextResponse(fileBuffer, {
     headers: {
       "Content-Type": contentType,
       "Content-Disposition": isDownload
-        ? `attachment; filename="${safeName}"`
-        : `inline; filename="${safeName}"`,
+        ? `attachment; filename="${escapedName}"`
+        : `inline; filename="${escapedName}"`,
       "Cache-Control": "public, max-age=3600",
     },
   });

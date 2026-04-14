@@ -242,10 +242,15 @@ function ModelViewerPreview({ url }: { url: string }) {
   }, []);
   useEffect(() => {
     if (!divRef.current) return;
-    divRef.current.innerHTML = `
-      <model-viewer src="${url}" auto-rotate camera-controls shadow-intensity="1"
-        style="width:100%;height:520px;background:#111113;--poster-color:#111113"
-        loading="eager"></model-viewer>`;
+    divRef.current.textContent = "";
+    const mv = document.createElement("model-viewer");
+    mv.setAttribute("src", url);
+    mv.setAttribute("auto-rotate", "");
+    mv.setAttribute("camera-controls", "");
+    mv.setAttribute("shadow-intensity", "1");
+    mv.setAttribute("loading", "eager");
+    mv.style.cssText = "width:100%;height:520px;background:#111113;--poster-color:#111113";
+    divRef.current.appendChild(mv);
   }, [url]);
   return <div ref={divRef} />;
 }

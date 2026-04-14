@@ -3,7 +3,7 @@ import { PersistentLayout } from "@/components/persistent-layout";
 import { BackgroundStatus } from "@/components/background-status";
 import { BoltPersistentIframe } from "@/components/bolt-persistent-iframe";
 import { CodeServerPersistentIframe } from "@/components/kilocode-persistent-iframe";
-import { BlenderPersistentIframe } from "@/components/blender-persistent-iframe";
+import { BlockbenchPersistentIframe } from "@/components/blockbench-persistent-iframe";
 import { HandoffProvider } from "@/components/handoff-context";
 import { HandoffTray } from "@/components/handoff-tray";
 
@@ -19,7 +19,7 @@ export default function ComputerLayout({ children }: { children: React.ReactNode
           </PersistentLayout>
           <BoltPersistentIframe />
           <CodeServerPersistentIframe />
-          <BlenderPersistentIframe />
+          <BlockbenchPersistentIframe />
         </main>
         <BackgroundStatus />
         <HandoffTray />

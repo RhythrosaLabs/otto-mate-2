@@ -25,7 +25,7 @@ import {
   Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Code2,
   Undo, Redo, Type, Minus, Link as LinkIcon, Image as ImageIcon,
-  Highlighter, CheckSquare, Table as TableIcon, Wand2, CheckCheck,
+  Highlighter, CheckSquare, Table as TableIcon, Wand2, CheckCheck, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,9 +62,39 @@ const SLASH_ITEMS: SlashItem[] = [
   { title: "Image", description: "Insert from URL", icon: <ImageIcon size={16} />, category: "Media", command: () => {} },
 ];
 
+function UrlInputModal({ title, placeholder, onSubmit, onClose }: { title: string; placeholder: string; onSubmit: (url: string) => void; onClose: () => void }) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-pplx-card border border-pplx-border rounded-xl shadow-2xl p-4 w-80" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-pplx-text">{title}</span>
+          <button onClick={onClose} className="p-1 rounded hover:bg-pplx-border/50 text-pplx-muted"><X size={14} /></button>
+        </div>
+        <input
+          ref={inputRef}
+          type="url"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && value) { onSubmit(value); } if (e.key === "Escape") onClose(); }}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 rounded-lg bg-pplx-bg border border-pplx-border text-sm text-pplx-text outline-none focus:border-pplx-accent"
+        />
+        <div className="flex justify-end gap-2 mt-3">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs text-pplx-muted hover:bg-pplx-border/50">Cancel</button>
+          <button onClick={() => { if (value) onSubmit(value); }} disabled={!value} className="px-3 py-1.5 rounded-lg text-xs bg-pplx-accent text-white disabled:opacity-40">Insert</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SlashCommandMenu({ editor, onClose, position }: { editor: Editor; onClose: () => void; position: { top: number; left: number } }) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showImageUrl, setShowImageUrl] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const filtered = SLASH_ITEMS.filter(
@@ -78,8 +108,8 @@ function SlashCommandMenu({ editor, onClose, position }: { editor: Editor; onClo
     const slashStart = from - query.length - 1;
     editor.chain().focus().deleteRange({ from: slashStart, to: from }).run();
     if (item.title === "Image") {
-      const url = prompt("Image URL:");
-      if (url) editor.chain().focus().setImage({ src: url }).run();
+      setShowImageUrl(true);
+      return; // don't close yet — wait for modal
     } else {
       item.command(editor);
     }
@@ -109,6 +139,14 @@ function SlashCommandMenu({ editor, onClose, position }: { editor: Editor; onClo
   for (const item of filtered) (grouped[item.category] ||= []).push(item);
 
   return (
+    <>{showImageUrl && (
+      <UrlInputModal
+        title="Insert Image"
+        placeholder="https://example.com/image.png"
+        onSubmit={(url) => { editor.chain().focus().setImage({ src: url }).run(); setShowImageUrl(false); onClose(); }}
+        onClose={() => { setShowImageUrl(false); onClose(); }}
+      />
+    )}
     <div ref={menuRef} className="fixed z-50 bg-pplx-card border border-pplx-border rounded-xl shadow-2xl py-2 w-72 max-h-80 overflow-y-auto" style={{ top: position.top, left: position.left }}>
       {query && <div className="px-3 pb-2 mb-1 border-b border-pplx-border"><span className="text-xs text-pplx-muted">Search: </span><span className="text-xs text-pplx-text font-medium">{query}</span></div>}
       {filtered.length === 0 ? (
@@ -129,6 +167,7 @@ function SlashCommandMenu({ editor, onClose, position }: { editor: Editor; onClo
       ))}
       <div className="px-3 pt-2 border-t border-pplx-border mt-1"><p className="text-[10px] text-pplx-muted"><kbd className="px-1 py-0.5 rounded bg-pplx-bg text-[9px]">↑↓</kbd> navigate <kbd className="px-1 py-0.5 rounded bg-pplx-bg text-[9px]">↵</kbd> select <kbd className="px-1 py-0.5 rounded bg-pplx-bg text-[9px]">esc</kbd> close</p></div>
     </div>
+    </>
   );
 }
 
@@ -152,6 +191,7 @@ export function RichTextEditor({ content, onSave, onWordCountChange, focusMode }
   const [linkUrl, setLinkUrl] = useState("");
   const [bubbleMenu, setBubbleMenu] = useState<{ top: number; left: number } | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const [imageUrlModal, setImageUrlModal] = useState<"toolbar" | "bubble-link" | null>(null);
 
   const triggerSave = useCallback((html: string) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -253,7 +293,7 @@ export function RichTextEditor({ content, onSave, onWordCountChange, focusMode }
       const sel = window.getSelection();
       if (sel && sel.rangeCount) {
         const rect = sel.getRangeAt(0).getBoundingClientRect();
-        setBubbleMenu({ top: rect.top - 50, left: rect.left + rect.width / 2 - 150 });
+        setBubbleMenu({ top: Math.max(10, rect.top - 50), left: Math.max(10, rect.left + rect.width / 2 - 150) });
       }
     };
     editor.on("selectionUpdate", updateBubble);
@@ -319,7 +359,7 @@ export function RichTextEditor({ content, onSave, onWordCountChange, focusMode }
           <TBtn icon={<TableIcon size={15} />} label="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} />
           <TSep />
           <TBtn icon={<LinkIcon size={15} />} label="Link" active={editor.isActive("link")} onClick={() => { if (editor.isActive("link")) editor.chain().focus().unsetLink().run(); else setShowLinkInput(!showLinkInput); }} />
-          <TBtn icon={<ImageIcon size={15} />} label="Image" onClick={() => { const url = prompt("Image URL:"); if (url) editor.chain().focus().setImage({ src: url }).run(); }} />
+          <TBtn icon={<ImageIcon size={15} />} label="Image" onClick={() => setImageUrlModal("toolbar")} />
           {showLinkInput && (
             <div className="flex items-center gap-1 ml-2">
               <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") insertLink(); if (e.key === "Escape") setShowLinkInput(false); }} placeholder="https://..." className="px-2 py-1 rounded-md bg-pplx-card border border-pplx-border text-xs text-pplx-text w-48 outline-none focus:border-pplx-accent" autoFocus />
@@ -341,7 +381,7 @@ export function RichTextEditor({ content, onSave, onWordCountChange, focusMode }
             <TBtn icon={<Code size={14} />} label="Code" active={editor.isActive("code")} onClick={() => editor.chain().focus().toggleCode().run()} />
             <TBtn icon={<Highlighter size={14} />} label="Highlight" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()} />
             <TSep />
-            <TBtn icon={<LinkIcon size={14} />} label="Link" active={editor.isActive("link")} onClick={() => { if (editor.isActive("link")) editor.chain().focus().unsetLink().run(); else { const url = prompt("URL:"); if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); } }} />
+            <TBtn icon={<LinkIcon size={14} />} label="Link" active={editor.isActive("link")} onClick={() => { if (editor.isActive("link")) editor.chain().focus().unsetLink().run(); else setImageUrlModal("bubble-link"); }} />
             <TSep />
             <button title="AI: Improve" onClick={() => { const sel = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to); if (sel) window.dispatchEvent(new CustomEvent("ai-bubble-action", { detail: { action: "improve", text: sel } })); }} className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-pplx-accent hover:bg-pplx-accent/10 transition-colors">
               <Wand2 size={13} /> Improve
@@ -362,6 +402,24 @@ export function RichTextEditor({ content, onSave, onWordCountChange, focusMode }
 
       {/* Slash command menu */}
       {slashMenu && <SlashCommandMenu editor={editor} position={slashMenu} onClose={() => setSlashMenu(null)} />}
+
+      {/* URL input modal (replaces browser prompt()) */}
+      {imageUrlModal === "toolbar" && (
+        <UrlInputModal
+          title="Insert Image"
+          placeholder="https://example.com/image.png"
+          onSubmit={(url) => { editor.chain().focus().setImage({ src: url }).run(); setImageUrlModal(null); }}
+          onClose={() => setImageUrlModal(null)}
+        />
+      )}
+      {imageUrlModal === "bubble-link" && (
+        <UrlInputModal
+          title="Insert Link"
+          placeholder="https://..."
+          onSubmit={(url) => { editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); setImageUrlModal(null); }}
+          onClose={() => setImageUrlModal(null)}
+        />
+      )}
 
       {/* Editor styles */}
       <style jsx global>{`

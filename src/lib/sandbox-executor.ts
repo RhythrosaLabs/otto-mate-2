@@ -394,7 +394,7 @@ function getRunCommand(language: string, code: string): string {
     case "python": return `python3 -c '${code.replace(/'/g, "'\\''")}'`;
     case "javascript": return `node -e '${code.replace(/'/g, "'\\''")}'`;
     case "bash": return code;
-    default: return code;
+    default: return `sh -c '${code.replace(/'/g, "'\\''")}'`;
   }
 }
 

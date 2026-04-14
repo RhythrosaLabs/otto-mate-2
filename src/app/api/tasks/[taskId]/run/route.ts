@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getTask, updateTaskStatus, listSkills } from "@/lib/db";
 import { runAgent } from "@/lib/agent";
-import { runningTasks } from "@/lib/running-tasks";
+import { runningTasks, registerRunningTask, unregisterRunningTask } from "@/lib/running-tasks";
 import type { AgentStep, ModelId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,11 @@ export async function POST(
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
   }
 
+  // Prevent concurrent runs on the same task
+  if (task.status === "running" || runningTasks.has(taskId)) {
+    return new Response(JSON.stringify({ error: "Task is already running" }), { status: 409 });
+  }
+
   const body = await req.json().catch(() => ({})) as { message?: string; model?: ModelId };
   const userMessage = body.message || task.prompt;
   const model = body.model;
@@ -30,7 +35,7 @@ export async function POST(
 
   // Create AbortController for this run
   const abortController = new AbortController();
-  runningTasks.set(taskId, abortController);
+  registerRunningTask(taskId, abortController);
 
   // Mark task as running (agent will also do this, but signal early)
   updateTaskStatus(taskId, "running");
@@ -52,7 +57,7 @@ export async function POST(
     cancel() {
       // Client disconnected — abort the agent run
       abortController.abort();
-      runningTasks.delete(taskId);
+      unregisterRunningTask(taskId);
     },
   });
 
@@ -88,7 +93,7 @@ export async function POST(
         if (updatedTask) send({ type: "update", task: updatedTask });
       }
     } finally {
-      runningTasks.delete(taskId);
+      unregisterRunningTask(taskId);
       try {
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

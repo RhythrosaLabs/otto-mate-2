@@ -11,7 +11,11 @@ import {
   Loader2,
 } from "lucide-react";
 
-const CODE_SERVER_URL = "http://localhost:3100/?folder=/Users/sheils/repos";
+const CODE_SERVER_BASE = "http://localhost:3100";
+const CODE_SERVER_FOLDER = process.env.NEXT_PUBLIC_CODE_SERVER_FOLDER || "";
+const CODE_SERVER_URL = CODE_SERVER_FOLDER
+  ? `${CODE_SERVER_BASE}/?folder=${encodeURIComponent(CODE_SERVER_FOLDER)}`
+  : CODE_SERVER_BASE;
 
 /**
  * Persistent code-server iframe that lives in the Computer layout.

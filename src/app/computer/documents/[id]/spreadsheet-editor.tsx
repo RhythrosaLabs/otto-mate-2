@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   Plus,
-  Trash2,
   Bold,
   Italic,
   AlignLeft,
@@ -62,6 +61,54 @@ function parseCellRef(ref: string): { row: number; col: number } | null {
     col = col * 26 + (match[1].charCodeAt(i) - 64);
   }
   return { row: parseInt(match[2]) - 1, col: col - 1 };
+}
+
+// Safe recursive descent arithmetic parser (no eval/Function)
+function safeEvalArithmetic(expr: string): number {
+  let pos = 0;
+  const str = expr.replace(/\s/g, "");
+
+  function parseExpr(): number {
+    let result = parseTerm();
+    while (pos < str.length && (str[pos] === "+" || str[pos] === "-")) {
+      const op = str[pos++];
+      const right = parseTerm();
+      result = op === "+" ? result + right : result - right;
+    }
+    return result;
+  }
+
+  function parseTerm(): number {
+    let result = parseFactor();
+    while (pos < str.length && (str[pos] === "*" || str[pos] === "/")) {
+      const op = str[pos++];
+      const right = parseFactor();
+      result = op === "*" ? result * right : result / right;
+    }
+    return result;
+  }
+
+  function parseFactor(): number {
+    // Unary minus
+    if (str[pos] === "-") { pos++; return -parseFactor(); }
+    if (str[pos] === "+") { pos++; return parseFactor(); }
+    // Parentheses
+    if (str[pos] === "(") {
+      pos++; // skip (
+      const result = parseExpr();
+      pos++; // skip )
+      return result;
+    }
+    // Number
+    const start = pos;
+    while (pos < str.length && (str[pos] >= "0" && str[pos] <= "9" || str[pos] === ".")) pos++;
+    if (pos === start) return NaN;
+    return parseFloat(str.slice(start, pos));
+  }
+
+  const result = parseExpr();
+  if (pos !== str.length) return NaN; // leftover chars = malformed
+  return result;
 }
 
 // Safe formula evaluator for basic operations
@@ -169,7 +216,7 @@ function evaluateFormula(formula: string, cells: Record<string, CellData>): stri
     });
     // Only allow safe characters in arithmetic expressions
     if (/^[\d\s+\-*/().]+$/.test(resolved)) {
-      const result = new Function(`"use strict"; return (${resolved})`)();
+      const result = safeEvalArithmetic(resolved);
       return typeof result === "number" && isFinite(result) ? result.toString() : "#ERROR!";
     }
   } catch {
@@ -195,6 +242,10 @@ export function SpreadsheetEditor({ content, onSave }: SpreadsheetEditorProps) {
   const [selection, setSelection] = useState<{ start: string; end: string } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dataRef = useRef(data);
+  const selectedCellRef = useRef(selectedCell);
+  dataRef.current = data;
+  selectedCellRef.current = selectedCell;
 
   // Auto-save
   const triggerSave = useCallback((newData: SpreadsheetData) => {
@@ -204,16 +255,17 @@ export function SpreadsheetEditor({ content, onSave }: SpreadsheetEditorProps) {
     }, 800);
   }, [onSave]);
 
-  // Listen for AI insert events
+  // Listen for AI insert events (uses refs to avoid re-registering on every cell edit)
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.text) {
         // Try to parse AI response as cell data
         const lines = detail.text.split("\n");
-        const newData = { ...data };
-        let row = selectedCell ? (parseCellRef(selectedCell)?.row ?? 0) : 0;
-        const startCol = selectedCell ? (parseCellRef(selectedCell)?.col ?? 0) : 0;
+        const newData = { ...dataRef.current };
+        const sc = selectedCellRef.current;
+        let row = sc ? (parseCellRef(sc)?.row ?? 0) : 0;
+        const startCol = sc ? (parseCellRef(sc)?.col ?? 0) : 0;
         for (const line of lines) {
           if (!line.trim()) continue;
           const values = line.split("\t").length > 1 ? line.split("\t") : line.split(",");
@@ -229,7 +281,7 @@ export function SpreadsheetEditor({ content, onSave }: SpreadsheetEditorProps) {
     };
     window.addEventListener("ai-insert", handler);
     return () => window.removeEventListener("ai-insert", handler);
-  }, [data, selectedCell, triggerSave]);
+  }, [triggerSave]);
 
   const getCellDisplay = useCallback((ref: string): string => {
     const cell = data.cells[ref];

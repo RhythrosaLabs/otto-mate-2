@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
+import { addBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import {
   Plus,
   Play,
@@ -176,37 +176,29 @@ function makeBoard(name: string, type: Board["type"] = "storyboard"): Board {
 // ---------------------------------------------------------------------------
 
 export function DreamMachineClient() {
-  // Board state — restored from localStorage on mount
-  const [boards, setBoards] = useState<Board[]>(() => {
+  // Board state — hydrated from localStorage in useEffect to avoid SSR mismatch
+  const defaultBoard = makeBoard("My Film");
+  const [boards, setBoards] = useState<Board[]>([defaultBoard]);
+  const [activeBoardId, setActiveBoardId] = useState<string>(defaultBoard.id);
+
+  // Hydrate boards + active ID from localStorage after mount
+  useEffect(() => {
     try {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("dm:boards");
-        if (saved) {
-          const parsed = JSON.parse(saved) as Board[];
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const saved = localStorage.getItem("dm:boards");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Board[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBoards(parsed);
+          const savedId = localStorage.getItem("dm:activeBoardId");
+          if (savedId && parsed.some((b) => b.id === savedId)) {
+            setActiveBoardId(savedId);
+          } else {
+            setActiveBoardId(parsed[0].id);
+          }
         }
       }
     } catch { /* ignore */ }
-    return [makeBoard("My Film")];
-  });
-  const [activeBoardId, setActiveBoardId] = useState<string>(() => {
-    try {
-      if (typeof window !== "undefined") {
-        const savedBoards = localStorage.getItem("dm:boards");
-        const savedId = localStorage.getItem("dm:activeBoardId");
-        if (savedBoards && savedId) {
-          const parsed = JSON.parse(savedBoards) as Board[];
-          if (Array.isArray(parsed) && parsed.some((b) => b.id === savedId)) return savedId;
-        }
-        const fallback = localStorage.getItem("dm:boards");
-        if (fallback) {
-          const parsed = JSON.parse(fallback) as Board[];
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
-        }
-      }
-    } catch { /* ignore */ }
-    return boards[0]?.id ?? "";
-  });
+  }, []);
   const [editingBoardName, setEditingBoardName] = useState(false);
   const [boardNameDraft, setBoardNameDraft] = useState("");
   const [showBoardMenu, setShowBoardMenu] = useState(false);

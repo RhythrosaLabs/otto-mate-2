@@ -77,7 +77,7 @@ export function AuditClient() {
       console.error("Failed to fetch audit logs:", err);
     }
     setLoading(false);
-  }, [page, eventType, toolFilter, successFilter, searchQuery]);
+  }, [page, eventType, toolFilter, successFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -189,9 +189,9 @@ export function AuditClient() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total Events", value: total, icon: Filter, color: "text-pplx-accent" },
-          { label: "Tool Calls", value: logs.filter(l => l.event_type === "tool_call").length, icon: Zap, color: "text-blue-400" },
-          { label: "Errors", value: logs.filter(l => !l.success).length, icon: AlertTriangle, color: "text-red-400" },
-          { label: "Avg Duration", value: formatDuration(Math.round(logs.reduce((s, l) => s + (l.duration_ms || 0), 0) / Math.max(logs.length, 1))), icon: Clock, color: "text-amber-400" },
+          { label: "Tool Calls", value: filteredLogs.filter(l => l.event_type === "tool_call").length, icon: Zap, color: "text-blue-400" },
+          { label: "Errors", value: filteredLogs.filter(l => !l.success).length, icon: AlertTriangle, color: "text-red-400" },
+          { label: "Avg Duration", value: formatDuration(Math.round(filteredLogs.reduce((s, l) => s + (l.duration_ms || 0), 0) / Math.max(filteredLogs.length, 1))), icon: Clock, color: "text-amber-400" },
         ].map(stat => (
           <div key={stat.label} className="rounded-xl border border-pplx-border bg-pplx-card p-3">
             <div className="flex items-center gap-2 mb-1">

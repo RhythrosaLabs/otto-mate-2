@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getTask, updateTaskStatus } from "@/lib/db";
-import { runningTasks } from "@/lib/running-tasks";
+import { runningTasks, unregisterRunningTask } from "@/lib/running-tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function POST(
   const controller = runningTasks.get(taskId);
   if (controller) {
     controller.abort();
-    runningTasks.delete(taskId);
+    unregisterRunningTask(taskId);
   }
 
   // Update status to paused regardless (in case the map was already cleared)

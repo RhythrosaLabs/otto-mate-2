@@ -955,7 +955,9 @@ export function deleteSkill(id: string): void {
 
 export function incrementSkillUsage(skillId: string, outcome: "success" | "failure"): void {
   const db = getDb();
-  const field = outcome === "success" ? "success_count" : "failure_count";
+  const FIELDS: Record<string, string> = { success: "success_count", failure: "failure_count" };
+  const field = FIELDS[outcome];
+  if (!field) throw new Error(`Invalid outcome: ${outcome}`);
   db.prepare(`UPDATE skills SET usage_count = usage_count + 1, ${field} = ${field} + 1, updated_at = ? WHERE id = ?`)
     .run(new Date().toISOString(), skillId);
   // Recompute performance score

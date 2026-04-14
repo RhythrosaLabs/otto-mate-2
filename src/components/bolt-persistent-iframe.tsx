@@ -36,7 +36,6 @@ export function BoltPersistentIframe() {
   const [retrying, setRetrying] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Activate on first visit
   useEffect(() => {

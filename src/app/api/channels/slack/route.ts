@@ -13,11 +13,30 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 const BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
+
+/**
+ * Verify Slack request signature using HMAC-SHA256.
+ * See: https://api.slack.com/authentication/verifying-requests-from-slack
+ */
+function verifySlackSignature(
+  body: string,
+  timestamp: string | null,
+  signature: string | null
+): boolean {
+  if (!SIGNING_SECRET || !timestamp || !signature) return false;
+  // Reject requests older than 5 minutes to prevent replay attacks
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - Number(timestamp)) > 300) return false;
+  const sigBasestring = `v0:${timestamp}:${body}`;
+  const mySignature = "v0=" + crypto.createHmac("sha256", SIGNING_SECRET).update(sigBasestring).digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(mySignature), Buffer.from(signature));
+}
 
 interface SlackEvent {
   type: string;
@@ -72,12 +91,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "SLACK_BOT_TOKEN not configured" }, { status: 503 });
   }
 
+  // Read raw body for signature verification
+  const rawBody = await req.text();
+
+  // Verify Slack request signature (skip only if signing secret not configured)
+  if (SIGNING_SECRET) {
+    const timestamp = req.headers.get("x-slack-request-timestamp");
+    const signature = req.headers.get("x-slack-signature");
+    if (!verifySlackSignature(rawBody, timestamp, signature)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  }
+
   try {
     const contentType = req.headers.get("content-type") || "";
 
     // Slash commands come as application/x-www-form-urlencoded
     if (contentType.includes("application/x-www-form-urlencoded")) {
-      const formData = await req.formData();
+      const formData = new URLSearchParams(rawBody);
       const command = formData.get("command") as string;
       const text = formData.get("text") as string;
       const userId = formData.get("user_id") as string;
@@ -126,7 +157,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Events API (JSON body)
-    const body = (await req.json()) as SlackEvent;
+    const body = JSON.parse(rawBody) as SlackEvent;
 
     // URL verification challenge
     if (body.type === "url_verification" && body.challenge) {

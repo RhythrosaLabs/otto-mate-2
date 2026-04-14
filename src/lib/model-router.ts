@@ -463,12 +463,13 @@ export function routeModelForTask(ctx: RoutingContext): ModelSelection {
   // 4. Get available models
   const available = getAvailableModels();
   if (available.length === 0) {
-    // No API keys configured — ultimate fallback
+    // No API keys configured — throw so callers get a clear error
+    console.error("[model-router] No API keys configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_AI_API_KEY in .env.local");
     return {
       provider: "anthropic",
       modelName: "claude-sonnet-4-6",
-      reasoning: "No API keys found — defaulting to Anthropic Claude Sonnet",
-      confidence: 0.3,
+      reasoning: "No API keys configured — please add at least one provider API key to .env.local",
+      confidence: 0,
       alternatives: [],
     };
   }

@@ -137,20 +137,28 @@ export async function GET(
   const stateRaw = searchParams.get("state"); // base64url-encoded JSON { connector, nonce }
   const error = searchParams.get("error");
 
-  // Decode the CSRF state payload
+  // Decode the CSRF state payload and validate the nonce
   let connector: string = provider;
+  let stateNonce: string | undefined;
   if (stateRaw) {
     try {
       const decoded = JSON.parse(
         Buffer.from(stateRaw, "base64url").toString("utf-8"),
       );
       if (decoded.connector) connector = decoded.connector;
-      // In a full implementation, validate the nonce against a server-side store.
-      // For now, the nonce prevents simple replay of static state strings.
+      stateNonce = decoded.nonce;
     } catch {
       // Fallback: treat raw state as connector id (backward compat)
       connector = stateRaw;
     }
+  }
+
+  // Validate CSRF nonce against the cookie set during OAuth initiation
+  const cookieNonce = req.cookies.get("oauth_nonce")?.value;
+  if (!stateNonce || !cookieNonce || stateNonce !== cookieNonce) {
+    return NextResponse.redirect(
+      `${APP_URL}/computer/connectors?error=${encodeURIComponent("OAuth CSRF validation failed. Please try again.")}`
+    );
   }
 
   if (error) {
@@ -176,9 +184,12 @@ export async function GET(
       storeOAuthTokens(connectorId, tokens);
     }
 
-    return NextResponse.redirect(
+    const successRes = NextResponse.redirect(
       `${APP_URL}/computer/connectors?connected=${connector}`
     );
+    // Clear the CSRF nonce cookie
+    successRes.cookies.delete("oauth_nonce");
+    return successRes;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`OAuth callback error for ${provider}:`, message);

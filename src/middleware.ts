@@ -18,6 +18,7 @@ const PUBLIC_PATHS = [
   "/api/channels/telegram",  // incoming webhook from Telegram
   "/api/channels/slack",     // incoming webhook from Slack
   "/api/channels/discord",   // incoming webhook from Discord
+  "/api/whatsapp",           // incoming webhook from Meta WhatsApp
 ];
 
 function isPublicPath(pathname: string): boolean {

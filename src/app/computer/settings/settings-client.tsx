@@ -5,13 +5,13 @@ import {
   Settings,
   Shield,
   Cpu,
-  Search,
   DollarSign,
   RefreshCw,
   CheckCircle2,
   XCircle,
   Save,
   Palette,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS } from "@/lib/types";
@@ -19,7 +19,6 @@ import type { HealthInfo } from "@/lib/types";
 import { THEMES, applyTheme, getStoredThemeId } from "@/lib/themes";
 
 export function SettingsClient() {
-  const [settings, setSettings] = useState<Record<string, string>>({});
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -37,7 +36,6 @@ export function SettingsClient() {
       fetch("/api/settings").then(r => { if (!r.ok) throw new Error(`Settings ${r.status}`); return r.json(); }),
       fetch("/api/settings?section=health").then(r => { if (!r.ok) throw new Error(`Health ${r.status}`); return r.json(); }),
     ]).then(([s, h]) => {
-      setSettings(s as Record<string, string>);
       setHealth(h as HealthInfo);
       // Populate form from saved settings
       const ss = s as Record<string, string>;

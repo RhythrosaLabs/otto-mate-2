@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   Sparkles, Image as ImageIcon, Loader2, Download, Heart,
   RefreshCw, Copy, ChevronRight,
@@ -644,7 +644,6 @@ function ImageActions({ image, prompt }: { image: GeneratedImage; prompt: string
 /* ─── Main Component ──────────────────────────────────────────────── */
 
 export function GenerateImageClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialPrompt = searchParams.get("prompt") || "";
 

@@ -136,7 +136,7 @@ export function AiAssistant({ docId, docType, onClose, onInsert }: AiAssistantPr
       const res = await fetch(`/api/documents/${docId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, selection: sel, prompt: prompt || "", language: "Spanish" }),
+        body: JSON.stringify({ action, selection: sel, prompt: prompt || "" }),
       });
 
       if (!res.ok) {

@@ -8,7 +8,7 @@
 //
 // The agent can use these primitives to interact with desktop applications.
 
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -208,52 +208,68 @@ export function executeMouseAction(action: MouseAction): ComputerUseResult {
 }
 
 function executeMacOSMouse(action: MouseAction): ComputerUseResult {
-  const { type, x, y, end_x, end_y } = action;
+  const { type } = action;
+  const x = Math.round(Number(action.x));
+  const y = Math.round(Number(action.y));
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return { success: false, action: type, error: "Invalid coordinates" };
+  }
 
   switch (type) {
     case "click":
-      execSync(`cliclick c:${x},${y}`, { timeout: 5000 });
+      execFileSync("cliclick", [`c:${x},${y}`], { timeout: 5000 });
       break;
     case "double_click":
-      execSync(`cliclick dc:${x},${y}`, { timeout: 5000 });
+      execFileSync("cliclick", [`dc:${x},${y}`], { timeout: 5000 });
       break;
     case "right_click":
-      execSync(`cliclick rc:${x},${y}`, { timeout: 5000 });
+      execFileSync("cliclick", [`rc:${x},${y}`], { timeout: 5000 });
       break;
     case "move":
-      execSync(`cliclick m:${x},${y}`, { timeout: 5000 });
+      execFileSync("cliclick", [`m:${x},${y}`], { timeout: 5000 });
       break;
-    case "drag":
-      if (end_x !== undefined && end_y !== undefined) {
-        execSync(`cliclick dd:${x},${y} du:${end_x},${end_y}`, { timeout: 5000 });
+    case "drag": {
+      const ex = Math.round(Number(action.end_x));
+      const ey = Math.round(Number(action.end_y));
+      if (Number.isFinite(ex) && Number.isFinite(ey)) {
+        execFileSync("cliclick", [`dd:${x},${y}`, `du:${ex},${ey}`], { timeout: 5000 });
       }
       break;
+    }
   }
 
   return { success: true, action: type, details: `${type} at (${x}, ${y})` };
 }
 
 function executeLinuxMouse(action: MouseAction): ComputerUseResult {
-  const { type, x, y, end_x, end_y } = action;
+  const { type } = action;
+  const x = Math.round(Number(action.x));
+  const y = Math.round(Number(action.y));
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return { success: false, action: type, error: "Invalid coordinates" };
+  }
 
   switch (type) {
     case "click":
-      execSync(`xdotool mousemove ${x} ${y} click 1`, { timeout: 5000 });
+      execFileSync("xdotool", ["mousemove", String(x), String(y), "click", "1"], { timeout: 5000 });
       break;
     case "double_click":
-      execSync(`xdotool mousemove ${x} ${y} click --repeat 2 1`, { timeout: 5000 });
+      execFileSync("xdotool", ["mousemove", String(x), String(y), "click", "--repeat", "2", "1"], { timeout: 5000 });
       break;
     case "right_click":
-      execSync(`xdotool mousemove ${x} ${y} click 3`, { timeout: 5000 });
+      execFileSync("xdotool", ["mousemove", String(x), String(y), "click", "3"], { timeout: 5000 });
       break;
     case "move":
-      execSync(`xdotool mousemove ${x} ${y}`, { timeout: 5000 });
+      execFileSync("xdotool", ["mousemove", String(x), String(y)], { timeout: 5000 });
       break;
-    case "drag":
-      if (end_x !== undefined && end_y !== undefined) {
-        execSync(`xdotool mousemove ${x} ${y} mousedown 1 mousemove ${end_x} ${end_y} mouseup 1`, { timeout: 5000 });
+    case "drag": {
+      const ex = Math.round(Number(action.end_x));
+      const ey = Math.round(Number(action.end_y));
+      if (Number.isFinite(ex) && Number.isFinite(ey)) {
+        execFileSync("xdotool", ["mousemove", String(x), String(y), "mousedown", "1", "mousemove", String(ex), String(ey), "mouseup", "1"], { timeout: 5000 });
       }
       break;
+    }
   }
 
   return { success: true, action: type, details: `${type} at (${x}, ${y})` };
@@ -284,31 +300,31 @@ function executeMacOSKeyboard(action: KeyboardAction): ComputerUseResult {
   switch (action.type) {
     case "type": {
       if (!action.text) return { success: false, action: "type", error: "No text provided" };
-      // Use cliclick for typing (handles special chars)
-      const safeText = action.text
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\$/g, "\\$")
-        .replace(/`/g, "\\`")
-        .replace(/\n/g, "\\n")
-        .replace(/\r/g, "\\r");
-      execSync(`cliclick t:"${safeText}"`, { timeout: 10000 });
+      // Use execFileSync to avoid shell injection
+      execFileSync("cliclick", [`t:${action.text}`], { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }
     case "key": {
       if (!action.key) return { success: false, action: "key", error: "No key provided" };
       const macKey = mapKeyToMacOS(action.key);
-      execSync(`cliclick kp:${macKey}`, { timeout: 5000 });
+      execFileSync("cliclick", [`kp:${macKey}`], { timeout: 5000 });
       return { success: true, action: "key", details: `Pressed: ${action.key}` };
     }
     case "hotkey": {
       if (!action.modifiers || !action.key) return { success: false, action: "hotkey", error: "No modifiers/key" };
-      // Use AppleScript for hotkeys
+      // Validate key and modifiers against allowlists to prevent AppleScript injection
+      const ALLOWED_MODS = new Set(["cmd", "ctrl", "alt", "shift", "command", "control", "option"]);
+      const ALLOWED_KEYS = /^[a-zA-Z0-9]$/;
+      if (!action.modifiers.every(m => ALLOWED_MODS.has(m))) {
+        return { success: false, action: "hotkey", error: "Invalid modifier" };
+      }
+      if (!ALLOWED_KEYS.test(action.key)) {
+        return { success: false, action: "hotkey", error: "Invalid key for hotkey (single alphanumeric only)" };
+      }
       const modMap: Record<string, string> = { cmd: "command", ctrl: "control", alt: "option", shift: "shift" };
       const mods = action.modifiers.map(m => modMap[m] || m);
-      const keyCode = `"${action.key.replace(/"/g, '\\"')}"`;  
-      const script = `tell application "System Events" to keystroke ${keyCode} using {${mods.map(m => `${m} down`).join(", ")}}`;
-      execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, { timeout: 5000 });
+      const script = `tell application "System Events" to keystroke "${action.key}" using {${mods.map(m => `${m} down`).join(", ")}}`;
+      execFileSync("osascript", ["-e", script], { timeout: 5000 });
       return { success: true, action: "hotkey", details: `Hotkey: ${action.modifiers.join("+")}+${action.key}` };
     }
   }
@@ -320,20 +336,14 @@ function executeLinuxKeyboard(action: KeyboardAction): ComputerUseResult {
   switch (action.type) {
     case "type": {
       if (!action.text) return { success: false, action: "type", error: "No text provided" };
-      const safeText = action.text
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\$/g, "\\$")
-        .replace(/`/g, "\\`")
-        .replace(/\n/g, "\\n")
-        .replace(/\r/g, "\\r");
-      execSync(`xdotool type --delay 50 "${safeText}"`, { timeout: 10000 });
+      // Use execFileSync to avoid shell injection
+      execFileSync("xdotool", ["type", "--delay", "50", action.text], { timeout: 10000 });
       return { success: true, action: "type", details: `Typed: ${action.text.slice(0, 50)}` };
     }
     case "key": {
       if (!action.key) return { success: false, action: "key", error: "No key provided" };
       const linuxKey = mapKeyToLinux(action.key);
-      execSync(`xdotool key ${linuxKey}`, { timeout: 5000 });
+      execFileSync("xdotool", ["key", linuxKey], { timeout: 5000 });
       return { success: true, action: "key", details: `Pressed: ${action.key}` };
     }
     case "hotkey": {
@@ -341,7 +351,7 @@ function executeLinuxKeyboard(action: KeyboardAction): ComputerUseResult {
       const modMap: Record<string, string> = { cmd: "super", ctrl: "ctrl", alt: "alt", shift: "shift" };
       const mods = action.modifiers.map(m => modMap[m] || m);
       const combo = [...mods, mapKeyToLinux(action.key)].join("+");
-      execSync(`xdotool key ${combo}`, { timeout: 5000 });
+      execFileSync("xdotool", ["key", combo], { timeout: 5000 });
       return { success: true, action: "hotkey", details: `Hotkey: ${combo}` };
     }
   }

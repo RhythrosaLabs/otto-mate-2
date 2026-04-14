@@ -24,6 +24,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  let intervalId: ReturnType<typeof setInterval>;
+  let heartbeatId: ReturnType<typeof setInterval>;
+
   const stream = new ReadableStream<Uint8Array>({
     start(ctrl) {
       controller = ctrl;
@@ -37,9 +40,9 @@ export async function GET(req: NextRequest) {
         active.map((t) => [t.id, `${t.status}:${t.steps_count}:${t.files_count}`])
       );
 
-      const interval = setInterval(() => {
+      intervalId = setInterval(() => {
         if (closed) {
-          clearInterval(interval);
+          clearInterval(intervalId);
           return;
         }
         try {
@@ -73,9 +76,9 @@ export async function GET(req: NextRequest) {
       }, 1500);
 
       // Heartbeat every 15s to keep connection alive
-      const heartbeat = setInterval(() => {
+      heartbeatId = setInterval(() => {
         if (closed) {
-          clearInterval(heartbeat);
+          clearInterval(heartbeatId);
           return;
         }
         send({ type: "heartbeat", ts: Date.now() });
@@ -83,6 +86,8 @@ export async function GET(req: NextRequest) {
     },
     cancel() {
       closed = true;
+      clearInterval(intervalId);
+      clearInterval(heartbeatId);
     },
   });
 

@@ -38,7 +38,7 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
 
   useEffect(() => {
     fetch("/api/self-improvement")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => setSelfImprovementStats(data.stats))
       .catch(() => { /* best effort */ });
   }, []);

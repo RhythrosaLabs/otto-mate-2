@@ -9,13 +9,18 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await req.json() as {
+  let body: {
     name?: string;
     description?: string;
     instructions?: string;
     category?: string;
     is_active?: boolean;
   };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   updateSkill(id, body);
   const skills = listSkills();
   const updated = skills.find((s) => s.id === id);

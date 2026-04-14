@@ -83,7 +83,14 @@ export async function POST(req: NextRequest) {
   }
 
   const uploadedFiles = [];
+  const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
   for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File "${file.name}" exceeds 100MB limit` },
+        { status: 413 }
+      );
+    }
     const buffer = Buffer.from(await file.arrayBuffer());
     const safeName = path.basename(file.name);
     const filePath = path.join(taskDir, safeName);

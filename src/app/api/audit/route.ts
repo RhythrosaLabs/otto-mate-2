@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
     }
 
     const opts = {
-      limit: parseInt(url.searchParams.get("limit") || "50"),
-      offset: parseInt(url.searchParams.get("offset") || "0"),
+      limit: Math.max(1, parseInt(url.searchParams.get("limit") || "50") || 50),
+      offset: Math.max(0, parseInt(url.searchParams.get("offset") || "0") || 0),
       event_type: url.searchParams.get("event_type") || undefined,
       tool_name: url.searchParams.get("tool_name") || undefined,
       success: url.searchParams.get("success") === "true" ? true : url.searchParams.get("success") === "false" ? false : undefined,
