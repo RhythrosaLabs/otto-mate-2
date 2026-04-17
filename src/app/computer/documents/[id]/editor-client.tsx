@@ -47,6 +47,7 @@ export function DocumentEditorClient({ initialDoc }: { initialDoc: DocumentRow }
         body: JSON.stringify({ title: newTitle }),
       });
       if (!res.ok) throw new Error("Save failed");
+      setDoc((prev) => ({ ...prev, title: newTitle }));
       setLastSaved(new Date().toLocaleTimeString());
     } catch {
       setLastSaved("save failed!");

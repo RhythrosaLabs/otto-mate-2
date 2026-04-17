@@ -47,7 +47,7 @@ export const TaskSourceSchema = z.enum(["manual", "scheduled", "webhook"]);
 export const CreateTaskSchema = z.object({
   prompt: z.string().min(1, "prompt is required").max(50000),
   title: z.string().max(500).optional(),
-  model: ModelIdSchema.optional().default("auto"),
+  model: ModelIdSchema.catch("auto").optional().default("auto"),
   priority: PrioritySchema.optional().default("medium"),
   tags: z.array(z.string().max(100)).max(50).optional(),
   scheduled_at: z.string().datetime().optional(),
@@ -67,7 +67,7 @@ export const CreateScheduledTaskSchema = z.object({
     .default("once"),
   schedule_expr: z.string().max(200).optional(),
   next_run_at: z.string().datetime().optional(),
-  model: z.string().max(100).optional().default("auto"),
+  model: ModelIdSchema.catch("auto").optional().default("auto"),
   delete_after_run: z.boolean().optional().default(false),
 });
 

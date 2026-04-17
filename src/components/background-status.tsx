@@ -8,7 +8,7 @@
  * show details and navigation links.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, X, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function BackgroundStatus() {
 
   // Auto-dismiss completed ops after 15 seconds
   // Stabilize dependency on the set of finished op IDs, not the array reference
-  const finishedOpIds = finishedOps.map((op) => op.id).join(",");
+  const finishedOpIds = useMemo(() => finishedOps.map((op) => op.id).join(","), [finishedOps]);
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
     for (const op of finishedOps) {

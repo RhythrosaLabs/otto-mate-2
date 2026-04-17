@@ -128,6 +128,7 @@ export function CommandPalette({ open, onClose }: Props) {
           model: "auto",
         }),
       });
+      if (!res.ok) throw new Error(`Task creation failed: ${res.status}`);
       const task = await res.json() as { id: string };
       onClose();
       // Auto-run the task

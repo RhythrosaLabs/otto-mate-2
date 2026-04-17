@@ -352,14 +352,15 @@ export async function executeAction(
 
       case "hold_key": {
         const keyStr = input.text as string;
-        const duration = (input.duration as number) ?? 1;
-        const parts = keyStr.toLowerCase().split("+");
+        if (!/^[a-zA-Z0-9 +\-_]+$/.test(keyStr)) return { error: "Invalid key sequence: only alphanumeric, space, +, -, _ allowed" };
+        const duration = Math.min(Math.max((input.duration as number) ?? 1, 0.1), 10);
+        const parts = keyStr.toLowerCase().split("+").map(p => p.trim()).filter(Boolean);
         for (const p of parts) {
-          await execAsync(`osascript -e 'tell application "System Events" to key down "${p.replace(/'/g, "'\\''")}"'`);
+          await execAsync(`osascript -e 'tell application "System Events" to key down "${p}"'`);
         }
         await new Promise((r) => setTimeout(r, duration * 1000));
         for (const p of [...parts].reverse()) {
-          await execAsync(`osascript -e 'tell application "System Events" to key up "${p.replace(/'/g, "'\\''")}"'`);
+          await execAsync(`osascript -e 'tell application "System Events" to key up "${p}"'`);
         }
         await new Promise((r) => setTimeout(r, 300));
         const ss = await takeScreenshot(sessionId);

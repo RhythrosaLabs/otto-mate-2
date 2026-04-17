@@ -13,6 +13,17 @@
 
 const FALLBACK_BACKOFF_MS = [1000, 3000, 8000, 15000];
 
+const BILLING_PATTERNS = [
+  /credit.?balance/i, /insufficient.?funds/i, /billing/i,
+  /payment.?required/i, /402/i, /plan.?limit/i,
+  /authentication/i, /invalid.?api.?key/i, /unauthorized/i, /401/i,
+];
+
+function isBillingError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return BILLING_PATTERNS.some((p) => p.test(msg));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -361,19 +372,20 @@ export async function callLLMWithFallback(opts: LLMCallOptions): Promise<LLMCall
     const caller = PROVIDER_CALLERS[step.provider];
     if (!caller) continue;
 
-    // Backoff before retry (not on first attempt)
+    // Backoff before retry (not on first attempt) — skip instantly for billing errors
     if (i > 0) {
-      const backoffMs = FALLBACK_BACKOFF_MS[Math.min(i - 1, FALLBACK_BACKOFF_MS.length - 1)];
       const prevStep = chain[i - 1];
       const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
+      const billingErr = isBillingError(lastError);
+      const backoffMs = billingErr ? 0 : FALLBACK_BACKOFF_MS[Math.min(i - 1, FALLBACK_BACKOFF_MS.length - 1)];
 
       opts.onFallback?.(prevStep, step, errMsg);
 
       console.log(
         `[model-fallback] ${prevStep.provider}/${prevStep.model} failed (${errMsg.slice(0, 100)}), ` +
-        `falling back to ${step.provider}/${step.model} after ${backoffMs}ms`,
+        `falling back to ${step.provider}/${step.model}${backoffMs > 0 ? ` after ${backoffMs}ms` : ""}`,
       );
-      await sleep(backoffMs);
+      if (backoffMs > 0) await sleep(backoffMs);
     }
 
     try {

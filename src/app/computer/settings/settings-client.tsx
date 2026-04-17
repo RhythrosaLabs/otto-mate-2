@@ -22,6 +22,7 @@ export function SettingsClient() {
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   // Local form state
   const [defaultModel, setDefaultModel] = useState("auto");
@@ -71,6 +72,8 @@ export function SettingsClient() {
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error("Save failed:", err);
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 3000);
     }
     setSaving(false);
   }
@@ -95,11 +98,13 @@ export function SettingsClient() {
             "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
             saved
               ? "bg-green-500/20 text-green-400 border border-green-500/30"
+              : saveError
+              ? "bg-red-500/20 text-red-400 border border-red-500/30"
               : "bg-pplx-accent text-white hover:bg-pplx-accent-hover"
           )}
         >
-          {saving ? <RefreshCw size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
-          {saved ? "Saved" : "Save"}
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : saveError ? <XCircle size={14} /> : <Save size={14} />}
+          {saved ? "Saved" : saveError ? "Save Failed" : "Save"}
         </button>
       </div>
 

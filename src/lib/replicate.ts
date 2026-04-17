@@ -520,6 +520,19 @@ export async function buildModelInput(
   // For output format preferences
   if (propNames.includes("output_format") && !input["output_format"]) input["output_format"] = "png";
 
+  // Clamp width/height to the model's accepted range to prevent 422 errors
+  for (const dim of ["width", "height"] as const) {
+    if (propNames.includes(dim) && input[dim] != null) {
+      const dimSchema = props[dim] as Record<string, unknown>;
+      const maxVal = typeof dimSchema?.maximum === "number" ? dimSchema.maximum : 1440;
+      const minVal = typeof dimSchema?.minimum === "number" ? dimSchema.minimum : 64;
+      const val = Number(input[dim]);
+      if (!Number.isNaN(val)) {
+        input[dim] = Math.max(minVal, Math.min(val, maxVal));
+      }
+    }
+  }
+
   return input;
 }
 
@@ -716,10 +729,19 @@ export async function runReplicateTask(options: {
   let owner: string, name: string, reason: string;
 
   if (model && model.includes("/")) {
-    // User specified exact model
+    // User specified exact model — normalize common LLM typos
     [owner, name] = model.split("/", 2);
-    reason = `User-specified model: ${model}`;
-    onProgress?.(`Using specified model: ${model}`);
+    const OWNER_CORRECTIONS: Record<string, string> = {
+      "black-forest-lbs": "black-forest-labs",
+      "black-forrest-labs": "black-forest-labs",
+      "stability-ai": "stability-ai",  // correct already, placeholder
+    };
+    if (OWNER_CORRECTIONS[owner] && OWNER_CORRECTIONS[owner] !== owner) {
+      onProgress?.(`Corrected model owner typo: ${owner} → ${OWNER_CORRECTIONS[owner]}`);
+      owner = OWNER_CORRECTIONS[owner];
+    }
+    reason = `User-specified model: ${owner}/${name}`;
+    onProgress?.(`Using specified model: ${owner}/${name}`);
   } else if (defaultModel && !model) {
     // Use the well-known curated default for this task type — don't override with
     // random search results that may be unmaintained community models (frequent 404s).

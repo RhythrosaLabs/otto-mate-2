@@ -339,7 +339,16 @@ export function TaskDetailClient({ task: initialTask }: Props) {
         signal: abortRef.current.signal,
       });
 
-      if (!res.ok || !res.body) throw new Error("Stream failed");
+      if (!res.ok || !res.body) {
+        // 409 means the task is already running — just poll for updates instead of erroring
+        if (res.status === 409) {
+          console.log("[task-detail] Task already running, waiting for updates...");
+          setIsSubmitting(false);
+          isStreamingRef.current = false;
+          return;
+        }
+        throw new Error(`Stream failed (${res.status})`);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -421,11 +430,17 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     abortRef.current?.abort();
     // Also tell the server to abort the agent run
     fetch(`/api/tasks/${task.id}/stop`, { method: "POST" })
-      .then((res) => res.json() as Promise<{ task?: Task }>)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Stop failed: ${res.status}`);
+        return res.json() as Promise<{ task?: Task }>;
+      })
       .then((data) => {
         if (data.task) setTask(data.task);
       })
-      .catch(() => { /* best effort */ });
+      .catch(() => {
+        // Best effort — update local state to stopped even if server failed
+        setTask((prev) => ({ ...prev, status: "failed" }));
+      });
   }
 
   function toggleStep(stepId: string) {
@@ -679,6 +694,8 @@ export function TaskDetailClient({ task: initialTask }: Props) {
                   taskStatus={task.status}
                   pendingApprovals={(task.metadata?.pending_approvals as Array<{id: string}>) || []}
                   onApprove={async (approvalId: string) => {
+                    // Save previous state for rollback
+                    const prevTask = task;
                     // Immediately update step status in local state for visual feedback
                     setTask((prev) => ({
                       ...prev,
@@ -690,19 +707,26 @@ export function TaskDetailClient({ task: initialTask }: Props) {
                         pending_approvals: ((prev.metadata?.pending_approvals as Array<{id: string}>) || []).filter(a => a.id !== approvalId),
                       },
                     }));
-                    const res = await fetch(`/api/tasks/${task.id}/approve`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ approval_id: approvalId, approved: true }),
-                    });
-                    const data = await res.json() as { approval?: { tool?: string; input?: Record<string, unknown>; reason?: string } };
-                    // Re-run the task with specific context about what was approved
-                    const detail = data.approval
-                      ? `The user APPROVED the action: ${data.approval.tool}(${JSON.stringify(data.approval.input)}). Execute this exact tool call now and then continue.`
-                      : "Action approved. Please proceed with the previously requested action.";
-                    runTask(detail);
+                    try {
+                      const res = await fetch(`/api/tasks/${task.id}/approve`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ approval_id: approvalId, approved: true }),
+                      });
+                      if (!res.ok) throw new Error(`Approve failed: ${res.status}`);
+                      const data = await res.json() as { approval?: { tool?: string; input?: Record<string, unknown>; reason?: string } };
+                      // Re-run the task with specific context about what was approved
+                      const detail = data.approval
+                        ? `The user APPROVED the action: ${data.approval.tool}(${JSON.stringify(data.approval.input)}). Execute this exact tool call now and then continue.`
+                        : "Action approved. Please proceed with the previously requested action.";
+                      runTask(detail);
+                    } catch {
+                      setTask(prevTask);
+                    }
                   }}
                   onDeny={async (approvalId: string) => {
+                    // Save previous state for rollback
+                    const prevTask = task;
                     // Immediately update step status in local state for visual feedback
                     setTask((prev) => ({
                       ...prev,
@@ -714,16 +738,21 @@ export function TaskDetailClient({ task: initialTask }: Props) {
                         pending_approvals: ((prev.metadata?.pending_approvals as Array<{id: string}>) || []).filter(a => a.id !== approvalId),
                       },
                     }));
-                    const res = await fetch(`/api/tasks/${task.id}/approve`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ approval_id: approvalId, approved: false }),
-                    });
-                    const data = await res.json() as { approval?: { tool?: string; reason?: string } };
-                    const detail = data.approval
-                      ? `The user DENIED the action: ${data.approval.tool} — "${data.approval.reason}". Do NOT execute this action. Find an alternative approach or call complete_task to finish with a summary of what was accomplished so far.`
-                      : "Action denied. Do not proceed with this action. Call complete_task to finish.";
-                    runTask(detail);
+                    try {
+                      const res = await fetch(`/api/tasks/${task.id}/approve`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ approval_id: approvalId, approved: false }),
+                      });
+                      if (!res.ok) throw new Error(`Deny failed: ${res.status}`);
+                      const data = await res.json() as { approval?: { tool?: string; reason?: string } };
+                      const detail = data.approval
+                        ? `The user DENIED the action: ${data.approval.tool} — "${data.approval.reason}". Do NOT execute this action. Find an alternative approach or call complete_task to finish with a summary of what was accomplished so far.`
+                        : "Action denied. Do not proceed with this action. Call complete_task to finish.";
+                      runTask(detail);
+                    } catch {
+                      setTask(prevTask);
+                    }
                   }}
                 />
               ))}

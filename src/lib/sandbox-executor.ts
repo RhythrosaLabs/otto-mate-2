@@ -390,11 +390,26 @@ function getInstallCommand(language: string, packages: string[]): string {
 }
 
 function getRunCommand(language: string, code: string): string {
+  // Write code to a temp file and execute it to avoid shell injection via metacharacters
+  const tmpDir = "/tmp";
+  const id = `sandbox_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   switch (language) {
-    case "python": return `python3 -c '${code.replace(/'/g, "'\\''")}'`;
-    case "javascript": return `node -e '${code.replace(/'/g, "'\\''")}'`;
-    case "bash": return code;
-    default: return `sh -c '${code.replace(/'/g, "'\\''")}'`;
+    case "python": {
+      const f = `${tmpDir}/${id}.py`;
+      return `cat << 'SANDBOX_EOF' > ${f}\n${code}\nSANDBOX_EOF\npython3 ${f}; rm -f ${f}`;
+    }
+    case "javascript": {
+      const f = `${tmpDir}/${id}.js`;
+      return `cat << 'SANDBOX_EOF' > ${f}\n${code}\nSANDBOX_EOF\nnode ${f}; rm -f ${f}`;
+    }
+    case "bash": {
+      const f = `${tmpDir}/${id}.sh`;
+      return `cat << 'SANDBOX_EOF' > ${f}\n${code}\nSANDBOX_EOF\nsh ${f}; rm -f ${f}`;
+    }
+    default: {
+      const f = `${tmpDir}/${id}.sh`;
+      return `cat << 'SANDBOX_EOF' > ${f}\n${code}\nSANDBOX_EOF\nsh ${f}; rm -f ${f}`;
+    }
   }
 }
 

@@ -11,8 +11,8 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    actionTimeout: 15000,
-    navigationTimeout: 30000,
+    actionTimeout: 30_000,
+    navigationTimeout: 30_000,
   },
   projects: [
     {

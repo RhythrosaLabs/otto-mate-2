@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       description: prompt,
       status: depends_on ? "queued" : "pending",
       priority: priority || "medium",
-      model: model || "auto",
+      model: (model || "auto") as ModelId,
       source: source || "manual",
       tags: tags || [],
       metadata: metadata || {},

@@ -123,26 +123,36 @@ interface FailoverChain {
 
 function getFailoverChain(primary: { provider: string; modelName: string }): FailoverChain[] {
   const chain: FailoverChain[] = [primary];
-  // Add fallback providers in order of capability
-  // Priority: Anthropic → OpenAI → Google → OpenRouter (DeepSeek free) → Perplexity
-  const fallbacks: FailoverChain[] = [];
-  if (primary.provider !== "anthropic" && process.env.ANTHROPIC_API_KEY) {
-    fallbacks.push({ provider: "anthropic", modelName: "claude-sonnet-4-6" });
+  const seen = new Set<string>([`${primary.provider}/${primary.modelName}`]);
+  const add = (provider: string, modelName: string) => {
+    const key = `${provider}/${modelName}`;
+    if (!seen.has(key)) { seen.add(key); chain.push({ provider, modelName }); }
+  };
+
+  // Tier 1: Premium models (same-tier fallbacks)
+  if (process.env.ANTHROPIC_API_KEY && primary.provider !== "anthropic") {
+    add("anthropic", "claude-sonnet-4-6");
   }
-  if (primary.provider !== "openai" && process.env.OPENAI_API_KEY) {
-    fallbacks.push({ provider: "openai", modelName: "gpt-5.4" });
+  if (process.env.OPENAI_API_KEY && primary.provider !== "openai") {
+    add("openai", "gpt-5.4");
   }
-  if (primary.provider !== "google" && process.env.GOOGLE_AI_API_KEY) {
-    fallbacks.push({ provider: "google", modelName: "gemini-2.5-pro" });
+  if (process.env.GOOGLE_AI_API_KEY) {
+    add("google", "gemini-2.5-pro");
   }
-  // OpenRouter as last-resort free fallback
-  if (primary.provider !== "openrouter" && process.env.OPENROUTER_API_KEY) {
-    fallbacks.push({ provider: "openrouter", modelName: "openrouter/free" });
+
+  // Tier 2: Cheap/fast models as additional fallbacks
+  if (process.env.OPENAI_API_KEY) add("openai", "gpt-5.4-mini");
+  if (process.env.GOOGLE_AI_API_KEY) add("google", "gemini-2.5-flash");
+
+  // Tier 3: Perplexity (web-augmented)
+  if (process.env.PERPLEXITY_API_KEY) add("perplexity", "sonar-pro");
+
+  // Tier 4: OpenRouter — always last-resort (free models, no billing needed)
+  if (process.env.OPENROUTER_API_KEY) {
+    add("openrouter", "openrouter/free");
   }
-  if (primary.provider !== "perplexity" && process.env.PERPLEXITY_API_KEY) {
-    fallbacks.push({ provider: "perplexity", modelName: "sonar-pro" });
-  }
-  return chain.concat(fallbacks);
+
+  return chain;
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -1518,6 +1528,7 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
   let lastError: unknown = null;
   // Track providers with billing/auth errors — skip them in future attempts
   const disabledProviders = new Set<string>();
+  let triedCount = 0;
 
   for (let attempt = 0; attempt < failoverChain.length; attempt++) {
     const { provider, modelName: mName } = failoverChain[attempt];
@@ -1528,20 +1539,23 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       continue;
     }
 
-    if (attempt > 0) {
+    triedCount++;
+
+    if (triedCount > 1) {
       // Log failover step with the actual error so users can debug
       const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
       const shortErr = errMsg.length > 200 ? errMsg.slice(0, 200) + "…" : errMsg;
       const failoverStep: AgentStep = {
         id: uuidv4(), task_id: taskId, type: "reasoning",
-        title: `Failover: switching to ${mName}`,
+        title: `Failover: switching to ${provider}/${mName}`,
         content: `Previous model failed: ${shortErr}`,
         status: "completed", created_at: new Date().toISOString(),
       };
       addAgentStep(failoverStep);
       onStep?.(failoverStep);
-      // Backoff before retry
-      await sleep(FAILOVER_BACKOFF_MS[Math.min(attempt - 1, FAILOVER_BACKOFF_MS.length - 1)]);
+      // Short backoff — don't waste time when billing errors are instant
+      const backoffIdx = Math.min(triedCount - 2, FAILOVER_BACKOFF_MS.length - 1);
+      await sleep(isBillingOrAuthError(lastError) ? 500 : FAILOVER_BACKOFF_MS[backoffIdx]);
     }
 
     try {
@@ -1565,26 +1579,27 @@ export async function runAgent(options: AgentRunOptions): Promise<void> {
       // Disable this provider if it has billing/auth issues
       if (isBillingOrAuthError(err)) {
         disabledProviders.add(provider);
-        console.error(`[agent-failover] ${provider}/${mName} disabled — billing/auth error: ${errMsg.slice(0, 150)}`);
+        console.error(`[agent-failover] ${provider} disabled — billing/auth error: ${errMsg.slice(0, 150)}`);
+      } else {
+        console.error(
+          `[agent-failover] ${provider}/${mName} failed (attempt ${triedCount}/${failoverChain.length}):`,
+          errMsg.slice(0, 200),
+        );
       }
-
-      // If we've exhausted all fallbacks, handle the error and give up
-      if (attempt === failoverChain.length - 1) {
-        handleAgentError(err, taskId, onStep);
-        return;
-      }
-      console.error(
-        `[agent-failover] ${provider}/${mName} failed (attempt ${attempt + 1}/${failoverChain.length}):`,
-        errMsg.slice(0, 200),
-      );
     }
   }
 
-  // If we reach here, all providers were disabled by billing/auth errors
-  if (disabledProviders.size > 0) {
-    const errMsg = `All available AI providers failed due to billing or authentication issues. Disabled providers: ${[...disabledProviders].join(", ")}. Please check your API keys and billing status in Settings.`;
-    handleAgentError(new Error(errMsg), taskId, onStep);
-  }
+  // All providers exhausted
+  const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
+  handleAgentError(
+    new Error(
+      triedCount === 0
+        ? "No AI providers configured. Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, PERPLEXITY_API_KEY"
+        : `All ${triedCount} AI providers failed. Last error: ${errMsg.slice(0, 300)}${disabledProviders.size > 0 ? ` | Disabled (billing/auth): ${[...disabledProviders].join(", ")}` : ""}`
+    ),
+    taskId,
+    onStep,
+  );
 }
 
 // ─── Anthropic Provider ───────────────────────────────────────────────────────
@@ -4391,7 +4406,18 @@ async function executeGenerateImage(
     addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: "image/png", source: "agent", created_at: new Date().toISOString() });
     const revised = resp.data?.[0]?.revised_prompt;
     return `Image generated: ${safeName} (${formatBytes(stat.size)})${revised ? `\nRevised prompt: ${revised}` : ""}`;
-  } catch (err) { return `Image generation failed: ${err instanceof Error ? err.message : String(err)}`; }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    // If OpenAI billing/auth error, fall back to Replicate image generation
+    if (isBillingOrAuthError(err)) {
+      try {
+        return await executeReplicateRun(prompt, "black-forest-labs/flux-schnell", undefined, ctx);
+      } catch (fallbackErr) {
+        return `Image generation failed (OpenAI: ${errMsg}; Replicate fallback: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)})`;
+      }
+    }
+    return `Image generation failed: ${errMsg}`;
+  }
 }
 
 // ─── Replicate Smart Model Runner ─────────────────────────────────────────────
@@ -5082,18 +5108,25 @@ async function createSubAgent(
 
   // Build failover chain for the sub-agent
   const failoverChain = getFailoverChain(subModel);
+  const disabledSubProviders = new Set<string>();
 
   try {
     let result = "";
     let lastError: unknown = null;
+    let triedCount = 0;
 
     for (let attempt = 0; attempt < failoverChain.length; attempt++) {
       const { provider, modelName: mName } = failoverChain[attempt];
 
-      if (attempt > 0) {
+      // Skip disabled (billing/auth) providers
+      if (disabledSubProviders.has(provider)) continue;
+
+      triedCount++;
+
+      if (triedCount > 1) {
         const errMsg = lastError instanceof Error ? lastError.message : String(lastError);
-        console.log(`[sub-agent-failover] ${failoverChain[attempt - 1].provider}/${failoverChain[attempt - 1].modelName} failed (${errMsg.slice(0, 120)}), trying ${provider}/${mName}`);
-        await sleep(FAILOVER_BACKOFF_MS[Math.min(attempt - 1, FAILOVER_BACKOFF_MS.length - 1)]);
+        console.log(`[sub-agent-failover] previous failed (${errMsg.slice(0, 120)}), trying ${provider}/${mName}`);
+        await sleep(isBillingOrAuthError(lastError) ? 500 : FAILOVER_BACKOFF_MS[Math.min(triedCount - 2, FAILOVER_BACKOFF_MS.length - 1)]);
       }
 
       try {
@@ -5111,8 +5144,15 @@ async function createSubAgent(
           result = await runSubAgentOpenAICompat(orClient, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
         } else if (provider === "anthropic" && process.env.ANTHROPIC_API_KEY) {
           result = await runSubAgentAnthropic(mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
+        } else if (provider === "perplexity" && process.env.PERPLEXITY_API_KEY) {
+          // Perplexity uses OpenAI-compatible API — works for sub-agents too
+          const pplxClient = new OpenAI({
+            baseURL: "https://api.perplexity.ai",
+            apiKey: process.env.PERPLEXITY_API_KEY || "",
+          });
+          result = await runSubAgentOpenAICompat(pplxClient, mName, subSystemPrompt, fullPrompt, subTools, MAX_SUB_ITERATIONS, ctx);
         } else {
-          // Google / Perplexity — fall through to next since they don't support tool use in sub-agent format
+          // Google doesn't support OpenAI-compat tool format — skip
           continue;
         }
 
@@ -5122,10 +5162,15 @@ async function createSubAgent(
         return trimmedResult;
       } catch (err) {
         lastError = err;
-        console.error(
-          `[sub-agent-failover] ${provider}/${mName} error (attempt ${attempt + 1}/${failoverChain.length}):`,
-          err instanceof Error ? err.message : String(err),
-        );
+        if (isBillingOrAuthError(err)) {
+          disabledSubProviders.add(provider);
+          console.error(`[sub-agent-failover] ${provider} disabled — billing/auth: ${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`);
+        } else {
+          console.error(
+            `[sub-agent-failover] ${provider}/${mName} error (attempt ${triedCount}/${failoverChain.length}):`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
         // Continue to next provider
       }
     }

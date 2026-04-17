@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
 
   // ── Folder actions ──
   if (action === "createFolder") {
-    const body = await req.json() as { name: string; parentId?: string; color?: string };
+    let body: { name: string; parentId?: string; color?: string };
+    try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     const folder: FileFolder = {
       id: uuidv4(),
       name: body.name || "New Folder",
@@ -46,14 +47,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "renameFolder") {
-    const body = await req.json() as { id: string; name: string };
+    let body: { id: string; name: string };
+    try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     if (!body.id || !body.name) return NextResponse.json({ error: "id and name required" }, { status: 400 });
     renameFolder(body.id, body.name);
     return NextResponse.json({ ok: true });
   }
 
   if (action === "moveToFolder") {
-    const body = await req.json() as { fileIds: string[]; folderId: string | null };
+    let body: { fileIds: string[]; folderId: string | null };
+    try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     if (!body.fileIds) return NextResponse.json({ error: "fileIds required" }, { status: 400 });
     for (const fid of body.fileIds) {
       updateFileFolder(fid, body.folderId);

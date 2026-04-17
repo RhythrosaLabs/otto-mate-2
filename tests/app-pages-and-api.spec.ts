@@ -217,12 +217,15 @@ test.describe("Tasks API", () => {
     expect(status).toBe(400);
   });
 
-  test("POST /api/tasks with invalid model enum returns 400", async ({ request }) => {
-    const { status } = await postJSON(request, "/api/tasks", {
-      prompt: "test",
+  test("POST /api/tasks with invalid model enum falls back to auto", async ({ request }) => {
+    const { status, body } = await postJSON(request, "/api/tasks", {
+      prompt: "test model fallback",
       model: "gpt-99-turbo-fake",
     });
-    expect(status).toBe(400);
+    expect(status).toBe(201);
+    expect(body.model).toBe("auto");
+    // cleanup
+    await request.delete(`/api/tasks/${body.id}`);
   });
 
   test("GET /api/tasks/[id] returns 404 for unknown task", async ({ request }) => {
