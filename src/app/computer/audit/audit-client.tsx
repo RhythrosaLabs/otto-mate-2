@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
 
 interface AuditLog {
@@ -91,18 +91,12 @@ export function AuditClient() {
 
   useEffect(() => {
     fetch("/api/audit?section=tool_names")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => setToolNames((d as { tools: string[] }).tools || []))
       .catch(console.error);
   }, []);
 
   const totalPages = Math.ceil(total / pageSize);
-
-  function formatDuration(ms: number | null): string {
-    if (!ms) return "—";
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  }
 
   function formatTime(iso: string): string {
     const d = new Date(iso);
@@ -247,7 +241,7 @@ export function AuditClient() {
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-pplx-muted text-xs font-mono">
-                        {formatDuration(log.duration_ms)}
+                        {log.duration_ms != null ? formatDuration(log.duration_ms) : "—"}
                       </td>
                       <td className="px-4 py-2.5 text-pplx-muted text-xs">
                         {formatTime(log.created_at)}

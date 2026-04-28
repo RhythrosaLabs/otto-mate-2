@@ -295,6 +295,12 @@ export function ConnectorsClient({
       </div>
 
       {/* Connector grid */}
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-pplx-muted">
+          <p className="text-sm font-medium">No connectors found</p>
+          <p className="text-xs mt-1 opacity-70">Try a different search or filter</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map((connector) => {
           const isConnected = connected.has(connector.id);
@@ -359,6 +365,7 @@ export function ConnectorsClient({
           );
         })}
       </div>
+      )}
 
       {/* Connect modal */}
       {modalConnector && (

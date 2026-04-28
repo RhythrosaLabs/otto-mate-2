@@ -25,6 +25,8 @@ import {
   Package,
   Terminal,
   Box,
+  Layers,
+  MessageCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -48,10 +50,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/coding-companion", label: "Coding Companion", icon: Terminal },
   { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
   { href: "/computer/dream-machine", label: "Dream Machine", icon: Sparkles },
+  { href: "/computer/playground", label: "Multimedia Playground", icon: Layers },
   { href: "/computer/audio-studio", label: "Audio Studio", icon: Music },
   { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
   { href: "/computer/3d-studio", label: "3D Studio", icon: Box },
   { href: "/computer/channels", label: "Channels", icon: Globe },
+  { href: "/computer/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/scheduled", label: "Scheduled", icon: Clock },
   { href: "/computer/analytics", label: "Analytics", icon: BarChart3 },

@@ -1,8 +1,10 @@
-import type { Metadata } from "next";
-import { ReplicateClient } from "./replicate-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Replicate — Ottomate" };
-
+/**
+ * /computer/replicate redirects to the Multimedia Playground.
+ * The Playground supersedes this page with multi-provider support (Replicate + HuggingFace),
+ * multi-column comparison, history, and file upload.
+ */
 export default function ReplicatePage() {
-  return <ReplicateClient />;
+  redirect("/computer/playground");
 }

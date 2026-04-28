@@ -146,6 +146,7 @@ export function TasksClientPage({ initialTasks }: Props) {
       }
     } catch (err) {
       console.error("Failed to retry task:", err);
+      toastError("Failed to retry task");
     }
   }
 
@@ -168,6 +169,7 @@ export function TasksClientPage({ initialTasks }: Props) {
       }
     } catch (err) {
       console.error("Failed to clone task:", err);
+      toastError("Failed to clone task");
     }
   }
 

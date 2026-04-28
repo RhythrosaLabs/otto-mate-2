@@ -66,7 +66,7 @@ export function SessionsClient() {
   // Fetch tasks for linking
   useEffect(() => {
     fetch("/api/tasks?limit=50")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => setTasks(d as TaskInfo[]))
       .catch(console.error);
   }, []);

@@ -40,6 +40,7 @@ export default function WhatsAppClient() {
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/whatsapp/send");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStatus(data);
     } catch {

@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
-import { DreamscapeClient } from "./dreamscape-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Video Producer — Ottomate" };
-
+/**
+ * /computer/dreamscape redirects to the Video Studio.
+ * The studio sub-route is the canonical URL listed in NAV_ITEMS.
+ */
 export default function DreamscapePage() {
-  return <DreamscapeClient />;
+  redirect("/computer/dreamscape/studio");
 }

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { SkillMarketplace } from "./skill-marketplace";
 import { SkillConverter } from "./skill-converter";
 import type { MarketplaceSkill } from "@/lib/skill-catalog";
+import { SKILL_CATALOG } from "@/lib/skill-catalog";
 import type { ConvertedSkill } from "@/lib/skill-converters";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -151,11 +152,11 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
     }
   }
 
-  // Track installed marketplace skill IDs by matching names
-  const installedMarketplaceIds = skills.map(s => {
-    // Match by name prefix to detect installed marketplace skills
-    return `mkt-${s.name.toLowerCase().replace(/\s+/g, "-")}`;
-  });
+  // Build installed IDs by matching installed skill names against the catalog
+  const installedNameSet = new Set(skills.map(s => s.name.toLowerCase()));
+  const installedMarketplaceIds = SKILL_CATALOG
+    .filter(mkt => installedNameSet.has(mkt.name.toLowerCase()))
+    .map(mkt => mkt.id);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -272,7 +273,7 @@ export function SkillsClient({ skills: initialSkills }: { skills: Skill[] }) {
 
           {/* My Skills grid */}
 
-      {skills.length === 0 && !isCreating ? (
+      {activeTab === "my-skills" && skills.length === 0 && !isCreating ? (
         <div className="flex flex-col items-center justify-center h-64 text-pplx-muted">
           <Zap size={40} className="mb-3 opacity-30" />
           <p className="text-sm font-medium">No skills yet</p>

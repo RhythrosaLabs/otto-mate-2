@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -19,7 +19,7 @@ export function AnalyticsClient() {
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/analytics");
@@ -28,9 +28,9 @@ export function AnalyticsClient() {
       console.error("Failed to fetch analytics:", err);
     }
     setLoading(false);
-  }
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Refresh when page becomes visible again
   const isVisible = usePageVisible();
@@ -38,7 +38,7 @@ export function AnalyticsClient() {
   useEffect(() => {
     if (isVisible && !wasVisibleRef.current) fetchData();
     wasVisibleRef.current = isVisible;
-  }, [isVisible]);
+  }, [isVisible, fetchData]);
 
   if (loading) {
     return (

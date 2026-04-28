@@ -24,7 +24,7 @@ import { routeModelForTask, routeSubAgentModel, recordModelOutcome, assessComple
 import { executeConnectorAction, listConnectorActions, EXECUTABLE_CONNECTORS } from "./executable-connectors";
 import { observePageElements, buildExtractionPrompt, processBrowseResult, formatBrowserResultForAgent, type ActAction, type ExtractAction, type ObserveAction } from "./stagehand-browser";
 import { executeSandboxed, validateCodeSecurity, formatSandboxResult } from "./sandbox-executor";
-import { computerUseAction, formatComputerUseResult, checkToolAvailability, COMPUTER_USE_TOOL_DESCRIPTION } from "./computer-use";
+import { computerUseAction, formatComputerUseResult } from "./computer-use";
 import { takeScreenshot, getScreenSize, getScalingTarget, executeAction, executeBash, executeTextEditor, filterOldScreenshots } from "./computer-use-native";
 import {
   addAgentStep,
@@ -8557,7 +8557,7 @@ When tasks involve finance, data, or analytics:
 - **replicate_run**: Run ANY of 1000s of AI models — image gen (Flux, SDXL), video, upscaling, background removal, face swap, music, speech, 3D, and more. Auto-selects the optimal model.
 - **dream_machine**: Multi-shot video/image production — commercials, storyboards, brand films
 - **send_email**: Send emails via Resend or connected services (Gmail, Outlook)
-- **connector_call**: 40+ external services — Slack, GitHub, Notion, Stripe, Google Sheets, Linear, Jira, Salesforce, HubSpot, Airtable, and more
+- **connector_call**: 190+ external services — Slack, GitHub, Notion, Stripe, Google Sheets, Linear, Jira, Salesforce, HubSpot, Airtable, Printify, Shopify, and more
 - **execute_connector**: Execute live API calls to Slack, GitHub, Notion, Discord, Telegram, Linear, Stripe, Google Sheets directly (set tokens in .env)
 - **social_media_post**: Post to Twitter/X, LinkedIn, Instagram, Reddit, Facebook, Bluesky using real browser automation — no API keys needed. Also read feeds and search. Uses persistent browser sessions. Credentials from .env.local are used automatically for login — NEVER ask the user to manually log in if credentials are configured (see Configured Login Credentials section above).
 - **finance_data**: Live stock quotes, company financials, SEC filings, crypto, economic indicators — no API key needed
@@ -8588,14 +8588,20 @@ You run inside the Ottomate app at **http://localhost:3000**. Every section of t
 | Image Studio | /computer/firefly | Creative Suite (Nova) — Replicate + HuggingFace image/video/audio generation |
 | Dream Machine | /computer/dream-machine | Luma AI video generation (text-to-video, image-to-video) |
 | Video Studio | /computer/dreamscape/studio | Luma Dream Machine video production |
+| Multimedia Playground | /computer/playground | Multi-provider AI model runner — Replicate + HuggingFace, multi-column comparison, gallery, file upload |
 | Audio Studio | /computer/audio-studio | openDAW (localhost:8080) — music, mixing, DAW |
 | 3D Studio | /computer/3d-studio | Blockbench (localhost:3001) — 3D modelling |
 | App Builder | /computer/app-builder | bolt.diy (localhost:5173) — full-stack visual IDE |
 | Coding Companion | /computer/coding-companion | VS Code Server (localhost:3100) |
 | Connectors | /computer/connectors | Configure external service integrations |
 | Skills | /computer/skills | Add/edit specialized behavior skills |
+| Channels | /computer/channels | Telegram, Discord, Slack, and WhatsApp webhook integrations |
+| WhatsApp | /computer/whatsapp | Send and receive WhatsApp messages directly |
+| Scheduled | /computer/scheduled | Create and manage scheduled/recurring tasks |
 | Analytics | /computer/analytics | Task metrics + usage tracking |
+| Audit Trail | /computer/audit | Full log of all agent actions and tool calls |
 | Sessions | /computer/sessions | Browser sessions |
+| Computer Control | /computer/computer-control | Native Anthropic screen control — full GUI automation with screenshots |
 | Settings | /computer/settings | Models, API keys, preferences |
 
 The internal REST API is available at \`/api/*\` — you can call it from \`execute_code\` fetch or \`bash\` curl:

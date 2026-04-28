@@ -7,7 +7,7 @@ import {
   Clock, Sparkles, Copy, PenLine, SortAsc, SortDesc, LayoutGrid, LayoutList,
   Hash,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 import type { DocumentRow } from "@/lib/db";
 
 type DocType = "all" | "document" | "spreadsheet";
@@ -29,10 +29,11 @@ export function DocumentsListClient({ initialDocs }: { initialDocs: DocumentRow[
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on outside click
+  // Close menu on outside click (only register when a menu is open)
   useEffect(() => {
+    if (!menuOpenId) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) && menuOpenId) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpenId(null);
       }
     };
@@ -243,7 +244,7 @@ export function DocumentsListClient({ initialDocs }: { initialDocs: DocumentRow[
 
                 <div className="flex items-center gap-2 text-xs text-pplx-muted">
                   <Clock size={12} />
-                  <span>{formatDate(doc.updated_at)}</span>
+                  <span>{formatRelativeTime(doc.updated_at)}</span>
                   {doc.type === "document" && (
                     <span className="ml-auto flex items-center gap-1"><Hash size={11} />{getWordCount(doc)}</span>
                   )}
@@ -267,7 +268,7 @@ export function DocumentsListClient({ initialDocs }: { initialDocs: DocumentRow[
                   )}
                   <p className="text-xs text-pplx-muted truncate">{getPreview(doc)}</p>
                 </div>
-                <span className="text-xs text-pplx-muted whitespace-nowrap">{formatDate(doc.updated_at)}</span>
+                <span className="text-xs text-pplx-muted whitespace-nowrap">{formatRelativeTime(doc.updated_at)}</span>
                 {doc.type === "document" && <span className="text-xs text-pplx-muted whitespace-nowrap flex items-center gap-1"><Hash size={11} />{getWordCount(doc)}</span>}
                 <div className="relative" ref={menuOpenId === doc.id ? menuRef : undefined}>
                   <button onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === doc.id ? null : doc.id); }} className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-pplx-border/50 transition-all text-pplx-muted">
@@ -293,16 +294,6 @@ export function DocumentsListClient({ initialDocs }: { initialDocs: DocumentRow[
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  if (diff < 60000) return "Just now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-  return d.toLocaleDateString();
-}
 
 function getPreview(doc: DocumentRow) {
   if (doc.type === "spreadsheet") {

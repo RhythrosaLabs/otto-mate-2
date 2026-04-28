@@ -28,7 +28,7 @@ export function SettingsClient() {
   const [defaultModel, setDefaultModel] = useState("auto");
   const [maxTokenBudget, setMaxTokenBudget] = useState("500000");
   const [maxCostBudget, setMaxCostBudget] = useState("5.00");
-  const [maxIterations, setMaxIterations] = useState("50");
+  const [maxIterations, setMaxIterations] = useState("75");
   const [verboseMode, setVerboseMode] = useState(false);
   const [activeTheme, setActiveTheme] = useState("default");
 

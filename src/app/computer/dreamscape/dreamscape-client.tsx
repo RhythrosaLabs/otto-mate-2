@@ -1842,7 +1842,8 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const imported = JSON.parse(e.target?.result as string) as Board;
+        if (!e.target?.result) return;
+        const imported = JSON.parse(e.target.result as string) as Board;
         if (!imported?.id || !Array.isArray(imported?.shots)) return;
         const freshBoard: Board = { ...imported, id: uid(), shots: imported.shots.map((s) => ({ ...s, id: uid() })), createdAt: Date.now() };
         setBoards((prev) => [...prev, freshBoard]);

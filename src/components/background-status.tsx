@@ -8,7 +8,7 @@
  * show details and navigation links.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, X, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,19 +34,22 @@ export function BackgroundStatus() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // Per-op timer ref — keyed by op ID so adding a new finished op never resets
+  // an existing countdown (the old approach cancelled ALL timers on every change).
+  const timerRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Filter out dismissed completed/failed ops
   const visibleOps = ops.filter((op) => !dismissed.has(op.id));
   const runningOps = visibleOps.filter((op) => op.status === "running");
   const finishedOps = visibleOps.filter((op) => op.status !== "running");
 
-  // Auto-dismiss completed ops after 15 seconds
-  // Stabilize dependency on the set of finished op IDs, not the array reference
-  const finishedOpIds = useMemo(() => finishedOps.map((op) => op.id).join(","), [finishedOps]);
+  // Auto-dismiss completed ops after 15 seconds — one timer per op, never restarted.
   useEffect(() => {
-    const timers: NodeJS.Timeout[] = [];
+    const timers = timerRef.current;
     for (const op of finishedOps) {
+      if (timers.has(op.id)) continue; // already counting down
       const timer = setTimeout(() => {
+        timers.delete(op.id);
         removeBackgroundOp(op.id);
         setDismissed((prev) => {
           const next = new Set(prev);
@@ -54,11 +57,16 @@ export function BackgroundStatus() {
           return next;
         });
       }, 15000);
-      timers.push(timer);
+      timers.set(op.id, timer);
     }
-    return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finishedOpIds]);
+    // Clean up timers for ops that were manually dismissed before 15s
+    for (const [id, timer] of Array.from(timers.entries())) {
+      if (!finishedOps.some((op) => op.id === id)) {
+        clearTimeout(timer);
+        timers.delete(id);
+      }
+    }
+  }, [finishedOps]);
 
   // Nothing to show
   if (visibleOps.length === 0) return null;

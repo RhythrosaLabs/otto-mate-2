@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { ScheduledTask } from "@/lib/types";
 import { usePageVisible } from "@/components/persistent-layout";
 import { useToast } from "@/components/toast-provider";
+import { formatRelativeTime } from "@/lib/utils";
 
 const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   once: "One-time",
@@ -122,14 +123,6 @@ export default function ScheduledTasksClient() {
       }
     } catch {
       toastError("Failed to run due tasks");
-    }
-  };
-
-  const formatDate = (d: string) => {
-    try {
-      return new Date(d).toLocaleString();
-    } catch {
-      return d;
     }
   };
 
@@ -321,8 +314,8 @@ export default function ScheduledTasksClient() {
                     </div>
                     <p className="text-pplx-muted text-sm truncate">{task.prompt}</p>
                     <div className="flex gap-4 mt-2 text-xs text-pplx-muted/60">
-                      <span>Next: {formatDate(task.next_run_at)}</span>
-                      {task.last_run_at && <span>Last: {formatDate(task.last_run_at)}</span>}
+                      <span>Next: {formatRelativeTime(task.next_run_at)}</span>
+                      {task.last_run_at && <span>Last: {formatRelativeTime(task.last_run_at)}</span>}
                       <span>Model: {task.model}</span>
                       {task.schedule_expr && <span>Expr: {task.schedule_expr}</span>}
                     </div>

@@ -141,7 +141,7 @@ export function ComputerControlClient() {
   // Load saved max_iterations from settings
   useEffect(() => {
     fetch("/api/settings")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((s: Record<string, string>) => {
         if (s.max_iterations) {
           const v = parseInt(s.max_iterations, 10);
