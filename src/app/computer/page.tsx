@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUp, Shuffle, Loader2, Monitor, Paperclip, X, Command, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SlashCommand } from "@/lib/types";
+import { useToast } from "@/components/toast-provider";
 
 // ─── Slash Commands (Otto-inspired) ───────────────────────────────────────────
 // Power-user shortcuts for common modalities
@@ -155,6 +156,7 @@ export default function ComputerPage() {
 }
 
 function ComputerPageInner() {
+  const { warning: toastWarning, error: toastError } = useToast();
   const [prompt, setPrompt] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shuffleIndex, setShuffleIndex] = useState(0);
@@ -412,12 +414,10 @@ function ComputerPageInner() {
                           if (data.text) {
                             setPrompt((prev) => (prev ? prev + " " : "") + data.text);
                           } else if (data.fallback === "browser") {
-                            // Server has no STT key — cannot transcribe recorded audio
-                            console.warn('No STT key configured on server; recorded audio could not be transcribed.');
+                            toastWarning("Speech-to-text is not configured on this server.");
                           }
                         } catch {
-                          // Network error — recorded audio lost
-                          console.warn('Voice transcription failed (network error).');
+                          toastError("Voice transcription failed — check your connection.");
                         }
                       };
 
@@ -433,7 +433,7 @@ function ComputerPageInner() {
                       try {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                        if (!Ctor) { alert("Speech recognition is not supported in this browser."); return; }
+                        if (!Ctor) { toastError("Speech recognition is not supported in this browser."); return; }
                         const recognition = new Ctor();
                         recognition.continuous = false;
                         recognition.interimResults = false;
@@ -451,7 +451,7 @@ function ComputerPageInner() {
                         recognition.start();
                         setIsListening(true);
                       } catch {
-                        alert("Speech recognition is not available.");
+                        toastError("Speech recognition is not available.");
                       }
                     }
                   }}

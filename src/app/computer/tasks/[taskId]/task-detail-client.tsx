@@ -253,10 +253,11 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     const es = new EventSource("/api/tasks/events");
 
     es.onmessage = async (ev) => {
-      // Don't process events while actively streaming from the run endpoint
-      if (isStreamingRef.current) return;
       try {
         const data = JSON.parse(ev.data);
+        // Skip SSE updates while we're actively receiving the run stream —
+        // but still process them once streaming has finished so we don't get stuck.
+        if (isStreamingRef.current && data.type === "update") return;
         if (data.type === "update" && data.task?.id === task.id) {
           const res = await fetch(`/api/tasks/${task.id}`);
           if (res.ok) {

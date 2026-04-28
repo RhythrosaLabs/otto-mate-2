@@ -65,8 +65,10 @@ export function Sidebar() {
   }, []);
 
   // Fetch recent tasks
+  // Fetch recent tasks — pause when tab is hidden
   useEffect(() => {
     async function fetchRecent() {
+      if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch("/api/tasks?limit=5");
         if (res.ok) {

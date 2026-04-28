@@ -50,8 +50,8 @@ export function AuditClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
 
-  // Reset to page 0 when search query changes
-  useEffect(() => { setPage(0); }, [searchQuery]);
+  // Reset to page 0 when any filter changes
+  useEffect(() => { setPage(0); }, [searchQuery, eventType, toolFilter, successFilter]);
   const pageSize = 30;
 
   // Refresh data when page becomes visible again (user navigated back)
@@ -67,6 +67,7 @@ export function AuditClient() {
       if (eventType) params.set("event_type", eventType);
       if (toolFilter) params.set("tool_name", toolFilter);
       if (successFilter) params.set("success", successFilter);
+      if (searchQuery) params.set("search", searchQuery);
 
       const res = await fetch(`/api/audit?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -77,7 +78,7 @@ export function AuditClient() {
       console.error("Failed to fetch audit logs:", err);
     }
     setLoading(false);
-  }, [page, eventType, toolFilter, successFilter]);
+  }, [page, eventType, toolFilter, successFilter, searchQuery]);
 
   useEffect(() => {
     fetchLogs();
@@ -96,15 +97,6 @@ export function AuditClient() {
   }, []);
 
   const totalPages = Math.ceil(total / pageSize);
-
-  const filteredLogs = searchQuery
-    ? logs.filter(l =>
-        l.tool_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.model?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.event_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.task_id?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : logs;
 
   function formatDuration(ms: number | null): string {
     if (!ms) return "—";
@@ -189,9 +181,9 @@ export function AuditClient() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total Events", value: total, icon: Filter, color: "text-pplx-accent" },
-          { label: "Tool Calls", value: filteredLogs.filter(l => l.event_type === "tool_call").length, icon: Zap, color: "text-blue-400" },
-          { label: "Errors", value: filteredLogs.filter(l => !l.success).length, icon: AlertTriangle, color: "text-red-400" },
-          { label: "Avg Duration", value: formatDuration(Math.round(filteredLogs.reduce((s, l) => s + (l.duration_ms || 0), 0) / Math.max(filteredLogs.length, 1))), icon: Clock, color: "text-amber-400" },
+          { label: "Tool Calls", value: logs.filter(l => l.event_type === "tool_call").length, icon: Zap, color: "text-blue-400" },
+          { label: "Errors", value: logs.filter(l => !l.success).length, icon: AlertTriangle, color: "text-red-400" },
+          { label: "Avg Duration", value: formatDuration(Math.round(logs.reduce((s, l) => s + (l.duration_ms || 0), 0) / Math.max(logs.length, 1))), icon: Clock, color: "text-amber-400" },
         ].map(stat => (
           <div key={stat.label} className="rounded-xl border border-pplx-border bg-pplx-card p-3">
             <div className="flex items-center gap-2 mb-1">
@@ -209,7 +201,7 @@ export function AuditClient() {
           <div className="flex items-center justify-center h-48 text-pplx-muted text-sm">
             Loading audit logs...
           </div>
-        ) : filteredLogs.length === 0 ? (
+        ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-pplx-muted">
             <Shield size={32} className="mb-2 opacity-30" />
             <p className="text-sm">No audit logs found</p>
@@ -228,7 +220,7 @@ export function AuditClient() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.map(log => {
+                {logs.map(log => {
                   const config = EVENT_TYPE_CONFIG[log.event_type] || EVENT_TYPE_CONFIG.tool_call;
                   const Icon = config.icon;
                   return (
@@ -274,7 +266,7 @@ export function AuditClient() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {total > 0 && totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-xs text-pplx-muted">
             Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}

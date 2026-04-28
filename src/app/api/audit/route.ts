@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
       success: url.searchParams.get("success") === "true" ? true : url.searchParams.get("success") === "false" ? false : undefined,
       from_date: url.searchParams.get("from_date") || undefined,
       to_date: url.searchParams.get("to_date") || undefined,
+      search: url.searchParams.get("search") || undefined,
     };
 
     const result = getAuditLogs(opts);

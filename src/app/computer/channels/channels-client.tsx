@@ -101,7 +101,22 @@ export function ChannelsClient() {
       setCopiedPath(path);
       setTimeout(() => setCopiedPath(null), 2000);
     } catch {
-      // Clipboard API not available or permission denied
+      // Clipboard API unavailable (non-HTTPS or denied) — fallback to execCommand
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setCopiedPath(path);
+        setTimeout(() => setCopiedPath(null), 2000);
+      } catch {
+        // Both methods failed — nothing we can do silently
+      }
     }
   }
 

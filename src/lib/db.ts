@@ -748,22 +748,6 @@ export function getFilesStats(): { total: number; bySource: Record<string, numbe
   return { total, bySource, byType, totalSize };
 }
 
-export function getRecentMemoryForFiles(limit = 10): MemoryEntry[] {
-  const db = getDb();
-  const rows = db.prepare(
-    "SELECT * FROM memory WHERE key LIKE 'file:%' ORDER BY updated_at DESC LIMIT ?"
-  ).all(limit) as Array<Record<string, unknown>>;
-  return rows.map((r) => ({
-    id: r.id as string,
-    key: r.key as string,
-    value: r.value as string,
-    source_task_id: r.source_task_id as string | undefined,
-    tags: JSON.parse((r.tags as string) || "[]"),
-    created_at: r.created_at as string,
-    updated_at: r.updated_at as string,
-  }));
-}
-
 export function updateFileFolder(fileId: string, folderId: string | null): void {
   const db = getDb();
   db.prepare("UPDATE task_files SET folder_id = ? WHERE id = ?").run(folderId, fileId);
@@ -1726,6 +1710,7 @@ export function getAuditLogs(opts?: {
   task_id?: string;
   from_date?: string;
   to_date?: string;
+  search?: string;
 }): { logs: Array<{
   id: string;
   event_type: string;
@@ -1746,6 +1731,11 @@ export function getAuditLogs(opts?: {
   if (opts?.success !== undefined) { wheres.push("success = ?"); params.push(opts.success ? 1 : 0); }
   if (opts?.from_date) { wheres.push("created_at >= ?"); params.push(opts.from_date); }
   if (opts?.to_date) { wheres.push("created_at <= ?"); params.push(opts.to_date); }
+  if (opts?.search) {
+    const like = `%${opts.search}%`;
+    wheres.push("(tool_name LIKE ? OR model LIKE ? OR event_type LIKE ? OR metadata LIKE ?)");
+    params.push(like, like, like, like);
+  }
 
   const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(" AND ")}` : "";
   const limit = opts?.limit || 50;
