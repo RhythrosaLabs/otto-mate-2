@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles, Image as ImageIcon, Video, Music, Mic2, Wand2,
   ZoomIn, Eraser, ArrowRight, Paintbrush,
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { loadGallery, type GalleryItem } from "./lib/gallery-store";
 import { usePageVisible } from "@/components/persistent-layout";
 import { NovaSmartBar } from "./components/nova-smart-bar";
+import { useHandoff } from "@/components/handoff-context";
 
 /* ─── Gallery Thumbnail (graceful broken-image fallback) ─────────── */
 
@@ -290,8 +291,20 @@ function ShowcaseCard({
 export function FireflyHome() {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]["id"]>("featured");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isVisible = usePageVisible();
   const [recentItems, setRecentItems] = useState<GalleryItem[]>([]);
+  const { consumeHandoff } = useHandoff();
+
+  // Consume any pending handoff (image sent from another studio)
+  useEffect(() => {
+    if (searchParams.get("handoff") !== "1") return;
+    const h = consumeHandoff();
+    if (h && h.mimeCategory === "image") {
+      router.replace(`/computer/firefly/edit?imageUrl=${encodeURIComponent(h.url)}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isVisible) {

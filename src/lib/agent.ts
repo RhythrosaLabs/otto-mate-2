@@ -8585,7 +8585,8 @@ You run inside the Ottomate app at **http://localhost:3000**. Every section of t
 | Files | /computer/files | Finder-style browser for all generated files |
 | Memory | /computer/memory | Browse + manage persistent memories |
 | Documents | /computer/documents | Create and organize rich documents |
-| Image Studio | /computer/image-studio | Adobe Firefly + Replicate image generation |
+| Image Studio | /computer/firefly | Creative Suite (Nova) — Replicate + HuggingFace image/video/audio generation |
+| Dream Machine | /computer/dream-machine | Luma AI video generation (text-to-video, image-to-video) |
 | Video Studio | /computer/dreamscape/studio | Luma Dream Machine video production |
 | Audio Studio | /computer/audio-studio | openDAW (localhost:8080) — music, mixing, DAW |
 | 3D Studio | /computer/3d-studio | Blockbench (localhost:3001) — 3D modelling |

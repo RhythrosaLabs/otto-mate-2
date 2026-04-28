@@ -46,16 +46,13 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 - **Code execution** — runs Python, Node.js, and shell scripts in-process with captured output
 - **Web browsing** — searches (Brave, Perplexity, Serper, Tavily), scrapes pages, and automates browsers via Playwright
 - **190+ connectors** — Gmail, Slack, GitHub, Jira, Stripe, Notion, HubSpot, WhatsApp, and many more
-- **Nova AI creative suite** — universal SmartBar that auto-detects output type (image, video, audio, 3D, text), searches Replicate + HuggingFace models live, generates media, and offers post-generation actions (animate, upscale, make 3D)
+- **Nova AI creative suite** — universal SmartBar that auto-detects output type (image, video, audio, 3D, text), searches Replicate + HuggingFace models live, generates media, and offers post-generation actions (animate, upscale, make 3D). Includes image generation (FLUX, DALL-E 3 + 25 styles), video generation (Minimax, Kling, Wan, Seedance), AI soundtracks (MusicGen), speech (12 voices, 2 providers), image editing (7 AI operations with canvas masking), and a unified gallery
 - **Dreamscape Video Studio** — 17-mode AI creative studio built around Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) with storyboards, 20 camera presets, continuity library, and an AI Director with command chain orchestration
-- **AI Audio Studio** — generate music (MusicGen via Replicate), professional voiceovers (9 voices via OpenAI TTS), and record audio in-browser — with an AI Producer chat assistant
-- **Image Studio** — AI image generation and editing powered by Replicate (FLUX, SDXL, and dynamic model search) with 7 editing operations and a full brush-based mask canvas
 - **AI media generation** — Luma Dream Machine (video/image), Replicate (1000s of models), FLUX, DALL-E 3, ElevenLabs (voice), MusicGen (music)
 - **Sub-agents** — spawns specialized child agents for parallel work
 - **Persistent memory** — key-value store the agent reads/writes across tasks
 - **Scheduled tasks** — cron expressions, intervals, daily/weekly recurrence
-- **Visual pipelines** — DAG builder for chaining tasks with dependencies
-- **Skills marketplace** — 270+ pre-built skill templates across 10 categories
+- **Skills marketplace** — 270+ pre-built skills across 10 categories
 - **Voice input** — dictate tasks via Whisper or browser speech recognition
 - **Slash commands** — `/image`, `/research`, `/code`, `/email`, `/video`, `/scrape`, and more
 
@@ -111,8 +108,8 @@ A **17-mode AI creative studio** built around **Luma Dream Machine** (Ray 2, Ray
 
 **Additional features:** Shot tagging, likes, and bookmarks for organization. Annotation overlay system (arrows, rectangles, text labels) that feeds spatial context into prompts. Board export/import as JSON. Per-shot media preview with mute controls. Search and filter across all shots. Film Player for sequential playback of completed shots. Ideas Gallery for browsing all completed work across boards. Continuity library for persisting style, character, and setting references across boards. Handoff system for sending media between studios.
 
-### Nova — AI Creative Suite
-A full-featured **AI media generation hub** with a universal **SmartBar** on the home page that auto-detects output type (Image, Video, Audio, 3D, Text) from your prompt, searches **Replicate + HuggingFace** model libraries in real time, and renders results inline with quick actions (animate to video, upscale 4×, make 3D). Six dedicated creation tools are accessible from the home page.
+### Creative Suite (Nova)
+A full-featured **AI media generation hub** accessible from the sidebar. The home view features a universal **SmartBar** that auto-detects output type (Image, Video, Audio, 3D, Text) from your prompt, searches **Replicate + HuggingFace** model libraries in real time, and renders results inline with quick actions (animate to video, upscale 4×, make 3D). Five dedicated creation tools and a gallery are accessible as sub-pages:
 
 **Generate Image:** Text-to-image with FLUX Schnell (fast), FLUX 1.1 Pro, FLUX 2 Pro, DALL-E 3, plus live model search across Replicate and HuggingFace. Supports 8 aspect ratios, 25 style presets (cinematic, anime, watercolor, pixel art, etc.), 9 lighting presets, 8 camera angles, 4 content types, visual intensity slider, negative prompts, structure and style references with adjustable strength, seed control, and batch generation (1–4 images). Inline quick actions: edit, generative fill, animate to video, upscale, copy to clipboard, save to gallery.
 
@@ -124,32 +121,11 @@ A full-featured **AI media generation hub** with a universal **SmartBar** on the
 
 **Edit Image:** Full image editing suite with 7 AI operations — generative fill, remove object, replace background, generative expand, upscale (2×/4×), remove background, and prompt-to-edit. Canvas-based brush masking with adjustable size and line interpolation. Expand supports directional control (all/left/right/up/down) and target ratios. Accept/discard workflow with undo history.
 
-**Gallery:** Browse, filter, and manage all generated creations (images, videos, music, speech) in a unified media gallery. 5 filter types with item count badges, 3 sort options (newest/oldest/favorites), text search, adjustable grid size, and detail modal with full-size media preview. Stored in localStorage (up to 200 items).
-
-### Audio Studio
-An AI-powered audio production studio with three modes and a built-in **AI Producer** chat assistant:
-
-**Compose:** Generate music tracks from text prompts using MusicGen (via Replicate) with live model search for alternative music-generation models. 8 quick templates (Trailer, Coffee shop, Night drive, Boss fight, Meditation, Club banger, Sad piano, Summer pop). Control genre (18 options), mood (12 options), BPM (40–240), key (24 major/minor keys), duration (5–60s), and instruments (16 toggle options including Piano, Guitar, Synthesizer, Strings, 808, Choir, etc.). Advanced parameters include temperature (0.0–2.0) and prompt guidance/CFG scale (1–10). 6 MusicGen sub-variants when selected (stereo-melody-large, stereo-large, melody-large, large, medium, small). AI auto-fill button generates descriptive prompts from your settings.
-
-**Speech:** Generate professional AI voiceovers from text. 9 voice profiles (Alloy, Echo, Fable, Onyx, Nova, Shimmer, Aria, Roger, Sarah) via OpenAI TTS, displayed in a visual grid with descriptions.
-
-**Record:** Record audio directly in the browser via MediaRecorder. Live recording timer with red pulsing indicator. Recorded tracks listed with play/download/delete controls.
-
-**Track List:** Right-panel track manager with per-track playback, mute/unmute, loop toggle, volume slider, download (.wav), expand for full metadata (prompt, instruments, genre, BPM, key, duration). Animated waveform bars during playback. Color-coded badges for track type (music/speech/recording).
-
-**AI Producer:** A togglable chat panel that acts as your music production assistant. Sends full studio context (genre, mood, BPM, key, instruments, duration, model, track count) to Claude for intelligent suggestions and creative guidance.
-
-### Image Studio
-A dedicated AI image generation and editing workspace with three tabs (Generate, Edit, Gallery) powered by **Replicate** with live model search across Replicate + HuggingFace. Generate tab supports 7 aspect ratios, 25 style presets, 9 lighting presets, 8 camera angles, negative prompts, seed control, and batch generation (1–4 images) with starter prompts for inspiration. Edit tab provides 7 AI operations (generative fill, remove object, replace background, generative expand, upscale 2×/4×, remove background, prompt-to-edit) with a canvas-based brush masking system, adjustable brush size, and accept/discard workflow with undo history. Cross-studio handoff: generated images can be sent directly to Video Studio for animation.
-
-### Pipelines
-A visual DAG (directed acyclic graph) builder for chaining tasks. Add nodes with prompts, draw dependency edges on a canvas, and run the entire pipeline — nodes execute in topological (dependency) order with per-node status tracking. Supports connecting any node to any other as a dependency.
-
 ### Connectors Marketplace
 190+ integrations across 28 categories: communication, storage, development, project management, CRM, data, AI (LLMs, image, video, audio, speech, code, design, search, 3D, vector), analytics, automation, browser, cloud, ecommerce, finance, marketing, music, productivity, security, and social media. OAuth flows for Google/Microsoft/GitHub/Notion/Dropbox; API key entry for everything else. 135+ connectors have a completely free tier.
 
-### Skills & Templates
-**Skills** are reusable instruction sets (like Custom GPTs). Browse 270+ pre-built skills across 10 categories (code, writing, research, data, automation, architecture, infrastructure, security, testing, custom) in the marketplace or create your own. **Templates** are one-click task presets — create a template, hit Run, and the agent executes it instantly.
+### Skills
+**Skills** are reusable instruction sets (like Custom GPTs). Browse 270+ pre-built skills across 10 categories (code, writing, research, data, automation, architecture, infrastructure, security, testing, custom) in the marketplace or create your own.
 
 ### Scheduling
 Schedule any task to run automatically. Supports one-time (with optional delete-after-run), recurring intervals, daily, weekly, and full cron expressions. Enable/disable individual schedules and see next-run timestamps.
@@ -209,12 +185,6 @@ AI-powered creative hub with SmartBar (auto-detect output type, dual-provider mo
 <details>
 <summary><strong>More screenshots</strong></summary>
 
-### Pipelines
-![Pipelines](docs/screenshots/pipelines.png)
-
-### Templates
-![Templates](docs/screenshots/templates.png)
-
 ### Scheduled Tasks
 ![Scheduled](docs/screenshots/scheduled.png)
 
@@ -224,36 +194,56 @@ AI-powered creative hub with SmartBar (auto-detect output type, dual-provider mo
 
 ## Pages
 
+### Sidebar Navigation
+
+These 16 pages are accessible from the sidebar:
+
+| Page | Icon | Description |
+|---|---|---|
+| **Home** | Monitor | Centered prompt input with 12 slash commands, voice input (Whisper + browser speech), file attachments, gallery suggestions, and category chips |
+| **Tasks** | CheckSquare | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
+| **Files** | FolderOpen | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
+| **Connectors** | Plug | Integration marketplace — connect 190+ services via OAuth or API key |
+| **Skills** | Zap | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
+| **Documents** | FileEdit | Create and manage text documents and spreadsheets with AI writing assistance, search, and relative timestamps |
+| **Video Studio** | Clapperboard | 17-mode AI creative studio — Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, AI Director with command chains, continuity library, annotations, and Film Player |
+| **Creative Suite** | Flame | AI creative hub with SmartBar (auto-detects output type, dual-provider model search), generate images (FLUX, DALL-E 3 + 25 styles), video (Minimax, Kling, Wan, Seedance), soundtracks (13 genres, 12 instruments), speech (12 voices, 2 providers), edit images (7 operations), and unified gallery |
+| **Channels** | Globe | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
+| **Memory** | Brain | View, search, add, and delete agent memory entries |
+| **Scheduled** | Clock | Cron-based task scheduler with interval, daily, weekly, and cron modes |
+| **Analytics** | BarChart3 | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
+| **Audit Trail** | Shield | Paginated log of every agent action with filters and metadata |
+| **Sessions** | MessageSquare | Group related tasks into conversation sessions with shared context |
+| **Computer Control** | MousePointer2 | Full desktop automation — give Claude a task and watch it control your screen with live screenshots, mouse, keyboard, bash, and file editing. Configurable max steps, app permissions, and Continue button |
+| **Settings** | Settings | Default model, token/cost budgets, themes, verbose mode, health check |
+
+### Sub-Pages
+
+These pages are reached from within their parent page:
+
+| Page | Parent | Description |
+|---|---|---|
+| **Task Detail** | Tasks | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
+| **Document Editor** | Documents | Rich text editor with AI writing assistance, auto-save, and title sync |
+| **Generate Image** | Creative Suite | Text-to-image with FLUX, DALL-E 3, 25 style presets, aspect ratios, and live model search |
+| **Generate Video** | Creative Suite | Text-to-video and image-to-video via Minimax, Kling, Wan 2.1, Seedance, and more |
+| **Generate Soundtrack** | Creative Suite | AI music generation via MusicGen — 13 genres, 12 moods, 12 instruments, optional video upload |
+| **Generate Speech** | Creative Suite | AI voiceovers — 12 voices across OpenAI TTS and ElevenLabs, speed/language control |
+| **Edit Image** | Creative Suite | 7 AI editing operations (generative fill, remove object, replace background, expand, upscale, remove BG, prompt-to-edit) with canvas brush masking |
+
+### Additional Pages
+
+These pages exist but are not shown in the sidebar:
+
 | Page | Description |
 |---|---|
-| **Home** | Centered prompt input with 12 slash commands, voice input (Whisper + browser speech), file attachments, gallery suggestions, and category chips |
-| **Tasks** | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
-| **Task Detail** | Live agent execution with Steps, Chat, Files, and Preview tabs — streaming output, token tracking, context budget |
-| **Files** | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
-| **Documents** | Create and manage text documents and spreadsheets with AI writing assistance, search, and relative timestamps |
-| **Connectors** | Integration marketplace — connect 190+ services via OAuth or API key |
-| **Skills** | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
-| **Gallery** | Browse community example tasks, filter by category, one-click run |
-| **Video Studio** | 17-mode AI creative studio — Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, AI Director with command chains, continuity library, annotations, and Film Player |
-| **Audio Studio** | AI music generation (MusicGen via Replicate with 6 sub-variants), 9-voice AI voiceover (OpenAI TTS), in-browser recording, per-track playback/mixing, and AI Producer chat assistant |
-| **Image Studio** | AI image generation (FLUX, SDXL, DALL-E 3 + live model search), 7 AI editing operations with canvas masking, and per-studio gallery with cross-studio handoff to Video Studio |
-| **Creative Suite (Nova)** | AI creative hub with SmartBar (auto-detects output type, dual-provider model search), generate images (FLUX, DALL-E 3 + 25 styles), video (Minimax, Kling, Wan, Seedance), soundtracks (13 genres, 12 instruments), speech (12 voices, 2 providers), edit images (7 operations), and unified gallery |
 | **Playground** | Power-user multimedia workbench — dual-provider model search (Replicate + HuggingFace), multi-column comparison, quick actions per result type, aspect ratio selector |
 | **Replicate** | Replicate-only model explorer with Smart Run (auto-selects best model), quick category buttons, inline or task-based execution |
 | **3D Studio** | Embedded Blockbench 3D model editor (persistent iframe, state preserved across navigation) |
 | **Coding Companion** | Embedded code-server (VS Code in browser) via persistent iframe |
 | **App Builder** | Embedded bolt-diy full-stack AI app builder (WebContainers) via persistent iframe |
+| **Dream Machine** | Direct Luma Dream Machine interface for quick video/image generation |
 | **WhatsApp** | WhatsApp Business API integration dashboard — connection status, send messages, webhook URL display |
-| **Channels** | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
-| **Pipelines** | Visual DAG pipeline builder — chain tasks with dependencies |
-| **Templates** | Reusable one-click task presets by category |
-| **Scheduled** | Cron-based task scheduler with interval, daily, weekly, and cron modes |
-| **Sessions** | Group related tasks into conversation sessions with shared context |
-| **Memory** | View, search, add, and delete agent memory entries |
-| **Analytics** | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
-| **Audit Trail** | Paginated log of every agent action with filters and metadata |
-| **Computer Control** | Full desktop automation — give Claude a task and watch it control your screen with live screenshots, mouse, keyboard, bash, and file editing. Configurable max steps, app permissions, and Continue button |
-| **Settings** | Default model, token/cost budgets, themes, verbose mode, health check |
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
 
 ---
@@ -615,11 +605,9 @@ src/
 │   │   ├── gallery/                # Gallery items
 │   │   ├── memory/                 # Memory CRUD
 │   │   ├── skills/                 # Skills CRUD
-│   │   ├── pipelines/              # Pipeline execution
 │   │   ├── scheduled-tasks/        # Scheduler engine
 │   │   ├── analytics/              # Usage analytics
 │   │   ├── sessions/               # Session grouping
-│   │   ├── templates/              # Template CRUD
 │   │   ├── audit/                  # Audit log
 │   │   ├── replicate/              # Replicate model runner
 │   │   ├── dreamscape/             # Luma Dream Machine
@@ -639,8 +627,6 @@ src/
 │   └── computer/                   # All UI pages (25+ routes)
 │       ├── firefly/                # Nova creative suite (generate image/video/soundtrack/speech, edit, gallery)
 │       ├── dreamscape/             # Dreamscape Video Studio (storyboards, AI Director, 17 modes)
-│       ├── audio-studio/           # AI Audio Studio (MusicGen, TTS, recording, AI Producer)
-│       ├── image-studio/           # AI Image Studio (generate, edit, gallery)
 │       ├── playground/             # Multimedia Playground (Replicate + HuggingFace model workbench)
 │       ├── replicate/              # Replicate model explorer (Smart Run)
 │       ├── 3d-studio/              # Embedded Blockbench 3D editor
@@ -699,12 +685,12 @@ src/
 | `memory` | Agent long-term memory (key-value + tags) |
 | `token_usage` | Per-call token and cost tracking |
 | `scheduled_tasks` | Cron/interval schedules |
-| `task_templates` | Reusable task presets |
 | `agent_learnings` | Patterns the agent learns over time |
 | `agent_analytics` | Every agent action logged (audit trail) |
 | `settings` | Global configuration |
 | `sessions` | Conversation session groupings |
-| `pipelines` | DAG pipeline definitions (nodes stored as JSON) |
+| `documents` | Saved text documents |
+| `skill_performance` | Skill usage and performance metrics |
 
 ### Tech Stack
 

@@ -16,6 +16,7 @@ import { MODEL_CONFIGS, type ModelId } from "@/lib/types";
 import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas";
 import { NAV_ITEMS } from "@/lib/constants";
 import { HandoffTrayTrigger } from "@/components/handoff-tray";
+import { CommandPalette } from "@/components/command-palette";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -25,6 +26,7 @@ export function Sidebar() {
   const [recentTasks, setRecentTasks] = useState<Array<{ id: string; title: string; status: string }>>([]);
   const [activePersona, setActivePersona] = useState("default");
   const [showPersonaDropdown, setShowPersonaDropdown] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Load persona on mount
   useEffect(() => {
@@ -35,6 +37,31 @@ export function Sidebar() {
     };
     window.addEventListener("persona-changed", handler);
     return () => window.removeEventListener("persona-changed", handler);
+  }, []);
+
+  // Global Cmd+K shortcut to open command palette
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setPaletteOpen(open => !open);
+      }
+    }
+    function handleOpenPalette(e: Event) {
+      const detail = (e as CustomEvent).detail as { mode?: string } | undefined;
+      setPaletteOpen(true);
+      // If quickrun mode is requested, pass it via a small delay so the palette
+      // can mount first — the CommandPalette will read this via its own effect.
+      if (detail?.mode === "quickrun") {
+        window.dispatchEvent(new CustomEvent("palette-set-mode", { detail: "quickrun" }));
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("open-command-palette", handleOpenPalette);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("open-command-palette", handleOpenPalette);
+    };
   }, []);
 
   // Fetch recent tasks
@@ -323,6 +350,9 @@ export function Sidebar() {
       <aside className="hidden md:flex w-[220px] min-h-screen bg-pplx-sidebar border-r border-pplx-border flex-col py-4">
         {sidebarContent}
       </aside>
+
+      {/* Command Palette */}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </>
   );
 }

@@ -171,6 +171,21 @@ function ComputerPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Redirect to onboarding if not yet completed (checked once on mount)
+  useEffect(() => {
+    const key = "ottomate_onboarding_checked";
+    if (sessionStorage.getItem(key)) return; // only check once per session
+    sessionStorage.setItem(key, "1");
+    fetch("/api/settings?section=health")
+      .then(r => r.ok ? r.json() : null)
+      .then((h: { onboarding_completed?: boolean } | null) => {
+        if (h && h.onboarding_completed === false) {
+          router.replace("/computer/onboarding");
+        }
+      })
+      .catch(() => { /* ignore — don't block if settings unavailable */ });
+  }, [router]);
+
   // Slash command filtering
   const filteredSlashCommands = useMemo(() => {
     if (!prompt.startsWith("/")) return [];

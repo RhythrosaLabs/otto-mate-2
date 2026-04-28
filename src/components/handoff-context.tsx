@@ -32,6 +32,24 @@ export const STUDIO_MAP = {
     icon: "🎬",
     accepts: ["image", "video", "audio"] as HandoffMimeCategory[],
   },
+  "dream-machine": {
+    label: "Dream Machine",
+    route: "/computer/dream-machine",
+    icon: "✨",
+    accepts: ["image", "video"] as HandoffMimeCategory[],
+  },
+  "audio-studio": {
+    label: "Audio Studio",
+    route: "/computer/audio-studio",
+    icon: "🎵",
+    accepts: ["audio"] as HandoffMimeCategory[],
+  },
+  firefly: {
+    label: "Creative Suite",
+    route: "/computer/firefly",
+    icon: "🔥",
+    accepts: ["image"] as HandoffMimeCategory[],
+  },
   "3d-studio": {
     label: "3D Studio",
     route: "/computer/3d-studio",

@@ -20,6 +20,11 @@ import {
   Flame,
   FileEdit,
   MousePointer2,
+  Music,
+  Sparkles,
+  Package,
+  Terminal,
+  Box,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -39,8 +44,13 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/connectors", label: "Connectors", icon: Plug },
   { href: "/computer/skills", label: "Skills", icon: Zap },
   { href: "/computer/documents", label: "Documents", icon: FileEdit },
+  { href: "/computer/app-builder", label: "App Builder", icon: Package },
+  { href: "/computer/coding-companion", label: "Coding Companion", icon: Terminal },
   { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
+  { href: "/computer/dream-machine", label: "Dream Machine", icon: Sparkles },
+  { href: "/computer/audio-studio", label: "Audio Studio", icon: Music },
   { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
+  { href: "/computer/3d-studio", label: "3D Studio", icon: Box },
   { href: "/computer/channels", label: "Channels", icon: Globe },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/scheduled", label: "Scheduled", icon: Clock },

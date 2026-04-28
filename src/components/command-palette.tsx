@@ -102,6 +102,19 @@ export function CommandPalette({ open, onClose }: Props) {
     }
   }, [open]);
 
+  // Listen for mode override from GlobalKeyboardShortcuts (Cmd+J → quickrun)
+  useEffect(() => {
+    function handleSetMode(e: Event) {
+      const m = (e as CustomEvent).detail as string;
+      if (m === "quickrun") {
+        setMode("quickrun");
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    }
+    window.addEventListener("palette-set-mode", handleSetMode);
+    return () => window.removeEventListener("palette-set-mode", handleSetMode);
+  }, []);
+
   // Clamp selection
   useEffect(() => {
     setSelectedIndex(i => Math.min(i, Math.max(filtered.length - 1, 0)));

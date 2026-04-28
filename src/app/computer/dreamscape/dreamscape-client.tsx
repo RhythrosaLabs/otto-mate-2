@@ -655,7 +655,7 @@ export function DreamscapeClient({ defaultAgentOpen = false }: DreamscapeClientP
         type: "video",
         label: "Video Producer",
         status: "running",
-        href: "/computer/dreamscape",
+        href: "/computer/dreamscape/studio",
         startedAt: Date.now(),
         detail: `${dreamingShots.length} shot${dreamingShots.length > 1 ? "s" : ""} generating`,
       });
