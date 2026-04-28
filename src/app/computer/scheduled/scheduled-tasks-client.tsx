@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { ScheduledTask } from "@/lib/types";
 import { usePageVisible } from "@/components/persistent-layout";
+import { useToast } from "@/components/toast-provider";
 
 const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   once: "One-time",
@@ -25,6 +26,7 @@ export default function ScheduledTasksClient() {
     model: "auto",
     delete_after_run: false,
   });
+  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -65,10 +67,13 @@ export default function ScheduledTasksClient() {
       if (res.ok) {
         setShowForm(false);
         setFormData({ name: "", prompt: "", schedule_type: "once", schedule_expr: "", next_run_at: "", model: "auto", delete_after_run: false });
+        toastSuccess("Schedule created");
         fetchTasks();
+      } else {
+        toastError(`Failed to create schedule (${res.status})`);
       }
     } catch {
-      /* ignore */
+      toastError("Failed to create schedule");
     }
   };
 
@@ -79,9 +84,9 @@ export default function ScheduledTasksClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "toggle", id, enabled }),
       });
-      if (!res.ok) console.error("Toggle failed:", res.status);
-    } catch (err) {
-      console.error("Toggle error:", err);
+      if (!res.ok) toastError("Failed to toggle schedule");
+    } catch {
+      toastError("Failed to toggle schedule");
     }
     fetchTasks();
   };
@@ -89,9 +94,10 @@ export default function ScheduledTasksClient() {
   const handleDelete = async (id: string) => {
     try {
       const res = await fetch(`/api/scheduled-tasks?id=${id}`, { method: "DELETE" });
-      if (!res.ok) console.error("Delete failed:", res.status);
-    } catch (err) {
-      console.error("Delete error:", err);
+      if (!res.ok) toastError("Failed to delete schedule");
+      else toastSuccess("Schedule deleted");
+    } catch {
+      toastError("Failed to delete schedule");
     }
     fetchTasks();
   };
@@ -106,15 +112,16 @@ export default function ScheduledTasksClient() {
       if (res.ok) {
         const data = await res.json();
         if (data.ran > 0) {
-          alert(`Ran ${data.ran} scheduled task(s)!`);
+          toastSuccess(`Ran ${data.ran} scheduled task${data.ran > 1 ? "s" : ""}`);
         } else {
-          alert("No tasks are due right now.");
+          toastInfo("No tasks are due right now");
         }
         fetchTasks();
+      } else {
+        toastError("Failed to run due tasks");
       }
-    } catch (err) {
-      console.error("Failed to run due tasks:", err);
-      alert("Failed to run due tasks. Check the console for details.");
+    } catch {
+      toastError("Failed to run due tasks");
     }
   };
 

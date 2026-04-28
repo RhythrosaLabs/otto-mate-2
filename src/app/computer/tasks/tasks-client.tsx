@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, ArrowUpCircle, ArrowDownCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle } from "lucide-react";
+import { Plus, Search, Loader2, CheckCircle2, Clock, AlertCircle, PauseCircle, TimerIcon, Trash2, Webhook, ArrowUpCircle, ArrowDownCircle, Link2, Flame, Calendar, List, ChevronLeft, ChevronRight, Copy, RotateCcw, CheckSquare, Square, XCircle, CalendarClock } from "lucide-react";
 import { cn, formatRelativeTime, getStatusBgColor, truncate } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
-import type { Task } from "@/lib/types";
+import { useToast } from "@/components/toast-provider";
+import type { Task, ScheduledTask } from "@/lib/types";
 
 interface Props {
   initialTasks: Task[];
@@ -14,6 +15,7 @@ interface Props {
 
 export function TasksClientPage({ initialTasks }: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"recent" | "priority">("recent");
@@ -23,8 +25,48 @@ export function TasksClientPage({ initialTasks }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const router = useRouter();
+  const { error: toastError } = useToast();
 
-  // Refresh tasks when page becomes visible again
+  // Live SSE sync — updates tasks in real-time from any source (chat, scheduled, webhooks)
+  useEffect(() => {
+    const es = new EventSource("/api/tasks/events");
+    es.addEventListener("snapshot", (e) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as Task[];
+        setTasks(data);
+      } catch { /* ignore malformed */ }
+    });
+    es.addEventListener("update", (e) => {
+      try {
+        const updated = JSON.parse((e as MessageEvent).data) as Task;
+        setTasks((prev) => {
+          const idx = prev.findIndex((t) => t.id === updated.id);
+          if (idx === -1) return [updated, ...prev];
+          const next = [...prev];
+          next[idx] = updated;
+          return next;
+        });
+      } catch { /* ignore */ }
+    });
+    es.addEventListener("delete", (e) => {
+      try {
+        const { id } = JSON.parse((e as MessageEvent).data) as { id: string };
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+      } catch { /* ignore */ }
+    });
+    return () => es.close();
+  }, []);
+
+  // Fetch scheduled tasks when entering calendar view
+  useEffect(() => {
+    if (viewMode !== "calendar") return;
+    fetch("/api/scheduled-tasks")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: ScheduledTask[]) => setScheduledTasks(data))
+      .catch(() => { /* best effort — calendar still shows regular tasks */ });
+  }, [viewMode]);
+
+  // Refresh tasks when page becomes visible again (fallback if SSE drops)
   const isVisible = usePageVisible();
   const wasVisibleRef = useRef(true);
   useEffect(() => {
@@ -32,10 +74,10 @@ export function TasksClientPage({ initialTasks }: Props) {
       fetch("/api/tasks?limit=200")
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then((data: Task[]) => setTasks(data))
-        .catch(console.error);
+        .catch(() => toastError("Failed to refresh tasks"));
     }
     wasVisibleRef.current = isVisible;
-  }, [isVisible]);
+  }, [isVisible, toastError]);
 
   const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 } as const;
 
@@ -273,7 +315,7 @@ export function TasksClientPage({ initialTasks }: Props) {
       {/* Task list / Calendar view */}
       <div className="flex-1 overflow-y-auto px-8 py-4">
         {viewMode === "calendar" ? (
-          <CalendarView tasks={filtered} month={calendarMonth} onMonthChange={setCalendarMonth} />
+          <CalendarView tasks={filtered} scheduledTasks={scheduledTasks} month={calendarMonth} onMonthChange={setCalendarMonth} />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-pplx-muted">
             <Clock size={36} className="mb-3 opacity-40" />
@@ -450,14 +492,16 @@ function TaskCard({
   );
 }
 
-// ─── Calendar View (Otto-inspired task queue + calendar) ──────────────────────
+// ─── Calendar View (tasks + scheduled tasks, live via SSE) ───────────────────
 
 function CalendarView({
   tasks,
+  scheduledTasks,
   month,
   onMonthChange,
 }: {
   tasks: Task[];
+  scheduledTasks: ScheduledTask[];
   month: Date;
   onMonthChange: (d: Date) => void;
 }) {
@@ -468,12 +512,20 @@ function CalendarView({
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-  // Group tasks by date
+  // Group tasks by date (created_at)
   const tasksByDate: Record<string, Task[]> = {};
   tasks.forEach(t => {
     const d = t.created_at.slice(0, 10);
     if (!tasksByDate[d]) tasksByDate[d] = [];
     tasksByDate[d].push(t);
+  });
+
+  // Group scheduled tasks by next_run_at date
+  const scheduledByDate: Record<string, ScheduledTask[]> = {};
+  scheduledTasks.forEach(st => {
+    const d = st.next_run_at.slice(0, 10);
+    if (!scheduledByDate[d]) scheduledByDate[d] = [];
+    scheduledByDate[d].push(st);
   });
 
   const days: Array<{ day: number; dateStr: string } | null> = [];
@@ -495,9 +547,22 @@ function CalendarView({
         >
           <ChevronLeft size={16} />
         </button>
-        <h3 className="text-sm font-semibold text-pplx-text">
-          {monthNames[mon]} {year}
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-pplx-text">
+            {monthNames[mon]} {year}
+          </h3>
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-[10px] text-pplx-muted">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm bg-pplx-accent/30 border border-pplx-accent/40 inline-block" />
+              Tasks
+            </span>
+            <span className="flex items-center gap-1">
+              <CalendarClock size={10} className="text-cyan-400" />
+              Scheduled
+            </span>
+          </div>
+        </div>
         <button
           onClick={() => onMonthChange(new Date(year, mon + 1, 1))}
           className="p-1.5 rounded-lg text-pplx-muted hover:text-pplx-text hover:bg-white/5 transition-colors"
@@ -519,16 +584,18 @@ function CalendarView({
       <div className="grid grid-cols-7 gap-px bg-pplx-border/30 rounded-xl overflow-hidden border border-pplx-border">
         {days.map((cell, i) => {
           if (!cell) {
-            return <div key={`empty-${i}`} className="bg-pplx-bg min-h-[80px]" />;
+            return <div key={`empty-${i}`} className="bg-pplx-bg min-h-[90px]" />;
           }
           const dayTasks = tasksByDate[cell.dateStr] || [];
+          const dayScheduled = scheduledByDate[cell.dateStr] || [];
           const isToday = cell.dateStr === todayStr;
+          const totalItems = dayTasks.length + dayScheduled.length;
 
           return (
             <div
               key={cell.dateStr}
               className={cn(
-                "bg-pplx-card min-h-[80px] p-1.5 transition-colors hover:bg-pplx-card/80",
+                "bg-pplx-card min-h-[90px] p-1.5 transition-colors hover:bg-pplx-card/80",
                 isToday && "ring-1 ring-inset ring-pplx-accent/40"
               )}
             >
@@ -539,36 +606,64 @@ function CalendarView({
                 {cell.day}
               </span>
               <div className="mt-0.5 space-y-0.5">
-                {dayTasks.slice(0, 3).map(t => (
+                {/* Regular tasks */}
+                {dayTasks.slice(0, totalItems <= 4 ? 3 : 2).map(t => (
                   <Link
                     key={t.id}
                     href={`/computer/tasks/${t.id}`}
                     className={cn(
                       "block text-[9px] font-medium truncate px-1 py-0.5 rounded transition-colors",
-                      t.status === "completed" ? "bg-green-500/10 text-green-400" :
-                      t.status === "running" ? "bg-pplx-accent/10 text-pplx-accent" :
-                      t.status === "failed" ? "bg-red-500/10 text-red-400" :
-                      "bg-white/5 text-pplx-muted"
+                      t.status === "completed" ? "bg-green-500/10 text-green-400 hover:bg-green-500/20" :
+                      t.status === "running"   ? "bg-pplx-accent/10 text-pplx-accent hover:bg-pplx-accent/20" :
+                      t.status === "failed"    ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" :
+                      "bg-white/5 text-pplx-muted hover:bg-white/10"
                     )}
                     title={t.title}
                   >
                     {t.title}
                   </Link>
                 ))}
-                {dayTasks.length > 3 && (
-                  <span className="text-[9px] text-pplx-muted px-1">
-                    +{dayTasks.length - 3} more
-                  </span>
-                )}
+                {/* Scheduled tasks */}
+                {dayScheduled.slice(0, totalItems <= 4 ? 2 : 1).map(st => (
+                  <Link
+                    key={st.id}
+                    href="/computer/scheduled"
+                    className="flex items-center gap-0.5 text-[9px] font-medium truncate px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                    title={`Scheduled: ${st.name}`}
+                  >
+                    <CalendarClock size={7} className="shrink-0" />
+                    {st.name}
+                  </Link>
+                ))}
+                {/* Overflow count */}
+                {(() => {
+                  const shown = Math.min(dayTasks.length, totalItems <= 4 ? 3 : 2) +
+                                Math.min(dayScheduled.length, totalItems <= 4 ? 2 : 1);
+                  const remaining = totalItems - shown;
+                  return remaining > 0 ? (
+                    <span className="text-[9px] text-pplx-muted px-1">
+                      +{remaining} more
+                    </span>
+                  ) : null;
+                })()}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Today shortcut */}
+      {(month.getFullYear() !== today.getFullYear() || month.getMonth() !== today.getMonth()) && (
+        <button
+          onClick={() => onMonthChange(new Date(today.getFullYear(), today.getMonth(), 1))}
+          className="mt-3 text-xs text-pplx-accent hover:underline"
+        >
+          ← Back to today
+        </button>
+      )}
     </div>
   );
 }
-
 function PriorityBadge({ priority }: { priority: string }) {
   if (priority === "medium") return null;
   const config = {

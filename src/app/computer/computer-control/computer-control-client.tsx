@@ -312,11 +312,14 @@ export function ComputerControlClient() {
         }
       };
 
-      // Stream reading loop
-      (async () => {
+      // Stream reading loop — auto-reconnects up to 3 times on unexpected drop
+      let retries = 0;
+      const MAX_RETRIES = 3;
+
+      const readStream = async (r: ReadableStreamDefaultReader<Uint8Array>): Promise<void> => {
         try {
           while (true) {
-            const { done, value } = await reader.read();
+            const { done, value } = await r.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
@@ -325,14 +328,55 @@ export function ComputerControlClient() {
               processLine(line.trim());
             }
           }
+          // Stream ended cleanly
         } catch {
-          /* connection ended */
+          // Network error / stream aborted
+          setSessionState((s) => {
+            if (s !== "running" && s !== "waiting_permission") return s;
+            // Try to reconnect
+            if (retries < MAX_RETRIES) {
+              retries++;
+              const delay = retries * 2000;
+              addLog({ kind: "status", status: "reconnecting", message: `Connection dropped — reconnecting (${retries}/${MAX_RETRIES})…` });
+              setStatusMsg(`Reconnecting (${retries}/${MAX_RETRIES})…`);
+              setTimeout(async () => {
+                try {
+                  const retry = await fetch("/api/computer-control/stream", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId }),
+                  });
+                  if (retry.ok && retry.body) {
+                    const newReader = retry.body.getReader();
+                    setSessionState("running");
+                    setStatusMsg("Reconnected");
+                    await readStream(newReader);
+                  } else {
+                    throw new Error(`HTTP ${retry.status}`);
+                  }
+                } catch (reconnErr) {
+                  const msg = reconnErr instanceof Error ? reconnErr.message : "Reconnect failed";
+                  setSessionState("error");
+                  setStatusMsg(msg);
+                  addLog({ kind: "error", content: msg });
+                }
+              }, delay);
+              return "waiting_permission"; // keep as-is during reconnect
+            }
+            return "error";
+          });
+          if (retries >= MAX_RETRIES) {
+            setStatusMsg("Connection lost — max retries reached");
+            addLog({ kind: "error", content: "Stream connection lost after max retries" });
+          }
         } finally {
           setSessionState((s) =>
-            s === "running" || s === "waiting_permission" ? "done" : s
+            s === "running" || s === "waiting_permission" ? (retries >= MAX_RETRIES ? "error" : s) : s
           );
         }
-      })();
+      };
+
+      await readStream(reader);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setSessionState("error");

@@ -8,26 +8,29 @@ import { OpenDAWPersistentIframe } from "@/components/opendaw-persistent-iframe"
 import { HandoffProvider } from "@/components/handoff-context";
 import { HandoffTray } from "@/components/handoff-tray";
 import { GlobalKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { ToastProvider } from "@/components/toast-provider";
 
 export default function ComputerLayout({ children }: { children: React.ReactNode }) {
   return (
-    <HandoffProvider>
-      <GlobalKeyboardShortcuts />
-      <div className="flex min-h-screen bg-pplx-bg">
-        <Sidebar />
-        <main className="flex-1 overflow-hidden relative">
-          <div className="md:hidden h-14" />
-          <PersistentLayout>
-            {children}
-          </PersistentLayout>
-          <BoltPersistentIframe />
-          <CodeServerPersistentIframe />
-          <BlockbenchPersistentIframe />
-          <OpenDAWPersistentIframe />
-        </main>
-        <BackgroundStatus />
-        <HandoffTray />
-      </div>
-    </HandoffProvider>
+    <ToastProvider>
+      <HandoffProvider>
+        <GlobalKeyboardShortcuts />
+        <div className="flex min-h-screen bg-pplx-bg">
+          <Sidebar />
+          <main className="flex-1 overflow-hidden relative">
+            <div className="md:hidden h-14" />
+            <PersistentLayout>
+              {children}
+            </PersistentLayout>
+            <BoltPersistentIframe />
+            <CodeServerPersistentIframe />
+            <BlockbenchPersistentIframe />
+            <OpenDAWPersistentIframe />
+          </main>
+          <BackgroundStatus />
+          <HandoffTray />
+        </div>
+      </HandoffProvider>
+    </ToastProvider>
   );
 }

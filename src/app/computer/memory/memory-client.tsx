@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Trash2, Download, CheckSquare, Square, XCircle, Pencil, Check, X, Tag, Brain, Sparkles } from "lucide-react";
+import { Trash2, Download, CheckSquare, Square, XCircle, Pencil, Check, X, Tag, Brain, AlertCircle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEntry } from "@/lib/types";
 import { usePageVisible } from "@/components/persistent-layout";
+import { useToast } from "@/components/toast-provider";
 
 export default function MemoryClient() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -25,9 +27,11 @@ export default function MemoryClient() {
   const [memoryStats, setMemoryStats] = useState<{
     total_memories: number; compressed_memories: number;
   } | null>(null);
+  const { error: toastError, success: toastSuccess } = useToast();
 
   const fetchMemory = useCallback(async (q = "") => {
     setLoading(true);
+    setFetchError(null);
     try {
       const url = q ? `/api/memory?q=${encodeURIComponent(q)}` : "/api/memory";
       const res = await fetch(url);
@@ -35,7 +39,8 @@ export default function MemoryClient() {
       const data = await res.json() as { entries: MemoryEntry[] };
       setEntries(data.entries || []);
     } catch (err) {
-      console.error("Failed to fetch memory:", err);
+      const msg = err instanceof Error ? err.message : "Failed to load memory";
+      setFetchError(msg);
     } finally {
       setLoading(false);
     }
@@ -82,7 +87,10 @@ export default function MemoryClient() {
       setNewValue("");
       setNewTags("");
       setShowAdd(false);
+      toastSuccess("Memory saved");
       await fetchMemory(query);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Failed to save memory");
     } finally {
       setAdding(false);
     }
@@ -94,8 +102,8 @@ export default function MemoryClient() {
       if (res.ok) {
         setEntries(prev => prev.filter(e => e.id !== id));
       }
-    } catch (err) {
-      console.error("Failed to delete memory:", err);
+    } catch {
+      toastError("Failed to delete memory");
     }
   };
 
@@ -214,13 +222,35 @@ export default function MemoryClient() {
           </div>
         </div>
 
-        {/* Self-Improvement Memory Stats */}
-        {memoryStats && memoryStats.compressed_memories > 0 && (
+        {/* Self-Improvement Memory Stats — always shown when available */}
+        {memoryStats && (
           <div className="mb-6 rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/5 to-blue-500/5 p-3 flex items-center gap-3">
             <Brain size={16} className="text-violet-400 shrink-0" />
-            <p className="text-xs text-pplx-muted">
-              <span className="text-violet-400 font-medium">{memoryStats.compressed_memories}</span> memories compressed · Self-improvement engine is actively managing memory
-            </p>
+            <div className="flex items-center gap-4 flex-wrap text-xs text-pplx-muted">
+              <span>
+                <span className="text-violet-400 font-semibold">{memoryStats.total_memories}</span> total memories
+              </span>
+              {memoryStats.compressed_memories > 0 && (
+                <span>
+                  <span className="text-blue-400 font-semibold">{memoryStats.compressed_memories}</span> compressed
+                </span>
+              )}
+              <span className="text-pplx-muted/60">Self-improvement engine active</span>
+            </div>
+          </div>
+        )}
+
+        {/* Fetch error banner */}
+        {fetchError && (
+          <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 p-3 flex items-center gap-3">
+            <AlertCircle size={15} className="text-red-400 shrink-0" />
+            <p className="text-sm text-red-400 flex-1">{fetchError}</p>
+            <button
+              onClick={() => void fetchMemory(query)}
+              className="text-xs text-red-400 hover:underline"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -372,8 +402,11 @@ export default function MemoryClient() {
 
         {/* Entries */}
         {loading ? (
-          <div className="text-center py-12 text-pplx-muted text-sm">Loading memory…</div>
-        ) : displayedEntries.length === 0 ? (
+          <div className="flex items-center justify-center py-12 gap-2 text-pplx-muted text-sm">
+            <Brain size={16} className="animate-pulse text-violet-400" />
+            Loading memory…
+          </div>
+        ) : fetchError && entries.length === 0 ? null /* error banner shown above */ : displayedEntries.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">🧠</p>
             <p className="text-pplx-muted text-sm">
