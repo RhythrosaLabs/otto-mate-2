@@ -1,36 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-/**
- * Optional auth middleware for Ottomate.
- *
- * When `OTTOMATE_AUTH_TOKEN` is set in .env.local, every /api/* request
- * (except public health-check and webhook endpoints) must include the token
- * as a Bearer header or `x-ottomate-token` header.
- *
- * If `OTTOMATE_AUTH_TOKEN` is not set, all requests pass through (local dev default).
- */
+const COOKIE_NAME = "ottomate_session";
 
-// Routes that should never require auth
+// These paths are publicly accessible — no auth required
 const PUBLIC_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/pricing",
+  "/api/auth/login",
+  "/api/auth/register",
   "/api/health",
-  "/api/hooks",              // has its own webhook-secret auth
-  "/api/auth/callback",      // OAuth callbacks from external providers
-  "/api/channels/telegram",  // incoming webhook from Telegram
-  "/api/channels/slack",     // incoming webhook from Slack
-  "/api/channels/discord",   // incoming webhook from Discord
-  "/api/whatsapp",           // incoming webhook from Meta WhatsApp
+  "/api/hooks",
+  "/api/auth/callback",
+  "/api/channels/telegram",
+  "/api/channels/slack",
+  "/api/channels/discord",
+  "/api/whatsapp",
+  "/api/stripe/webhook",
 ];
 
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-export function middleware(request: NextRequest) {
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
+  if (!secret) throw new Error("NEXTAUTH_SECRET is not set");
+  return new TextEncoder().encode(secret);
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ── Cross-Origin Isolation for App Builder ────────────────────────────
-  // bolt.diy WebContainers require SharedArrayBuffer, which needs both
-  // COEP and COOP headers on the parent frame.
+  // ── COEP/COOP for App Builder ─────────────────────────────────────────
   if (pathname === "/computer/app-builder") {
     const response = NextResponse.next();
     response.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
@@ -38,40 +41,33 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Only protect API routes
-  if (!pathname.startsWith("/api/")) {
+  // ── Static assets & public paths always pass ──────────────────────────
+  if (isPublic(pathname)) {
     return NextResponse.next();
   }
 
-  // Allow public paths
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
+  // ── Verify session cookie ─────────────────────────────────────────────
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+
+  if (token) {
+    try {
+      await jwtVerify(token, getJwtSecret());
+      return NextResponse.next();
+    } catch {
+      // Token invalid or expired — fall through to redirect
+    }
   }
 
-  const token = process.env.OTTOMATE_AUTH_TOKEN;
-
-  // If no token configured, allow all (local dev mode)
-  if (!token) {
-    return NextResponse.next();
+  // ── Unauthenticated — redirect to login or 401 for API ────────────────
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Check for token in Authorization header or custom header
-  const authHeader = request.headers.get("authorization");
-  const customHeader = request.headers.get("x-ottomate-token");
-
-  const providedToken =
-    authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : customHeader;
-
-  if (providedToken !== token) {
-    return NextResponse.json(
-      { error: "Unauthorized. Provide a valid token via Authorization: Bearer <token> or x-ottomate-token header." },
-      { status: 401 },
-    );
-  }
-
-  return NextResponse.next();
+  const loginUrl = new URL("/auth/login", request.url);
+  loginUrl.searchParams.set("from", pathname);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/computer/app-builder"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

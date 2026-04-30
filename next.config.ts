@@ -25,6 +25,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      { source: "/computer/channels", destination: "/computer/dispatch", permanent: true },
+      { source: "/computer/whatsapp", destination: "/computer/dispatch", permanent: true },
+    ];
+  },
   // Enable cross-origin isolation on the Computer UI so bolt.diy WebContainers
   // can use SharedArrayBuffer. Scoped to /computer/* only (not API routes or
   // static assets). "credentialless" allows the cross-origin iframe to load.

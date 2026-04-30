@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   let closed = false;
 
-  function send(data: object) {
+  function send(eventName: string, data: object) {
     if (closed) return;
     try {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      controller.enqueue(encoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`));
     } catch {
       closed = true;
     }
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
       // Send initial snapshot (lightweight — no N+1 hydration)
       const active = listTasksSummary(100);
-      send({ type: "snapshot", tasks: active });
+      send("snapshot", { tasks: active });
 
       // Poll DB for changes every 1.5s and push diffs
       let lastStates = new Map<string, string>(
@@ -55,17 +55,17 @@ export async function GET(req: NextRequest) {
             const prev = lastStates.get(t.id);
             if (prev === undefined) {
               // New task
-              send({ type: "new", task: t });
+              send("new", { task: t });
             } else if (prev !== key) {
               // Updated task
-              send({ type: "update", task: t });
+              send("update", { task: t });
             }
           }
 
           // Detect deleted tasks
           for (const [id] of lastStates) {
             if (!currentIds.has(id)) {
-              send({ type: "deleted", id });
+              send("deleted", { id });
             }
           }
 
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
           clearInterval(heartbeatId);
           return;
         }
-        send({ type: "heartbeat", ts: Date.now() });
+        send("heartbeat", { ts: Date.now() });
       }, 15000);
     },
     cancel() {

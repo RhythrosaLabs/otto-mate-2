@@ -14,11 +14,13 @@ import { runAgent } from "@/lib/agent";
 import { safeErrorMessage } from "@/lib/constants";
 import { CreateScheduledTaskSchema, parseBody } from "@/lib/schemas";
 import type { ScheduledTask } from "@/lib/types";
+import { getSessionFromRequest } from "@/lib/auth";
 
 // GET /api/scheduled-tasks — list all scheduled tasks
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
   try {
-    const tasks = listScheduledTasks();
+    const tasks = listScheduledTasks(session?.userId);
     return NextResponse.json(tasks);
   } catch (err) {
     return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
@@ -27,6 +29,7 @@ export async function GET() {
 
 // POST /api/scheduled-tasks — create a new scheduled task
 export async function POST(request: NextRequest) {
+  const session = await getSessionFromRequest(request);
   const { data, error: validationError } = await parseBody(request, CreateScheduledTaskSchema);
   if (validationError) return validationError;
 
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
       enabled: true,
       model: data.model,
       delete_after_run: data.delete_after_run,
+      user_id: session?.userId,
     });
 
     return NextResponse.json(scheduledTask, { status: 201 });

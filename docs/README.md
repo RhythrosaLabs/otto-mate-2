@@ -5,7 +5,7 @@
     Describe a goal — Ottomate plans, codes, browses, generates media, builds apps, and orchestrates 190+ services autonomously.
   </p>
   <p align="center">
-    Built with Next.js 15 · Claude · GPT-4.1 · Gemini 2.0 · Replicate · Luma Dream Machine · FLUX · HuggingFace
+    Built with Next.js 15 · Claude · GPT · Gemini · Replicate · Luma · FLUX · HuggingFace
   </p>
   <p align="center">
     Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>

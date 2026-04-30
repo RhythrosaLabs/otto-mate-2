@@ -3,13 +3,16 @@ import { listMemory, memoryStore, memoryRecall, deleteMemory, updateMemory } fro
 import { safeErrorMessage } from "@/lib/constants";
 import { StoreMemorySchema, parseBody } from "@/lib/schemas";
 import { v4 as uuidv4 } from "uuid";
+import { getSessionFromRequest } from "@/lib/auth";
 
 // GET /api/memory?q=search+query
 export async function GET(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  const userId = session?.userId;
   const q = req.nextUrl.searchParams.get("q") || "";
   const limit = Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "50", 10) || 50);
   try {
-    const entries = q ? memoryRecall(q, limit) : listMemory(limit);
+    const entries = q ? memoryRecall(q, limit, userId) : listMemory(limit, userId);
     return Response.json({ entries });
   } catch (err) {
     return Response.json({ error: safeErrorMessage(err) }, { status: 500 });
@@ -18,6 +21,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/memory — store a new entry
 export async function POST(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
   const { data: body, error: validationError } = await parseBody(req, StoreMemorySchema);
   if (validationError) return validationError;
 
@@ -29,6 +33,7 @@ export async function POST(req: NextRequest) {
       value: body.value,
       source_task_id: body.source_task_id,
       tags: body.tags,
+      user_id: session?.userId,
       created_at: now,
       updated_at: now,
     });

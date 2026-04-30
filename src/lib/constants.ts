@@ -13,7 +13,6 @@ import {
   Clock,
   BarChart3,
   Settings,
-  Globe,
   Shield,
   MessageSquare,
   Clapperboard,
@@ -21,12 +20,12 @@ import {
   FileEdit,
   MousePointer2,
   Music,
-  Sparkles,
   Package,
   Terminal,
   Box,
   Layers,
-  MessageCircle,
+  Send,
+  KeyRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -37,7 +36,21 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   exact?: boolean;
+  /** Optional items are hidden by default; user enables them in Settings › Features */
+  optional?: boolean;
 }
+
+/**
+ * Nav items that are hidden by default and can be enabled in Settings › Features.
+ * Key is the href, value is a short description shown in the settings UI.
+ */
+export const OPTIONAL_NAV_ITEMS: Record<string, { label: string; description: string }> = {
+  "/computer/app-builder":     { label: "App Builder",           description: "Visual app scaffold & bolt.diy integration (requires bolt-diy service)" },
+  "/computer/audio-studio":    { label: "Audio Studio",          description: "Multi-track audio editor powered by openDAW (requires openDAW service)" },
+  "/computer/playground":      { label: "Multimedia Playground", description: "Combined image, video & audio generation sandbox" },
+  "/computer/coding-companion":{ label: "Coding Companion",      description: "In-browser VS Code environment via code-server proxy" },
+  "/computer/3d-studio":       { label: "3D Studio",             description: "3D model viewer & editor powered by Blockbench (requires Blockbench service)" },
+};
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/computer", label: "Ottomate", icon: Monitor, exact: true },
@@ -46,16 +59,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/connectors", label: "Connectors", icon: Plug },
   { href: "/computer/skills", label: "Skills", icon: Zap },
   { href: "/computer/documents", label: "Documents", icon: FileEdit },
-  { href: "/computer/app-builder", label: "App Builder", icon: Package },
-  { href: "/computer/coding-companion", label: "Coding Companion", icon: Terminal },
+  { href: "/computer/app-builder", label: "App Builder", icon: Package, optional: true },
+  { href: "/computer/coding-companion", label: "Coding Companion", icon: Terminal, optional: true },
   { href: "/computer/dreamscape/studio", label: "Video Studio", icon: Clapperboard },
-  { href: "/computer/dream-machine", label: "Dream Machine", icon: Sparkles },
-  { href: "/computer/playground", label: "Multimedia Playground", icon: Layers },
-  { href: "/computer/audio-studio", label: "Audio Studio", icon: Music },
+  { href: "/computer/playground", label: "Multimedia Playground", icon: Layers, optional: true },
+  { href: "/computer/audio-studio", label: "Audio Studio", icon: Music, optional: true },
   { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
-  { href: "/computer/3d-studio", label: "3D Studio", icon: Box },
-  { href: "/computer/channels", label: "Channels", icon: Globe },
-  { href: "/computer/whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { href: "/computer/3d-studio", label: "3D Studio", icon: Box, optional: true },
+  { href: "/computer/dispatch", label: "Dispatch", icon: Send },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/scheduled", label: "Scheduled", icon: Clock },
   { href: "/computer/analytics", label: "Analytics", icon: BarChart3 },
@@ -63,6 +74,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/sessions", label: "Sessions", icon: MessageSquare },
   { href: "/computer/computer-control", label: "Computer Control", icon: MousePointer2 },
   { href: "/computer/settings", label: "Settings", icon: Settings },
+  { href: "/computer/settings/api-keys", label: "API Keys", icon: KeyRound },
 ];
 
 // ─── API Response Helpers ─────────────────────────────────────────────────────

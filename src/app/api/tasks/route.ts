@@ -5,6 +5,7 @@ import type { ModelId, TaskPriority, TaskSource } from "@/lib/types";
 import { callLLMLightweight } from "@/lib/model-fallback";
 import { CreateTaskSchema, parseBody } from "@/lib/schemas";
 import { safeErrorMessage } from "@/lib/constants";
+import { getSessionFromRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,22 +30,26 @@ async function generateTitle(prompt: string): Promise<string> {
 
 // GET /api/tasks — list all tasks (supports ?source= filter for session isolation)
 export async function GET(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  const userId = session?.userId;
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") ?? undefined;
   const source = searchParams.get("source") ?? undefined;
   const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : undefined;
   
   if (source) {
-    const tasks = listTasksBySource(source, limit);
+    const tasks = listTasksBySource(source, limit, 0, userId);
     return NextResponse.json(tasks);
   }
   
-  const tasks = listTasks(status ?? undefined, limit);
+  const tasks = listTasks(status ?? undefined, limit, 0, userId);
   return NextResponse.json(tasks);
 }
 
 // POST /api/tasks — create a new task (does NOT run it yet; running is done via SSE route)
 export async function POST(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  const userId = session?.userId;
   const { data, error } = await parseBody(req, CreateTaskSchema);
   if (error) return error;
 
@@ -77,6 +82,7 @@ export async function POST(req: NextRequest) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       depends_on,
+      user_id: userId,
     });
 
     return NextResponse.json(task, { status: 201 });

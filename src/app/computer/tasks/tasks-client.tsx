@@ -27,25 +27,36 @@ export function TasksClientPage({ initialTasks }: Props) {
   const router = useRouter();
   const { error: toastError } = useToast();
 
-  // Live SSE sync — updates tasks in real-time from any source (chat, scheduled, webhooks)
+  // Pause when page is hidden by PersistentLayout
+  const isVisible = usePageVisible();
+  const wasVisibleRef = useRef(true);
+
+  // Live SSE sync — only active while this page is visible; closes when hidden
   useEffect(() => {
+    if (!isVisible) return;
     const es = new EventSource("/api/tasks/events");
     es.addEventListener("snapshot", (e) => {
       try {
-        const data = JSON.parse((e as MessageEvent).data) as Task[];
-        setTasks(data);
+        const data = JSON.parse((e as MessageEvent).data) as { tasks: Task[] };
+        setTasks(data.tasks);
       } catch { /* ignore malformed */ }
     });
     es.addEventListener("update", (e) => {
       try {
-        const updated = JSON.parse((e as MessageEvent).data) as Task;
+        const data = JSON.parse((e as MessageEvent).data) as { task: Task };
         setTasks((prev) => {
-          const idx = prev.findIndex((t) => t.id === updated.id);
-          if (idx === -1) return [updated, ...prev];
+          const idx = prev.findIndex((t) => t.id === data.task.id);
+          if (idx === -1) return [data.task, ...prev];
           const next = [...prev];
-          next[idx] = updated;
+          next[idx] = data.task;
           return next;
         });
+      } catch { /* ignore */ }
+    });
+    es.addEventListener("new", (e) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as { task: Task };
+        setTasks((prev) => [data.task, ...prev.filter((t) => t.id !== data.task.id)]);
       } catch { /* ignore */ }
     });
     es.addEventListener("delete", (e) => {
@@ -55,7 +66,7 @@ export function TasksClientPage({ initialTasks }: Props) {
       } catch { /* ignore */ }
     });
     return () => es.close();
-  }, []);
+  }, [isVisible]);
 
   // Fetch scheduled tasks when entering calendar view
   useEffect(() => {
@@ -67,8 +78,6 @@ export function TasksClientPage({ initialTasks }: Props) {
   }, [viewMode]);
 
   // Refresh tasks when page becomes visible again (fallback if SSE drops)
-  const isVisible = usePageVisible();
-  const wasVisibleRef = useRef(true);
   useEffect(() => {
     if (isVisible && !wasVisibleRef.current) {
       fetch("/api/tasks?limit=200")

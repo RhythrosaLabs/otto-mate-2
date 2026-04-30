@@ -1,45 +1,82 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
-  XCircle,
-  Cpu,
-  Search,
+  Eye,
+  EyeOff,
   Rocket,
   Sparkles,
   ArrowRight,
   ArrowLeft,
   Loader2,
-  Shield,
+  KeyRound,
   Zap,
   Brain,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MODEL_CONFIGS } from "@/lib/types";
-import type { HealthInfo } from "@/lib/types";
 
 const STEPS = [
-  { id: "welcome", title: "Welcome", icon: Sparkles },
-  { id: "health", title: "System Check", icon: Shield },
-  { id: "model", title: "Default Model", icon: Cpu },
-  { id: "done", title: "Ready!", icon: Rocket },
+  { id: "welcome", title: "Welcome" },
+  { id: "keys", title: "Add API Key" },
+  { id: "done", title: "Launch!" },
+] as const;
+
+const KEY_OPTIONS = [
+  {
+    id: "ANTHROPIC_API_KEY",
+    label: "Anthropic (Claude)",
+    placeholder: "sk-ant-...",
+    url: "https://console.anthropic.com/settings/keys",
+    recommended: true,
+  },
+  {
+    id: "OPENAI_API_KEY",
+    label: "OpenAI (GPT-4o, o1)",
+    placeholder: "sk-...",
+    url: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "GOOGLE_AI_API_KEY",
+    label: "Google (Gemini)",
+    placeholder: "AIza...",
+    url: "https://aistudio.google.com/apikey",
+  },
 ] as const;
 
 export function OnboardingClient() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [health, setHealth] = useState<HealthInfo | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("auto");
+  const [selectedProvider, setSelectedProvider] = useState<string>(KEY_OPTIONS[0].id);
+  const [keyValue, setKeyValue] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/settings?section=health")
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((h) => setHealth(h as HealthInfo))
-      .catch(console.error);
-  }, []);
+  async function saveKey() {
+    if (!keyValue.trim()) return;
+    setLoading(true);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyName: selectedProvider, keyValue: keyValue.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save key");
+      }
+      setKeySaved(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save key");
+    }
+    setLoading(false);
+  }
 
   async function completeOnboarding() {
     setLoading(true);
@@ -47,27 +84,19 @@ export function OnboardingClient() {
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          settings: {
-            onboarding_completed: "true",
-            default_model: selectedModel,
-          },
-        }),
+        body: JSON.stringify({ settings: { onboarding_completed: "true" } }),
       });
-      localStorage.setItem("ottomate_model", selectedModel);
       router.push("/computer");
-    } catch (err) {
-      console.error(err);
+    } catch {
+      router.push("/computer");
     }
     setLoading(false);
   }
 
-  const configuredProviders = health?.providers.filter((p) => p.configured).length ?? 0;
-
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-lg">
-        {/* Progress dots */}
+      <div className="w-full max-w-md">
+        {/* Progress */}
         <div className="flex items-center justify-center gap-2 mb-8">
           {STEPS.map((s, i) => (
             <div key={s.id} className="flex items-center gap-2">
@@ -90,8 +119,9 @@ export function OnboardingClient() {
           ))}
         </div>
 
-        {/* Step content */}
         <div className="rounded-2xl border border-pplx-border bg-pplx-card p-8">
+
+          {/* Step 0 — Welcome */}
           {step === 0 && (
             <div className="text-center">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 via-pink-500 to-orange-500 flex items-center justify-center mb-5">
@@ -99,14 +129,14 @@ export function OnboardingClient() {
               </div>
               <h2 className="text-xl font-semibold text-pplx-text mb-2">Welcome to Ottomate</h2>
               <p className="text-sm text-pplx-muted mb-6 leading-relaxed">
-                Your AI-powered computer agent that can browse, code, research, generate images,
-                and execute complex multi-step tasks autonomously.
+                Your personal AI workforce. Give it a task in plain English — it researches, codes,
+                creates, and automates, all on its own.
               </p>
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-3 gap-3 text-left">
                 {[
-                  { icon: Zap, label: "15+ Tools", desc: "Search, code, files" },
-                  { icon: Brain, label: "Smart Memory", desc: "Learns over time" },
-                  { icon: Cpu, label: "Multi-Model", desc: "GPT, Claude, Gemini" },
+                  { icon: Zap, label: "Autonomous tasks", desc: "Browse, code & create" },
+                  { icon: Brain, label: "Persistent memory", desc: "Learns your preferences" },
+                  { icon: Globe, label: "30+ connectors", desc: "Email, Slack, Telegram…" },
                 ].map((f) => (
                   <div key={f.label} className="rounded-xl bg-pplx-bg p-3 text-center">
                     <f.icon size={18} className="text-pplx-accent mx-auto mb-1.5" />
@@ -118,132 +148,110 @@ export function OnboardingClient() {
             </div>
           )}
 
+          {/* Step 1 — Add API Key */}
           {step === 1 && (
             <div>
-              <h2 className="text-lg font-semibold text-pplx-text mb-1">System Health Check</h2>
-              <p className="text-xs text-pplx-muted mb-5">
-                Let&apos;s verify your API keys and providers are configured.
+              <div className="flex items-center gap-2 mb-1">
+                <KeyRound size={18} className="text-pplx-accent" />
+                <h2 className="text-lg font-semibold text-pplx-text">Add your first API key</h2>
+              </div>
+              <p className="text-xs text-pplx-muted mb-5 leading-relaxed">
+                Ottomate uses your own API keys — you pay providers directly with no markup.
+                Keys are encrypted with AES-256.
               </p>
-              {!health ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={20} className="animate-spin text-pplx-muted" />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-xs font-medium text-pplx-muted mb-2 flex items-center gap-1.5">
-                      <Cpu size={11} /> AI Providers
-                    </h3>
-                    <div className="space-y-1.5">
-                      {health.providers.map((p) => (
-                        <div key={p.name} className="flex items-center gap-2 text-xs">
-                          {p.configured ? (
-                            <CheckCircle2 size={13} className="text-green-400" />
-                          ) : (
-                            <XCircle size={13} className="text-red-400/50" />
-                          )}
-                          <span className={p.configured ? "text-pplx-text" : "text-pplx-muted"}>
-                            {p.name}
-                          </span>
-                          {p.configured && (
-                            <span className="ml-auto text-[10px] text-green-400/70">ready</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-medium text-pplx-muted mb-2 flex items-center gap-1.5">
-                      <Search size={11} /> Search Providers
-                    </h3>
-                    <div className="space-y-1.5">
-                      {health.search.map((s) => (
-                        <div key={s.name} className="flex items-center gap-2 text-xs">
-                          {s.configured ? (
-                            <CheckCircle2 size={13} className="text-green-400" />
-                          ) : (
-                            <XCircle size={13} className="text-pplx-muted/40" />
-                          )}
-                          <span className={s.configured ? "text-pplx-text" : "text-pplx-muted/60"}>
-                            {s.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-pplx-border/50">
-                    <div className="flex items-center gap-2 text-xs">
-                      {health.db_ok ? (
-                        <>
-                          <CheckCircle2 size={12} className="text-green-400" />
-                          <span className="text-pplx-text">Database connected</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle size={12} className="text-red-400" />
-                          <span className="text-red-400">Database error</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {configuredProviders === 0 && (
-                    <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-xs text-yellow-400">
-                      No AI providers configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY
-                      in your .env.local file.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
-          {step === 2 && (
-            <div>
-              <h2 className="text-lg font-semibold text-pplx-text mb-1">Choose Default Model</h2>
-              <p className="text-xs text-pplx-muted mb-5">
-                Select the AI model to use by default. You can change this per-task later.
-              </p>
-              <div className="space-y-2">
-                {MODEL_CONFIGS.map((m) => (
+              {/* Provider selector */}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {KEY_OPTIONS.map((opt) => (
                   <button
-                    key={m.id}
-                    onClick={() => setSelectedModel(m.id)}
+                    key={opt.id}
+                    onClick={() => { setSelectedProvider(opt.id); setKeySaved(false); setKeyValue(""); setSaveError(""); }}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all",
-                      selectedModel === m.id
-                        ? "bg-pplx-accent/10 border border-pplx-accent/40 ring-1 ring-pplx-accent/20"
-                        : "bg-pplx-bg border border-pplx-border hover:border-pplx-border/80"
+                      "text-xs px-3 py-1.5 rounded-lg border transition-all",
+                      selectedProvider === opt.id
+                        ? "border-pplx-accent bg-pplx-accent/10 text-pplx-accent"
+                        : "border-pplx-border text-pplx-muted hover:border-pplx-accent/50"
                     )}
                   >
-                    <span className="text-lg">{m.icon}</span>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-pplx-text">{m.name}</div>
-                      <div className="text-[10px] text-pplx-muted">{m.description}</div>
-                    </div>
-                    {selectedModel === m.id && <CheckCircle2 size={16} className="text-pplx-accent" />}
+                    {opt.label}
+                    {"recommended" in opt && opt.recommended && <span className="ml-1 opacity-60">(recommended)</span>}
                   </button>
                 ))}
               </div>
+
+              {/* Key input */}
+              {!keySaved ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showKey ? "text" : "password"}
+                        value={keyValue}
+                        onChange={(e) => setKeyValue(e.target.value)}
+                        placeholder={KEY_OPTIONS.find((o) => o.id === selectedProvider)?.placeholder ?? "API key…"}
+                        className="w-full px-3 py-2.5 pr-10 rounded-lg bg-pplx-bg border border-pplx-border text-sm text-pplx-text placeholder-pplx-muted focus:outline-none focus:border-pplx-accent"
+                        onKeyDown={(e) => e.key === "Enter" && keyValue.trim() && saveKey()}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-pplx-muted hover:text-pplx-text"
+                      >
+                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <button
+                      onClick={saveKey}
+                      disabled={!keyValue.trim() || loading}
+                      className="px-4 py-2.5 rounded-lg bg-pplx-accent text-white text-sm font-medium disabled:opacity-50 hover:bg-pplx-accent-hover transition-colors"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : "Save"}
+                    </button>
+                  </div>
+                  {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+                  <a
+                    href={KEY_OPTIONS.find((o) => o.id === selectedProvider)?.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-pplx-accent hover:underline"
+                  >
+                    Get a free API key <ExternalLink size={10} />
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/20 px-4 py-3">
+                  <CheckCircle2 size={16} className="text-green-400" />
+                  <span className="text-sm text-green-400 font-medium">Key saved securely!</span>
+                </div>
+              )}
+
+              <p className="mt-4 text-[10px] text-pplx-muted">
+                You can add more keys any time in Settings → API Keys.
+              </p>
             </div>
           )}
 
-          {step === 3 && (
+          {/* Step 2 — Done */}
+          {step === 2 && (
             <div className="text-center">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-5">
                 <Rocket size={28} className="text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-pplx-text mb-2">You&apos;re All Set!</h2>
-              <p className="text-sm text-pplx-muted mb-4 leading-relaxed">
-                Ottomate is configured and ready. Start your first task using natural language —
-                just type what you need.
+              <h2 className="text-xl font-semibold text-pplx-text mb-2">You&apos;re all set!</h2>
+              <p className="text-sm text-pplx-muted mb-5 leading-relaxed">
+                Just type what you need in plain English. Ottomate handles the rest.
               </p>
-              <div className="rounded-xl bg-pplx-bg border border-pplx-border p-4 text-left mb-2">
-                <p className="text-[10px] text-pplx-muted mb-2">Try saying:</p>
-                <div className="space-y-1.5 text-xs text-pplx-text">
-                  <p>&ldquo;Research the latest AI news and write a summary&rdquo;</p>
-                  <p>&ldquo;Create a Python script that generates fibonacci numbers&rdquo;</p>
-                  <p>&ldquo;/image a futuristic cityscape at sunset&rdquo;</p>
-                </div>
+              <div className="rounded-xl bg-pplx-bg border border-pplx-border p-4 text-left space-y-2">
+                <p className="text-[10px] text-pplx-muted font-medium uppercase tracking-wide mb-3">Try asking:</p>
+                {[
+                  "Research the latest AI news and write a summary",
+                  "Write a Python script that reads a CSV and plots a chart",
+                  "/image a futuristic city at sunset, neon lighting",
+                ].map((ex) => (
+                  <p key={ex} className="text-xs text-pplx-text bg-pplx-card rounded-lg px-3 py-2">
+                    &ldquo;{ex}&rdquo;
+                  </p>
+                ))}
               </div>
             </div>
           )}
@@ -267,21 +275,21 @@ export function OnboardingClient() {
               onClick={() => setStep(step + 1)}
               className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-pplx-accent text-white text-sm font-medium hover:bg-pplx-accent-hover transition-colors"
             >
-              Continue <ArrowRight size={14} />
+              {step === 1 && !keySaved ? "Skip for now" : "Continue"}
+              <ArrowRight size={14} />
             </button>
           ) : (
             <button
               onClick={completeOnboarding}
               disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-              Get Started
+              Launch Ottomate
             </button>
           )}
         </div>
 
-        {/* Skip link */}
         {step < STEPS.length - 1 && (
           <button
             onClick={completeOnboarding}

@@ -10,6 +10,8 @@ import {
   X,
   User,
   Monitor,
+  LogOut,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS, type ModelId } from "@/lib/types";
@@ -17,6 +19,19 @@ import { PERSONAS, getStoredPersonaId, setStoredPersonaId } from "@/lib/personas
 import { NAV_ITEMS } from "@/lib/constants";
 import { HandoffTrayTrigger } from "@/components/handoff-tray";
 import { CommandPalette } from "@/components/command-palette";
+
+const FEATURES_KEY = "ottomate_enabled_features";
+
+function readEnabledFeatures(): Set<string> {
+  try {
+    const raw = localStorage.getItem(FEATURES_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -27,6 +42,18 @@ export function Sidebar() {
   const [activePersona, setActivePersona] = useState("default");
   const [showPersonaDropdown, setShowPersonaDropdown] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(new Set());
+  const [userInfo, setUserInfo] = useState<{ name: string; email: string; tier: string } | null>(null);
+
+  // Load enabled optional features from localStorage
+  useEffect(() => {
+    setEnabledFeatures(readEnabledFeatures());
+    function handleFeaturesChanged() {
+      setEnabledFeatures(readEnabledFeatures());
+    }
+    window.addEventListener("features-changed", handleFeaturesChanged);
+    return () => window.removeEventListener("features-changed", handleFeaturesChanged);
+  }, []);
 
   // Load persona on mount
   useEffect(() => {
@@ -82,9 +109,21 @@ export function Sidebar() {
     return () => clearInterval(interval);
   }, []);
 
-  // Close mobile sidebar on route change
+  // Fetch current user info + tier
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(r => r.ok ? r.json() as Promise<{ user: { name: string; email: string }; subscription?: { tier: string } }> : null)
+      .then(data => {
+        if (data) setUserInfo({ name: data.user.name, email: data.user.email, tier: data.subscription?.tier ?? "free" });
+      })
+      .catch(() => {/* ignore */});
+  }, []);
+
+  // Close mobile sidebar and dropdowns on route change
   useEffect(() => {
     setMobileOpen(false);
+    setShowModelDropdown(false);
+    setShowPersonaDropdown(false);
   }, [pathname]);
 
   // Close dropdowns on outside click
@@ -147,9 +186,10 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Nav links */}
-      <nav className="px-3">
-        {NAV_ITEMS.map((item) => {
+      {/* Nav links — rendered above persona/model dropdowns (z-[60]) so they
+           are always clickable even when a dropdown extends upward over this area */}
+      <nav className="px-3 relative z-[60]">
+        {NAV_ITEMS.filter(item => !item.optional || enabledFeatures.has(item.href)).map((item) => {
           const Icon = item.icon;
           // Determine if this item matches the current pathname
           const matches = item.exact
@@ -308,6 +348,40 @@ export function Sidebar() {
         <p className="px-3 mt-2 text-[10px] text-pplx-muted/40 text-center">
           Ottomate v2.0 · Multi-Agent AI
         </p>
+
+        {/* User / Plan widget */}
+        {userInfo && (
+          <div className="mt-3 pt-3 border-t border-pplx-border/50 px-1">
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+              <div className="w-6 h-6 rounded-full bg-pplx-accent/20 flex items-center justify-center flex-shrink-0">
+                <User size={11} className="text-pplx-accent" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-pplx-text truncate">{userInfo.name}</p>
+                <p className="text-[10px] text-pplx-muted capitalize">{userInfo.tier} plan</p>
+              </div>
+              <button
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/auth/login";
+                }}
+                className="p-1 rounded text-pplx-muted hover:text-pplx-text transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={12} />
+              </button>
+            </div>
+            {userInfo.tier !== "agency" && (
+              <Link
+                href="/pricing"
+                className="flex items-center justify-center gap-1.5 w-full mt-1 py-1.5 rounded-lg text-[11px] font-medium bg-pplx-accent/10 text-pplx-accent hover:bg-pplx-accent/20 transition-colors"
+              >
+                <Zap size={11} />
+                Upgrade plan
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

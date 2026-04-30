@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
-import { getTask, updateTaskStatus, listSkills } from "@/lib/db";
+import { getTask, updateTaskStatus, listSkills, incrementTaskUsage, getUserApiKeysRaw } from "@/lib/db";
 import { runAgent } from "@/lib/agent";
 import { runningTasks, registerRunningTask, unregisterRunningTask } from "@/lib/running-tasks";
 import type { AgentStep, ModelId } from "@/lib/types";
+import { getSessionFromRequest, decryptApiKey } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 min max on serverless; for local dev this is unlimited
@@ -13,6 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
+  const session = await getSessionFromRequest(req);
+  const userId = session?.userId;
+
   const task = getTask(taskId);
   if (!task) {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
@@ -23,15 +27,34 @@ export async function POST(
     return new Response(JSON.stringify({ error: "Task is already running" }), { status: 409 });
   }
 
+  // Tier limit check
+  if (userId) {
+    const usage = incrementTaskUsage(userId);
+    if (!usage.allowed) {
+      return new Response(JSON.stringify({
+        error: `Monthly task limit reached (${usage.limit} tasks). Upgrade your plan at /pricing.`,
+      }), { status: 429 });
+    }
+  }
+
   const body = await req.json().catch(() => ({})) as { message?: string; model?: ModelId };
   const userMessage = body.message || task.prompt;
   const model = body.model;
 
   // Build skills context string from active skills
-  const activeSkills = listSkills().filter(s => s.is_active);
+  const activeSkills = listSkills(userId).filter(s => s.is_active);
   const skills = activeSkills.length > 0
     ? activeSkills.map(s => `${s.name}: ${s.description}`).join("\n")
     : undefined;
+
+  // Load user's own API keys (decrypt them)
+  let apiKeys: Record<string, string> = {};
+  if (userId) {
+    const raw = getUserApiKeysRaw(userId);
+    for (const [k, v] of Object.entries(raw)) {
+      try { apiKeys[k] = decryptApiKey(v); } catch { /* skip malformed */ }
+    }
+  }
 
   // Create AbortController for this run
   const abortController = new AbortController();
@@ -70,6 +93,7 @@ export async function POST(
         skills,
         model,
         signal: abortController.signal,
+        apiKeys,
         onStep: (step: AgentStep) => {
           send({ type: "step", step });
         },

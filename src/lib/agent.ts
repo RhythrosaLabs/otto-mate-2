@@ -69,22 +69,39 @@ import {
 
 const execAsync = promisify(exec);
 
+// ─── Per-request API key context (AsyncLocalStorage) ─────────────────────────
+// Allows each agent run to use per-user API keys without polluting process.env
+// and without breaking concurrent requests.
+import { AsyncLocalStorage } from "async_hooks";
+const requestKeyStore = new AsyncLocalStorage<Record<string, string>>();
+
+function resolveKey(envName: string): string {
+  const store = requestKeyStore.getStore();
+  if (store !== undefined) {
+    // Inside a user request context — only use their own stored keys, never
+    // fall back to server env vars. This prevents users from running tasks
+    // on the server owner's API keys.
+    return store[envName] || "";
+  }
+  // No user context (scheduled tasks, internal/system ops) — use server env.
+  return process.env[envName] || "";
+}
+
 // ─── Multi-Model Clients ──────────────────────────────────────────────────────
 // Lazy getters so SDK instances always use the current process.env value,
 // even if the key was set at runtime via the Connectors page.
 
 function getAnthropic(): Anthropic {
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+  return new Anthropic({ apiKey: resolveKey("ANTHROPIC_API_KEY") });
 }
 
 function getOpenAI(): OpenAI {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+  return new OpenAI({ apiKey: resolveKey("OPENAI_API_KEY") });
 }
 
 function getGoogleAI(): GoogleGenerativeAI | null {
-  return process.env.GOOGLE_AI_API_KEY
-    ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
-    : null;
+  const key = resolveKey("GOOGLE_AI_API_KEY");
+  return key ? new GoogleGenerativeAI(key) : null;
 }
 
 // ─── Model Failover (OpenClaw-inspired) ───────────────────────────────────────
@@ -130,25 +147,25 @@ function getFailoverChain(primary: { provider: string; modelName: string }): Fai
   };
 
   // Tier 1: Premium models (same-tier fallbacks)
-  if (process.env.ANTHROPIC_API_KEY && primary.provider !== "anthropic") {
+  if (resolveKey("ANTHROPIC_API_KEY") && primary.provider !== "anthropic") {
     add("anthropic", "claude-sonnet-4-6");
   }
-  if (process.env.OPENAI_API_KEY && primary.provider !== "openai") {
+  if (resolveKey("OPENAI_API_KEY") && primary.provider !== "openai") {
     add("openai", "gpt-5.4");
   }
-  if (process.env.GOOGLE_AI_API_KEY) {
+  if (resolveKey("GOOGLE_AI_API_KEY")) {
     add("google", "gemini-2.5-pro");
   }
 
   // Tier 2: Cheap/fast models as additional fallbacks
-  if (process.env.OPENAI_API_KEY) add("openai", "gpt-5.4-mini");
-  if (process.env.GOOGLE_AI_API_KEY) add("google", "gemini-2.5-flash");
+  if (resolveKey("OPENAI_API_KEY")) add("openai", "gpt-5.4-mini");
+  if (resolveKey("GOOGLE_AI_API_KEY")) add("google", "gemini-2.5-flash");
 
   // Tier 3: Perplexity (web-augmented)
-  if (process.env.PERPLEXITY_API_KEY) add("perplexity", "sonar-pro");
+  if (resolveKey("PERPLEXITY_API_KEY")) add("perplexity", "sonar-pro");
 
   // Tier 4: OpenRouter — always last-resort (free models, no billing needed)
-  if (process.env.OPENROUTER_API_KEY) {
+  if (resolveKey("OPENROUTER_API_KEY")) {
     add("openrouter", "openrouter/free");
   }
 
@@ -1129,6 +1146,8 @@ export interface AgentRunOptions {
   onStep?: (step: AgentStep) => void;
   onToken?: (token: string) => void;
   signal?: AbortSignal;
+  /** Per-user API keys (plaintext). Keys are env-var names e.g. ANTHROPIC_API_KEY. */
+  apiKeys?: Record<string, string>;
 }
 
 // ─── Modality-First Model Selection (Otto-inspired) ──────────────────────────
@@ -1194,9 +1213,9 @@ function selectModelForTask(
     const modality = detectModality(taskText);
     const candidates = MODALITY_MODEL_MAP[modality];
     for (const candidate of candidates) {
-      if (candidate.provider === "anthropic" && process.env.ANTHROPIC_API_KEY) return candidate;
-      if (candidate.provider === "openai" && process.env.OPENAI_API_KEY) return candidate;
-      if (candidate.provider === "google" && process.env.GOOGLE_AI_API_KEY) return candidate;
+      if (candidate.provider === "anthropic" && resolveKey("ANTHROPIC_API_KEY")) return candidate;
+      if (candidate.provider === "openai" && resolveKey("OPENAI_API_KEY")) return candidate;
+      if (candidate.provider === "google" && resolveKey("GOOGLE_AI_API_KEY")) return candidate;
     }
     return { provider: "anthropic", modelName: "claude-sonnet-4-6" };
   }
@@ -1258,6 +1277,13 @@ const BUILTIN_PRESETS: Record<string, { model: string; max_steps: number; max_to
 };
 
 export async function runAgent(options: AgentRunOptions): Promise<void> {
+  const { taskId, userMessage, skills, model, onStep, onToken, signal, apiKeys } = options;
+
+  // Run the entire agent within the per-user key context
+  return requestKeyStore.run(apiKeys || {}, () => _runAgentInner(options));
+}
+
+async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   const { taskId, userMessage, skills, model, onStep, onToken, signal } = options;
   const filesDir = path.join(ensureFilesDir(), taskId);
   if (!fs.existsSync(filesDir)) fs.mkdirSync(filesDir, { recursive: true });

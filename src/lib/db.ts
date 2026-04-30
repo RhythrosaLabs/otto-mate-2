@@ -207,6 +207,39 @@ function initSchema(db: Database.Database): void {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_api_keys (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      key_name TEXT NOT NULL,
+      key_value TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, key_name),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      tier TEXT NOT NULL DEFAULT 'free',
+      status TEXT NOT NULL DEFAULT 'active',
+      tasks_used_this_month INTEGER NOT NULL DEFAULT 0,
+      usage_reset_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate: add model column to tasks if missing
@@ -284,6 +317,106 @@ function initSchema(db: Database.Database): void {
       FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
+  `);
+
+  // Migrate: add user_id to all per-user data tables
+  try { db.exec("ALTER TABLE tasks ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE skills ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE gallery_items ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE memory ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE scheduled_tasks ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE file_folders ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE agent_analytics ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  // connector_configs needs (user_id, connector_id) uniqueness — rebuild index
+  try { db.exec("ALTER TABLE connector_configs ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try {
+    db.exec("DROP INDEX IF EXISTS idx_connector_configs_connector_id");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_connector_user ON connector_configs(user_id, connector_id)");
+  } catch { /* exists */ }
+  // settings needs per-user keys — change PK behaviour via a new composite unique index
+  try { db.exec("ALTER TABLE settings ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_user_key ON settings(user_id, key)");
+  } catch { /* exists */ }
+
+  // Migrate connector_configs: drop inline UNIQUE(connector_id) by rebuilding the table
+  // The original schema has `connector_id TEXT NOT NULL UNIQUE` which prevents multi-user use
+  try {
+    const hasIdCol = db.prepare("PRAGMA table_info(connector_configs)").all() as Array<{ name: string }>;
+    const colNames = hasIdCol.map((c) => c.name);
+    // If user_id column exists but the table still has the connector_id UNIQUE inline constraint,
+    // we need to rebuild. Detect by checking if user_id column is present but no id2 sentinel column.
+    if (colNames.includes("user_id") && !colNames.includes("_migrated_v2")) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS connector_configs_v2 (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          connector_id TEXT NOT NULL,
+          api_key TEXT,
+          oauth_token TEXT,
+          oauth_refresh_token TEXT,
+          config TEXT DEFAULT '{}',
+          connected INTEGER NOT NULL DEFAULT 0,
+          connected_at TEXT,
+          UNIQUE(user_id, connector_id)
+        );
+        INSERT OR IGNORE INTO connector_configs_v2
+          SELECT id, user_id, connector_id, api_key, oauth_token, oauth_refresh_token, config, connected, connected_at
+          FROM connector_configs;
+        DROP TABLE connector_configs;
+        ALTER TABLE connector_configs_v2 RENAME TO connector_configs;
+        COMMIT;
+      `);
+    }
+  } catch { /* already migrated or table clean */ }
+
+  // Migrate settings: drop PRIMARY KEY(key) by rebuilding the table so per-user rows can share key names
+  try {
+    const settingsCols = db.prepare("PRAGMA table_info(settings)").all() as Array<{ name: string }>;
+    const colNames = settingsCols.map((c) => c.name);
+    // If the settings table lacks an 'id' column, it's the old single-key PK schema
+    if (!colNames.includes("id")) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS settings_v2 (
+          id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          user_id TEXT,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(user_id, key)
+        );
+        INSERT OR IGNORE INTO settings_v2 (id, key, value, user_id, updated_at)
+          SELECT hex(randomblob(8)), key, value, user_id, updated_at FROM settings;
+        DROP TABLE settings;
+        ALTER TABLE settings_v2 RENAME TO settings;
+        COMMIT;
+      `);
+    }
+  } catch { /* already migrated */ }
+
+  // Migrate: add Stripe columns to subscriptions table
+  try { db.exec("ALTER TABLE subscriptions ADD COLUMN stripe_customer_id TEXT"); } catch { /* exists */ }
+  try { db.exec("ALTER TABLE subscriptions ADD COLUMN stripe_subscription_id TEXT"); } catch { /* exists */ }
+
+  // Migrate: add is_admin column to users table
+  try { db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+
+  // Create gift_codes table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS gift_codes (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      tier TEXT NOT NULL,
+      duration_days INTEGER NOT NULL,
+      created_by TEXT REFERENCES users(id),
+      redeemed_by TEXT REFERENCES users(id),
+      redeemed_at TEXT,
+      expires_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_gift_codes_code ON gift_codes(code);
   `);
 
   // Clean orphaned file records (files in DB but deleted from disk)
@@ -438,11 +571,11 @@ function seedGallery(db: Database.Database): void {
 
 // ─── Task CRUD ───────────────────────────────────────────────────────────────
 
-export function createTask(task: Omit<Task, "steps" | "files" | "messages" | "sub_tasks"> & { depends_on?: string }): Task {
+export function createTask(task: Omit<Task, "steps" | "files" | "messages" | "sub_tasks"> & { depends_on?: string; user_id?: string }): Task {
   const db = getDb();
   db.prepare(`
-    INSERT INTO tasks (id, title, prompt, description, status, priority, model, tags, metadata, depends_on, source, created_at, updated_at)
-    VALUES (@id, @title, @prompt, @description, @status, @priority, @model, @tags, @metadata, @depends_on, @source, @created_at, @updated_at)
+    INSERT INTO tasks (id, title, prompt, description, status, priority, model, tags, metadata, depends_on, source, user_id, created_at, updated_at)
+    VALUES (@id, @title, @prompt, @description, @status, @priority, @model, @tags, @metadata, @depends_on, @source, @user_id, @created_at, @updated_at)
   `).run({
     id: task.id,
     title: task.title,
@@ -455,6 +588,7 @@ export function createTask(task: Omit<Task, "steps" | "files" | "messages" | "su
     metadata: JSON.stringify(task.metadata || {}),
     depends_on: task.depends_on || null,
     source: task.source || "manual",
+    user_id: task.user_id || null,
     created_at: task.created_at,
     updated_at: task.updated_at,
   });
@@ -468,11 +602,18 @@ export function getTask(id: string): Task | null {
   return hydrateTask(db, row);
 }
 
-export function listTasks(status?: string, limit = 50, offset = 0): Task[] {
+export function listTasks(status?: string, limit = 50, offset = 0, userId?: string): Task[] {
   const db = getDb();
-  const rows = status
-    ? (db.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(status, limit, offset) as Record<string, unknown>[])
-    : (db.prepare("SELECT * FROM tasks ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(limit, offset) as Record<string, unknown>[]);
+  let rows: Record<string, unknown>[];
+  if (userId && status) {
+    rows = db.prepare("SELECT * FROM tasks WHERE user_id = ? AND status = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(userId, status, limit, offset) as Record<string, unknown>[];
+  } else if (userId) {
+    rows = db.prepare("SELECT * FROM tasks WHERE user_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(userId, limit, offset) as Record<string, unknown>[];
+  } else if (status) {
+    rows = db.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(status, limit, offset) as Record<string, unknown>[];
+  } else {
+    rows = db.prepare("SELECT * FROM tasks ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(limit, offset) as Record<string, unknown>[];
+  }
   return rows.map((r) => hydrateTask(db, r));
 }
 
@@ -487,14 +628,21 @@ export interface TaskSummary {
   files_count: number;
 }
 
-export function listTasksSummary(limit = 100): TaskSummary[] {
+export function listTasksSummary(limit = 100, userId?: string): TaskSummary[] {
   const db = getDb();
-  const rows = db.prepare(`
-    SELECT t.id, t.title, t.status, t.priority, t.updated_at,
-      (SELECT COUNT(*) FROM agent_steps WHERE task_id = t.id) AS steps_count,
-      (SELECT COUNT(*) FROM task_files WHERE task_id = t.id) AS files_count
-    FROM tasks t ORDER BY t.updated_at DESC LIMIT ?
-  `).all(limit) as TaskSummary[];
+  const rows = userId
+    ? db.prepare(`
+        SELECT t.id, t.title, t.status, t.priority, t.updated_at,
+          (SELECT COUNT(*) FROM agent_steps WHERE task_id = t.id) AS steps_count,
+          (SELECT COUNT(*) FROM task_files WHERE task_id = t.id) AS files_count
+        FROM tasks t WHERE t.user_id = ? ORDER BY t.updated_at DESC LIMIT ?
+      `).all(userId, limit) as TaskSummary[]
+    : db.prepare(`
+        SELECT t.id, t.title, t.status, t.priority, t.updated_at,
+          (SELECT COUNT(*) FROM agent_steps WHERE task_id = t.id) AS steps_count,
+          (SELECT COUNT(*) FROM task_files WHERE task_id = t.id) AS files_count
+        FROM tasks t ORDER BY t.updated_at DESC LIMIT ?
+      `).all(limit) as TaskSummary[];
   return rows;
 }
 
@@ -824,9 +972,13 @@ export function updateSubTask(id: string, status: string, result?: string): void
 
 // ─── Skills CRUD ──────────────────────────────────────────────────────────────
 
-export function listSkills(): Skill[] {
+export function listSkills(userId?: string): Skill[] {
   const db = getDb();
-  return (db.prepare("SELECT * FROM skills ORDER BY created_at DESC").all() as Record<string, unknown>[]).map((r) => ({
+  // Return user's own skills + global skills (user_id IS NULL)
+  const rows = userId
+    ? (db.prepare("SELECT * FROM skills WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC").all(userId) as Record<string, unknown>[])
+    : (db.prepare("SELECT * FROM skills ORDER BY created_at DESC").all() as Record<string, unknown>[]);
+  return rows.map((r) => ({
     id: r.id as string,
     name: r.name as string,
     description: r.description as string,
@@ -879,14 +1031,14 @@ export function getSkillByName(name: string): Skill | undefined {
   return getSkill(row.id as string);
 }
 
-export function createSkill(skill: Omit<Skill, "created_at" | "updated_at">): Skill {
+export function createSkill(skill: Omit<Skill, "created_at" | "updated_at"> & { user_id?: string }): Skill {
   const db = getDb();
   const now = new Date().toISOString();
   db.prepare(`
     INSERT INTO skills (id, name, description, instructions, category, triggers, is_active,
-      preset_type, model, tools, max_steps, max_tokens, auto_generated, source_task_id, created_at, updated_at)
+      preset_type, model, tools, max_steps, max_tokens, auto_generated, source_task_id, user_id, created_at, updated_at)
     VALUES (@id, @name, @description, @instructions, @category, @triggers, @is_active,
-      @preset_type, @model, @tools, @max_steps, @max_tokens, @auto_generated, @source_task_id, @created_at, @updated_at)
+      @preset_type, @model, @tools, @max_steps, @max_tokens, @auto_generated, @source_task_id, @user_id, @created_at, @updated_at)
   `).run({
     ...skill,
     category: skill.category || "custom",
@@ -899,6 +1051,7 @@ export function createSkill(skill: Omit<Skill, "created_at" | "updated_at">): Sk
     max_tokens: skill.max_tokens || null,
     auto_generated: (skill as Record<string, unknown>).auto_generated ? 1 : 0,
     source_task_id: (skill as Record<string, unknown>).source_task_id || null,
+    user_id: skill.user_id || null,
     created_at: now,
     updated_at: now,
   });
@@ -1088,9 +1241,12 @@ export function getSelfImprovementStats(): {
 
 // ─── Gallery CRUD ─────────────────────────────────────────────────────────────
 
-export function listGallery(): GalleryItem[] {
+export function listGallery(userId?: string): GalleryItem[] {
   const db = getDb();
-  return (db.prepare("SELECT * FROM gallery_items ORDER BY is_featured DESC, created_at DESC").all() as Record<string, unknown>[]).map((r) => ({
+  const rows = userId
+    ? db.prepare("SELECT * FROM gallery_items WHERE user_id = ? ORDER BY is_featured DESC, created_at DESC").all(userId) as Record<string, unknown>[]
+    : db.prepare("SELECT * FROM gallery_items ORDER BY is_featured DESC, created_at DESC").all() as Record<string, unknown>[];
+  return rows.map((r) => ({
     id: r.id as string,
     title: r.title as string,
     description: r.description as string,
@@ -1103,11 +1259,11 @@ export function listGallery(): GalleryItem[] {
   }));
 }
 
-export function addGalleryItem(item: GalleryItem): void {
+export function addGalleryItem(item: GalleryItem & { user_id?: string }): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO gallery_items (id, title, description, preview_url, category, prompt, task_id, is_featured, created_at)
-    VALUES (@id, @title, @description, @preview_url, @category, @prompt, @task_id, @is_featured, @created_at)
+    INSERT INTO gallery_items (id, title, description, preview_url, category, prompt, task_id, is_featured, user_id, created_at)
+    VALUES (@id, @title, @description, @preview_url, @category, @prompt, @task_id, @is_featured, @user_id, @created_at)
   `).run({
     id: item.id,
     title: item.title,
@@ -1117,6 +1273,7 @@ export function addGalleryItem(item: GalleryItem): void {
     prompt: item.prompt,
     task_id: item.task_id ?? null,
     is_featured: item.is_featured ? 1 : 0,
+    user_id: item.user_id || null,
     created_at: item.created_at,
   });
 }
@@ -1129,9 +1286,11 @@ export function deleteGalleryItem(id: string): boolean {
 
 // ─── Connector Config ─────────────────────────────────────────────────────────
 
-export function getConnectorConfig(connectorId: string): Record<string, unknown> | null {
+export function getConnectorConfig(connectorId: string, userId?: string): Record<string, unknown> | null {
   const db = getDb();
-  const row = db.prepare("SELECT * FROM connector_configs WHERE connector_id = ?").get(connectorId) as Record<string, unknown> | undefined;
+  const row = userId
+    ? db.prepare("SELECT * FROM connector_configs WHERE connector_id = ? AND user_id = ?").get(connectorId, userId) as Record<string, unknown> | undefined
+    : db.prepare("SELECT * FROM connector_configs WHERE connector_id = ? AND user_id IS NULL").get(connectorId) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
     ...row,
@@ -1143,57 +1302,71 @@ export function getConnectorConfig(connectorId: string): Record<string, unknown>
   };
 }
 
-export function setConnectorConfig(connectorId: string, config: Record<string, unknown>): void {
+export function setConnectorConfig(connectorId: string, config: Record<string, unknown>, userId?: string): void {
   const db = getDb();
-  const existing = db.prepare("SELECT id FROM connector_configs WHERE connector_id = ?").get(connectorId);
+  const existing = userId
+    ? db.prepare("SELECT id FROM connector_configs WHERE connector_id = ? AND user_id = ?").get(connectorId, userId)
+    : db.prepare("SELECT id FROM connector_configs WHERE connector_id = ? AND user_id IS NULL").get(connectorId);
   if (existing) {
-    db.prepare("UPDATE connector_configs SET api_key=?, config=?, connected=?, connected_at=? WHERE connector_id=?").run(
+    db.prepare("UPDATE connector_configs SET api_key=?, config=?, connected=?, connected_at=? WHERE connector_id=? AND (user_id = ? OR (user_id IS NULL AND ? IS NULL))").run(
       config.api_key as string || null,
       JSON.stringify(config),
       config.connected ? 1 : 0,
       config.connected ? new Date().toISOString() : null,
-      connectorId
+      connectorId,
+      userId || null,
+      userId || null
     );
   } else {
     db.prepare(`
-      INSERT INTO connector_configs (id, connector_id, api_key, config, connected, connected_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO connector_configs (id, connector_id, api_key, config, connected, connected_at, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       uuidv4(),
       connectorId,
       config.api_key as string || null,
       JSON.stringify(config),
       config.connected ? 1 : 0,
-      config.connected ? new Date().toISOString() : null
+      config.connected ? new Date().toISOString() : null,
+      userId || null
     );
   }
 }
 
 export function storeOAuthTokens(
   connectorId: string,
-  tokens: { access_token: string; refresh_token?: string; expires_in?: number }
+  tokens: { access_token: string; refresh_token?: string; expires_in?: number },
+  userId?: string
 ): void {
   const db = getDb();
-  const existing = db.prepare("SELECT id FROM connector_configs WHERE connector_id = ?").get(connectorId);
+  const existing = userId
+    ? db.prepare("SELECT id FROM connector_configs WHERE connector_id = ? AND user_id = ?").get(connectorId, userId)
+    : db.prepare("SELECT id FROM connector_configs WHERE connector_id = ? AND user_id IS NULL").get(connectorId);
   if (existing) {
     db.prepare(
-      "UPDATE connector_configs SET oauth_token=?, oauth_refresh_token=?, connected=1, connected_at=? WHERE connector_id=?"
-    ).run(tokens.access_token, tokens.refresh_token ?? null, new Date().toISOString(), connectorId);
+      "UPDATE connector_configs SET oauth_token=?, oauth_refresh_token=?, connected=1, connected_at=? WHERE connector_id=? AND (user_id = ? OR (user_id IS NULL AND ? IS NULL))"
+    ).run(tokens.access_token, tokens.refresh_token ?? null, new Date().toISOString(), connectorId, userId || null, userId || null);
   } else {
     db.prepare(
-      "INSERT INTO connector_configs (id, connector_id, oauth_token, oauth_refresh_token, connected, connected_at, config, api_key) VALUES (?, ?, ?, ?, 1, ?, ?, NULL)"
-    ).run(uuidv4(), connectorId, tokens.access_token, tokens.refresh_token ?? null, new Date().toISOString(), "{}");
+      "INSERT INTO connector_configs (id, connector_id, oauth_token, oauth_refresh_token, connected, connected_at, config, api_key, user_id) VALUES (?, ?, ?, ?, 1, ?, ?, NULL, ?)"
+    ).run(uuidv4(), connectorId, tokens.access_token, tokens.refresh_token ?? null, new Date().toISOString(), "{}", userId || null);
   }
 }
 
-export function disconnectConnector(connectorId: string): void {
+export function disconnectConnector(connectorId: string, userId?: string): void {
   const db = getDb();
-  db.prepare("UPDATE connector_configs SET connected = 0, api_key = NULL, oauth_token = NULL WHERE connector_id = ?").run(connectorId);
+  if (userId) {
+    db.prepare("UPDATE connector_configs SET connected = 0, api_key = NULL, oauth_token = NULL WHERE connector_id = ? AND user_id = ?").run(connectorId, userId);
+  } else {
+    db.prepare("UPDATE connector_configs SET connected = 0, api_key = NULL, oauth_token = NULL WHERE connector_id = ? AND user_id IS NULL").run(connectorId);
+  }
 }
 
-export function listConnectorConfigs(): Array<{ connector_id: string; connected: boolean; connected_at?: string }> {
+export function listConnectorConfigs(userId?: string): Array<{ connector_id: string; connected: boolean; connected_at?: string }> {
   const db = getDb();
-  const rows = db.prepare("SELECT connector_id, connected, connected_at FROM connector_configs WHERE connected = 1").all() as Array<{ connector_id: string; connected: number; connected_at?: string }>;
+  const rows = userId
+    ? db.prepare("SELECT connector_id, connected, connected_at FROM connector_configs WHERE connected = 1 AND user_id = ?").all(userId) as Array<{ connector_id: string; connected: number; connected_at?: string }>
+    : db.prepare("SELECT connector_id, connected, connected_at FROM connector_configs WHERE connected = 1 AND user_id IS NULL").all() as Array<{ connector_id: string; connected: number; connected_at?: string }>;
   return rows.map((r) => ({ ...r, connected: r.connected === 1 }));
 }
 
@@ -1208,36 +1381,44 @@ export function ensureFilesDir(): string {
 
 // ─── Memory ───────────────────────────────────────────────────────────────────
 
-export function memoryStore(entry: MemoryEntry): void {
+export function memoryStore(entry: MemoryEntry & { user_id?: string }): void {
   const db = getDb();
-  const existing = db.prepare("SELECT id FROM memory WHERE key = ?").get(entry.key);
+  const userId = entry.user_id || null;
+  const existing = userId
+    ? db.prepare("SELECT id FROM memory WHERE key = ? AND user_id = ?").get(entry.key, userId)
+    : db.prepare("SELECT id FROM memory WHERE key = ? AND user_id IS NULL").get(entry.key);
   if (existing) {
-    db.prepare("UPDATE memory SET value=?, source_task_id=?, tags=?, updated_at=? WHERE key=?").run(
+    db.prepare("UPDATE memory SET value=?, source_task_id=?, tags=?, updated_at=? WHERE key=? AND (user_id = ? OR (user_id IS NULL AND ? IS NULL))").run(
       entry.value,
       entry.source_task_id || null,
       JSON.stringify(entry.tags || []),
       new Date().toISOString(),
-      entry.key
+      entry.key,
+      userId,
+      userId
     );
   } else {
     db.prepare(`
-      INSERT INTO memory (id, key, value, source_task_id, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memory (id, key, value, source_task_id, tags, user_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.id,
       entry.key,
       entry.value,
       entry.source_task_id || null,
       JSON.stringify(entry.tags || []),
+      userId,
       entry.created_at,
       entry.updated_at
     );
   }
 }
 
-export function memoryRecall(query: string, limit = 5): MemoryEntry[] {
+export function memoryRecall(query: string, limit = 5, userId?: string): MemoryEntry[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM memory ORDER BY updated_at DESC LIMIT 200").all() as Array<Record<string, unknown>>;
+  const rows = userId
+    ? db.prepare("SELECT * FROM memory WHERE user_id = ? OR user_id IS NULL ORDER BY updated_at DESC LIMIT 200").all(userId) as Array<Record<string, unknown>>
+    : db.prepare("SELECT * FROM memory ORDER BY updated_at DESC LIMIT 200").all() as Array<Record<string, unknown>>;
   
   // Enhanced keyword search with TF-IDF-inspired scoring (OpenClaw-inspired)
   const queryTokens = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1302,9 +1483,11 @@ export function memoryRecall(query: string, limit = 5): MemoryEntry[] {
     }));
 }
 
-export function listMemory(limit = 50): MemoryEntry[] {
+export function listMemory(limit = 50, userId?: string): MemoryEntry[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM memory ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<Record<string, unknown>>;
+  const rows = userId
+    ? db.prepare("SELECT * FROM memory WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(userId, limit) as Array<Record<string, unknown>>
+    : db.prepare("SELECT * FROM memory ORDER BY updated_at DESC LIMIT ?").all(limit) as Array<Record<string, unknown>>;
   return rows.map((r) => ({
     id: r.id as string,
     key: r.key as string,
@@ -1385,27 +1568,30 @@ export function getGlobalTokenUsage(): { total_tokens: number; estimated_cost_us
 import type { ScheduledTask } from "./types";
 export type { ScheduledTask };
 
-export function createScheduledTask(task: Omit<ScheduledTask, "created_at" | "updated_at">): ScheduledTask {
+export function createScheduledTask(task: Omit<ScheduledTask, "created_at" | "updated_at"> & { user_id?: string }): ScheduledTask {
   const db = getDb();
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO scheduled_tasks (id, name, prompt, schedule_type, schedule_expr, next_run_at, last_run_at, enabled, model, delete_after_run, created_at, updated_at)
-    VALUES (@id, @name, @prompt, @schedule_type, @schedule_expr, @next_run_at, @last_run_at, @enabled, @model, @delete_after_run, @created_at, @updated_at)
+    INSERT INTO scheduled_tasks (id, name, prompt, schedule_type, schedule_expr, next_run_at, last_run_at, enabled, model, delete_after_run, user_id, created_at, updated_at)
+    VALUES (@id, @name, @prompt, @schedule_type, @schedule_expr, @next_run_at, @last_run_at, @enabled, @model, @delete_after_run, @user_id, @created_at, @updated_at)
   `).run({
     ...task,
     enabled: task.enabled ? 1 : 0,
     delete_after_run: task.delete_after_run ? 1 : 0,
     last_run_at: task.last_run_at || null,
     schedule_expr: task.schedule_expr || null,
+    user_id: task.user_id || null,
     created_at: now,
     updated_at: now,
   });
   return { ...task, created_at: now, updated_at: now };
 }
 
-export function listScheduledTasks(): ScheduledTask[] {
+export function listScheduledTasks(userId?: string): ScheduledTask[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM scheduled_tasks ORDER BY next_run_at ASC").all() as Array<Record<string, unknown>>;
+  const rows = userId
+    ? db.prepare("SELECT * FROM scheduled_tasks WHERE user_id = ? ORDER BY next_run_at ASC").all(userId) as Array<Record<string, unknown>>
+    : db.prepare("SELECT * FROM scheduled_tasks ORDER BY next_run_at ASC").all() as Array<Record<string, unknown>>;
   return rows.map(hydrateScheduledTask);
 }
 
@@ -1439,13 +1625,17 @@ export function toggleScheduledTask(id: string, enabled: boolean): void {
 
 // ─── Tasks by Source (Session Isolation) ──────────────────────────────────────
 
-export function listTasksBySource(source?: string, limit = 50, offset = 0): Task[] {
+export function listTasksBySource(source?: string, limit = 50, offset = 0, userId?: string): Task[] {
   const db = getDb();
+  if (source && userId) {
+    const rows = db.prepare("SELECT * FROM tasks WHERE source = ? AND user_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(source, userId, limit, offset) as Record<string, unknown>[];
+    return rows.map((r) => hydrateTask(db, r));
+  }
   if (source) {
     const rows = db.prepare("SELECT * FROM tasks WHERE source = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(source, limit, offset) as Record<string, unknown>[];
     return rows.map((r) => hydrateTask(db, r));
   }
-  return listTasks(undefined, limit, offset);
+  return listTasks(undefined, limit, offset, userId);
 }
 
 function hydrateScheduledTask(r: Record<string, unknown>): ScheduledTask {
@@ -1469,44 +1659,79 @@ export { type TaskStatus };
 
 // ─── Settings CRUD ────────────────────────────────────────────────────────────
 
-export function getSetting(key: string): string | null {
+export function getSetting(key: string, userId?: string): string | null {
   const db = getDb();
-  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  if (userId) {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ? AND user_id = ?").get(key, userId) as { value: string } | undefined;
+    if (row) return row.value;
+  }
+  // Fall back to global setting (user_id IS NULL)
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? AND user_id IS NULL").get(key) as { value: string } | undefined;
   return row?.value ?? null;
 }
 
-export function setSetting(key: string, value: string): void {
+export function setSetting(key: string, value: string, userId?: string): void {
   const db = getDb();
-  db.prepare(
-    "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
-  ).run(key, value, new Date().toISOString());
+  const now = new Date().toISOString();
+  const id = Math.random().toString(36).slice(2);
+  if (userId) {
+    db.prepare(
+      "INSERT INTO settings (id, key, value, user_id, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+    ).run(id, key, value, userId, now);
+  } else {
+    db.prepare(
+      "INSERT INTO settings (id, key, value, user_id, updated_at) VALUES (?, ?, ?, NULL, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+    ).run(id, key, value, now);
+  }
 }
 
-export function getAllSettings(): Record<string, string> {
+export function getAllSettings(userId?: string): Record<string, string> {
   const db = getDb();
-  const rows = db.prepare("SELECT key, value FROM settings").all() as Array<{ key: string; value: string }>;
+  // Return global settings, overridden by user-specific settings when userId provided
+  const globalRows = db.prepare("SELECT key, value FROM settings WHERE user_id IS NULL").all() as Array<{ key: string; value: string }>;
   const result: Record<string, string> = {};
-  for (const r of rows) result[r.key] = r.value;
+  for (const r of globalRows) result[r.key] = r.value;
+  if (userId) {
+    const userRows = db.prepare("SELECT key, value FROM settings WHERE user_id = ?").all(userId) as Array<{ key: string; value: string }>;
+    for (const r of userRows) result[r.key] = r.value;
+  }
   return result;
 }
 
-export function getSystemHealth(): {
+export function getSystemHealth(userId?: string): {
   providers: Array<{ name: string; configured: boolean }>;
   search: Array<{ name: string; configured: boolean }>;
   db_ok: boolean;
   onboarding_completed: boolean;
 } {
+  // When called for a specific user, check their stored keys (not server env).
+  // This prevents the server owner's Fly secrets from leaking as "configured"
+  // to other users who haven't set their own keys.
+  let userKeyNames: Set<string> = new Set();
+  if (userId) {
+    try {
+      const rawKeys = getUserApiKeysRaw(userId);
+      userKeyNames = new Set(Object.keys(rawKeys));
+    } catch { /* fall through — treat as no keys */ }
+  }
+
+  function hasKey(envName: string): boolean {
+    if (userId) return userKeyNames.has(envName);
+    // No userId = admin/system check — use server env (scheduled tasks, etc.)
+    return !!process.env[envName];
+  }
+
   const providers = [
-    { name: "Anthropic (Claude)", configured: !!process.env.ANTHROPIC_API_KEY },
-    { name: "OpenAI (GPT-5.4)", configured: !!process.env.OPENAI_API_KEY },
-    { name: "Google (Gemini)", configured: !!process.env.GOOGLE_AI_API_KEY },
-    { name: "Replicate", configured: !!process.env.REPLICATE_API_TOKEN || !!getConnectorConfig("replicate")?.api_key },
+    { name: "Anthropic (Claude)", configured: hasKey("ANTHROPIC_API_KEY") },
+    { name: "OpenAI (GPT-5.4)", configured: hasKey("OPENAI_API_KEY") },
+    { name: "Google (Gemini)", configured: hasKey("GOOGLE_AI_API_KEY") },
+    { name: "Replicate", configured: hasKey("REPLICATE_API_TOKEN") || (userId ? userKeyNames.has("REPLICATE_API_TOKEN") : !!getConnectorConfig("replicate")?.api_key) },
   ];
   const search = [
-    { name: "Perplexity", configured: !!process.env.PERPLEXITY_API_KEY },
-    { name: "Brave Search", configured: !!process.env.BRAVE_SEARCH_API_KEY },
-    { name: "Serper", configured: !!process.env.SERPER_API_KEY },
-    { name: "Tavily", configured: !!process.env.TAVILY_API_KEY },
+    { name: "Perplexity", configured: hasKey("PERPLEXITY_API_KEY") },
+    { name: "Brave Search", configured: hasKey("BRAVE_SEARCH_API_KEY") },
+    { name: "Serper", configured: hasKey("SERPER_API_KEY") },
+    { name: "Tavily", configured: hasKey("TAVILY_API_KEY") },
   ];
   let db_ok = false;
   try { getDb().prepare("SELECT 1").get(); db_ok = true; } catch { /* */ }
@@ -1953,3 +2178,426 @@ export function deleteDocument(id: string): void {
   const db = getDb();
   db.prepare("DELETE FROM documents WHERE id = ?").run(id);
 }
+
+// ─── Tiers ────────────────────────────────────────────────────────────────────
+
+export type TierName = "free" | "starter" | "pro" | "agency";
+
+export interface TierLimits {
+  name: TierName;
+  label: string;
+  price_monthly: number; // USD
+  tasks_per_month: number; // -1 = unlimited
+  computer_use: boolean;
+  creative_suite: boolean;
+  video_suite: boolean;
+  scheduled_tasks: number; // max count, -1 = unlimited
+  skills: number; // max count, -1 = unlimited
+  connectors: number; // max count, -1 = unlimited
+  memory_entries: number; // max, -1 = unlimited
+  file_storage_mb: number; // -1 = unlimited
+  models: "basic" | "standard" | "premium" | "all";
+  analytics: boolean;
+  api_access: boolean;
+  priority_support: boolean;
+  description: string;
+  features: string[];
+}
+
+export const TIERS: Record<TierName, TierLimits> = {
+  free: {
+    name: "free",
+    label: "Free",
+    price_monthly: 0,
+    tasks_per_month: 50,
+    computer_use: false,
+    creative_suite: false,
+    video_suite: false,
+    scheduled_tasks: 0,
+    skills: 5,
+    connectors: 2,
+    memory_entries: 100,
+    file_storage_mb: 100,
+    models: "basic",
+    analytics: false,
+    api_access: false,
+    priority_support: false,
+    description: "Explore what AI agents can do",
+    features: [
+      "50 tasks / month",
+      "5 reusable skills",
+      "AI models (GPT-4o mini, Gemini Flash 2.0)",
+      "File manager with 100 MB storage",
+      "2 service integrations",
+      "Persistent memory & context recall",
+      "Full task history & audit log",
+      "Community support",
+    ],
+  },
+  starter: {
+    name: "starter",
+    label: "Starter",
+    price_monthly: 12,
+    tasks_per_month: 500,
+    computer_use: false,
+    creative_suite: true,
+    video_suite: true,
+    scheduled_tasks: 5,
+    skills: 25,
+    connectors: 10,
+    memory_entries: 1000,
+    file_storage_mb: 1024,
+    models: "standard",
+    analytics: false,
+    api_access: false,
+    priority_support: false,
+    description: "Automate the work you do every day",
+    features: [
+      "500 tasks / month",
+      "25 reusable skills",
+      "AI models (GPT-4o, Claude Sonnet, Gemini Pro)",
+      "5 scheduled automations (cron, recurring)",
+      "Image & video generation",
+      "10 service integrations",
+      "1 GB file storage",
+      "Email support",
+    ],
+  },
+  pro: {
+    name: "pro",
+    label: "Pro",
+    price_monthly: 39,
+    tasks_per_month: -1,
+    computer_use: true,
+    creative_suite: true,
+    video_suite: true,
+    scheduled_tasks: -1,
+    skills: -1,
+    connectors: -1,
+    memory_entries: -1,
+    file_storage_mb: 10240,
+    models: "premium",
+    analytics: true,
+    api_access: false,
+    priority_support: true,
+    description: "Your personal AI power user, no limits",
+    features: [
+      "Unlimited tasks & scheduled automations",
+      "Unlimited skills & integrations",
+      "Full AI model access (Claude Opus 4, GPT-4.1, Gemini Ultra)",
+      "Browser & desktop computer control",
+      "Multi-channel dispatch (Telegram, Discord, Slack, email)",
+      "Full creative suite — Video, Audio & 3D Studio",
+      "App builder & in-browser coding companion",
+      "Advanced analytics & usage insights",
+      "10 GB file storage",
+      "Priority support",
+    ],
+  },
+  agency: {
+    name: "agency",
+    label: "Agency",
+    price_monthly: 99,
+    tasks_per_month: -1,
+    computer_use: true,
+    creative_suite: true,
+    video_suite: true,
+    scheduled_tasks: -1,
+    skills: -1,
+    connectors: -1,
+    memory_entries: -1,
+    file_storage_mb: -1,
+    models: "all",
+    analytics: true,
+    api_access: true,
+    priority_support: true,
+    description: "Built for high-volume and client work",
+    features: [
+      "Everything in Pro",
+      "REST API access & webhook triggers",
+      "Unlimited file storage",
+      "All models including experimental & fine-tuned",
+      "Team usage dashboard & per-user limits",
+      "Custom skill & connector development",
+      "Dedicated account manager & onboarding",
+      "Uptime SLA guarantee",
+    ],
+  },
+};
+
+export interface UserSubscription {
+  id: string;
+  user_id: string;
+  tier: TierName;
+  status: "active" | "cancelled" | "past_due";
+  tasks_used_this_month: number;
+  usage_reset_at: string;
+  created_at: string;
+  updated_at: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+}
+
+export function getUserSubscription(userId: string): UserSubscription {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM subscriptions WHERE user_id = ?").get(userId) as Record<string, unknown> | undefined;
+  if (!row) {
+    // Auto-create free tier subscription on first access
+    return createUserSubscription(userId, "free");
+  }
+  return {
+    id: row.id as string,
+    user_id: row.user_id as string,
+    tier: row.tier as TierName,
+    status: row.status as UserSubscription["status"],
+    tasks_used_this_month: row.tasks_used_this_month as number,
+    usage_reset_at: row.usage_reset_at as string,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+    stripe_customer_id: row.stripe_customer_id as string | undefined,
+    stripe_subscription_id: row.stripe_subscription_id as string | undefined,
+  };
+}
+
+export function createUserSubscription(userId: string, tier: TierName = "free"): UserSubscription {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const resetAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const sub: UserSubscription = {
+    id: uuidv4(),
+    user_id: userId,
+    tier,
+    status: "active",
+    tasks_used_this_month: 0,
+    usage_reset_at: resetAt,
+    created_at: now,
+    updated_at: now,
+  };
+  db.prepare(`
+    INSERT INTO subscriptions (id, user_id, tier, status, tasks_used_this_month, usage_reset_at, created_at, updated_at)
+    VALUES (@id, @user_id, @tier, @status, @tasks_used_this_month, @usage_reset_at, @created_at, @updated_at)
+  `).run(sub);
+  return sub;
+}
+
+export function updateUserTier(userId: string, tier: TierName, stripeCustomerId?: string, stripeSubscriptionId?: string): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  let result;
+  if (stripeCustomerId || stripeSubscriptionId) {
+    result = db.prepare(
+      "UPDATE subscriptions SET tier = ?, stripe_customer_id = COALESCE(?, stripe_customer_id), stripe_subscription_id = COALESCE(?, stripe_subscription_id), updated_at = ? WHERE user_id = ?"
+    ).run(tier, stripeCustomerId ?? null, stripeSubscriptionId ?? null, now, userId);
+  } else {
+    result = db.prepare("UPDATE subscriptions SET tier = ?, updated_at = ? WHERE user_id = ?").run(tier, now, userId);
+  }
+  if (result.changes === 0) createUserSubscription(userId, tier);
+}
+
+export function getUserByStripeCustomerId(stripeCustomerId: string): { id: string; email: string } | null {
+  const db = getDb();
+  const row = db.prepare("SELECT u.id, u.email FROM users u JOIN subscriptions s ON s.user_id = u.id WHERE s.stripe_customer_id = ?").get(stripeCustomerId) as { id: string; email: string } | undefined;
+  return row ?? null;
+}
+
+// ─── Gift Code Functions ────────────────────────────────────────────────────
+
+export interface GiftCode {
+  id: string;
+  code: string;
+  tier: TierName;
+  duration_days: number;
+  created_by: string | null;
+  redeemed_by: string | null;
+  redeemed_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export function createGiftCode(opts: {
+  tier: TierName;
+  duration_days: number;
+  created_by: string;
+  expires_at?: string | null;
+}): GiftCode {
+  const db = getDb();
+  const { v4: uuidv4 } = require("uuid");
+  // 8-char uppercase alphanumeric code, e.g. "GIFT-A3BX9PQZ"
+  const code = "GIFT-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  db.prepare(
+    "INSERT INTO gift_codes (id, code, tier, duration_days, created_by, expires_at, created_at) VALUES (?,?,?,?,?,?,?)"
+  ).run(id, code, opts.tier, opts.duration_days, opts.created_by, opts.expires_at ?? null, now);
+  return db.prepare("SELECT * FROM gift_codes WHERE id = ?").get(id) as GiftCode;
+}
+
+export function getGiftCode(code: string): GiftCode | null {
+  const db = getDb();
+  return (db.prepare("SELECT * FROM gift_codes WHERE code = ?").get(code) as GiftCode | undefined) ?? null;
+}
+
+export function listGiftCodes(): GiftCode[] {
+  const db = getDb();
+  return db.prepare("SELECT * FROM gift_codes ORDER BY created_at DESC").all() as GiftCode[];
+}
+
+export function redeemGiftCode(code: string, userId: string): { success: boolean; error?: string; tier?: TierName } {
+  const db = getDb();
+  const gc = getGiftCode(code.toUpperCase());
+  if (!gc) return { success: false, error: "Invalid gift code" };
+  if (gc.redeemed_by) return { success: false, error: "This code has already been redeemed" };
+  if (gc.expires_at && new Date() > new Date(gc.expires_at)) return { success: false, error: "This code has expired" };
+
+  const now = new Date().toISOString();
+  db.prepare("UPDATE gift_codes SET redeemed_by = ?, redeemed_at = ? WHERE id = ?").run(userId, now, gc.id);
+  // Grant the tier (duration_days stored for reference; tier is granted indefinitely until next payment cycle)
+  updateUserTier(userId, gc.tier);
+  return { success: true, tier: gc.tier };
+}
+
+export function isUserAdmin(userId: string): boolean {
+  const db = getDb();
+  const row = db.prepare("SELECT is_admin, role FROM users WHERE id = ?").get(userId) as { is_admin: number; role: string } | undefined;
+  return !!(row?.is_admin || row?.role === "admin");
+}
+
+export function incrementTaskUsage(userId: string): { allowed: boolean; used: number; limit: number } {
+  const db = getDb();
+  const sub = getUserSubscription(userId);
+  const limits = TIERS[sub.tier];
+
+  // Reset monthly counter if past reset date
+  if (new Date() > new Date(sub.usage_reset_at)) {
+    const resetAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare("UPDATE subscriptions SET tasks_used_this_month = 0, usage_reset_at = ?, updated_at = ? WHERE user_id = ?").run(
+      resetAt, new Date().toISOString(), userId
+    );
+    sub.tasks_used_this_month = 0;
+  }
+
+  if (limits.tasks_per_month !== -1 && sub.tasks_used_this_month >= limits.tasks_per_month) {
+    return { allowed: false, used: sub.tasks_used_this_month, limit: limits.tasks_per_month };
+  }
+
+  db.prepare("UPDATE subscriptions SET tasks_used_this_month = tasks_used_this_month + 1, updated_at = ? WHERE user_id = ?").run(
+    new Date().toISOString(), userId
+  );
+  return { allowed: true, used: sub.tasks_used_this_month + 1, limit: limits.tasks_per_month };
+}
+
+export function checkTierFeature(userId: string, feature: keyof TierLimits): boolean | number {
+  const sub = getUserSubscription(userId);
+  return TIERS[sub.tier][feature] as boolean | number;
+}
+
+// ─── User CRUD ────────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string;
+  role: "admin" | "user";
+  created_at: string;
+  updated_at: string;
+}
+
+export function createUser(data: { email: string; password_hash: string; name: string; role?: "admin" | "user" }): User {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const user: User = {
+    id: uuidv4(),
+    email: data.email.toLowerCase().trim(),
+    password_hash: data.password_hash,
+    name: data.name.trim(),
+    role: data.role || "user",
+    created_at: now,
+    updated_at: now,
+  };
+  db.prepare(`
+    INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
+    VALUES (@id, @email, @password_hash, @name, @role, @created_at, @updated_at)
+  `).run(user);
+  // Auto-create free tier subscription
+  createUserSubscription(user.id, "free");
+  return user;
+}
+
+export function getUserByEmail(email: string): User | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?)").get(email.trim()) as User | undefined;
+  return row || null;
+}
+
+export function getUserById(id: string): User | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | undefined;
+  return row || null;
+}
+
+export function getUserCount(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+  return row.count;
+}
+
+export function updateUser(id: string, updates: { name?: string; email?: string }): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  if (updates.name !== undefined) {
+    db.prepare("UPDATE users SET name = ?, updated_at = ? WHERE id = ?").run(updates.name.trim(), now, id);
+  }
+  if (updates.email !== undefined) {
+    db.prepare("UPDATE users SET email = ?, updated_at = ? WHERE id = ?").run(updates.email.toLowerCase().trim(), now, id);
+  }
+}
+
+// ─── User API Keys ─────────────────────────────────────────────────────────────
+
+export interface UserApiKey {
+  id: string;
+  user_id: string;
+  key_name: string;
+  key_value: string; // encrypted
+  created_at: string;
+  updated_at: string;
+}
+
+export function getUserApiKeys(userId: string): UserApiKey[] {
+  const db = getDb();
+  return db.prepare("SELECT * FROM user_api_keys WHERE user_id = ? ORDER BY key_name ASC").all(userId) as UserApiKey[];
+}
+
+export function setUserApiKey(userId: string, keyName: string, encryptedValue: string): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const existing = db.prepare("SELECT id FROM user_api_keys WHERE user_id = ? AND key_name = ?").get(userId, keyName);
+  if (existing) {
+    db.prepare("UPDATE user_api_keys SET key_value = ?, updated_at = ? WHERE user_id = ? AND key_name = ?").run(
+      encryptedValue, now, userId, keyName
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO user_api_keys (id, user_id, key_name, key_value, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), userId, keyName, encryptedValue, now, now);
+  }
+}
+
+export function deleteUserApiKey(userId: string, keyName: string): void {
+  const db = getDb();
+  db.prepare("DELETE FROM user_api_keys WHERE user_id = ? AND key_name = ?").run(userId, keyName);
+}
+
+/**
+ * Returns decrypted API keys as a Record<keyName, plaintext> for use in agent calls.
+ * Caller is responsible for decryption via auth.decryptApiKey.
+ */
+export function getUserApiKeysRaw(userId: string): Record<string, string> {
+  const keys = getUserApiKeys(userId);
+  const result: Record<string, string> = {};
+  for (const k of keys) result[k.key_name] = k.key_value;
+  return result;
+}
+

@@ -1,0 +1,17 @@
+node_modules
+.next
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.env*.local
+bolt-diy
+blockbench
+opendaw
+task-files
+playwright-report
+test-results
+docs
+scripts
+.git

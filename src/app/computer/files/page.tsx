@@ -5,7 +5,7 @@ import { FilesClient } from "./files-client";
 export const metadata: Metadata = { title: "Files — Ottomate" };
 export const dynamic = "force-dynamic";
 
-export default function FilesPage() {
+export default async function FilesPage() {
   let files: ReturnType<typeof listAllFiles> = [];
   let folders: ReturnType<typeof listFolders> = [];
   let stats: ReturnType<typeof getFilesStats> = { total: 0, bySource: {}, byType: {}, totalSize: 0 };

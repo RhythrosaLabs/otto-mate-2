@@ -17,7 +17,10 @@
 import { usePathname } from "next/navigation";
 import { useRef, ReactNode, useCallback, useEffect, createContext, useContext } from "react";
 
-const MAX_CACHED_PAGES = 20;
+// Keep a small LRU window. Task detail pages each have a unique URL so a large
+// cache rapidly accumulates dozens of mounted component trees, each with their
+// own SSE connections and polling intervals, causing serious slowdown.
+const MAX_CACHED_PAGES = 8;
 
 // ─── Page Visibility Context ──────────────────────────────────────────────────
 // Components can use this to know if their page is visible or hidden.

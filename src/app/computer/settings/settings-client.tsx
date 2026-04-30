@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Settings,
   Shield,
@@ -8,21 +9,96 @@ import {
   DollarSign,
   RefreshCw,
   CheckCircle2,
+  RotateCcw,
   XCircle,
   Save,
   Palette,
   Search,
+  LayoutGrid,
+  Gift,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS } from "@/lib/types";
 import type { HealthInfo } from "@/lib/types";
 import { THEMES, applyTheme, getStoredThemeId } from "@/lib/themes";
+import { OPTIONAL_NAV_ITEMS } from "@/lib/constants";
+
+const FEATURES_KEY = "ottomate_enabled_features";
+
+function readEnabledFeatures(): Set<string> {
+  try {
+    const raw = localStorage.getItem(FEATURES_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveEnabledFeatures(features: Set<string>) {
+  localStorage.setItem(FEATURES_KEY, JSON.stringify([...features]));
+  window.dispatchEvent(new CustomEvent("features-changed"));
+}
 
 export function SettingsClient() {
+  const router = useRouter();
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(false);
+
+  // Gift code
+  const [giftCode, setGiftCode] = useState("");
+  const [giftLoading, setGiftLoading] = useState(false);
+  const [giftResult, setGiftResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.user?.role === "admin" || d?.user?.is_admin) setIsAdmin(true);
+    }).catch(() => {});
+  }, []);
+
+  async function redeemGiftCode() {
+    if (!giftCode.trim()) return;
+    setGiftLoading(true);
+    setGiftResult(null);
+    try {
+      const res = await fetch("/api/gift-codes/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: giftCode.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setGiftResult({ ok: true, msg: d.message ?? "Code redeemed!" });
+        setGiftCode("");
+        // Refresh page so subscription badge updates
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setGiftResult({ ok: false, msg: d.error ?? "Redemption failed" });
+      }
+    } catch {
+      setGiftResult({ ok: false, msg: "Network error" });
+    }
+    setGiftLoading(false);
+  }
+
+  // Optional sidebar features
+  const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setEnabledFeatures(readEnabledFeatures());
+  }, []);
+
+  function toggleFeature(href: string) {
+    const next = new Set(enabledFeatures);
+    if (next.has(href)) next.delete(href); else next.add(href);
+    setEnabledFeatures(next);
+    saveEnabledFeatures(next);
+  }
 
   // Local form state
   const [defaultModel, setDefaultModel] = useState("auto");
@@ -297,6 +373,101 @@ export function SettingsClient() {
         </div>
       </div>
 
+      {/* Optional Sidebar Features */}
+      <div className="rounded-xl border border-pplx-border bg-pplx-card p-5 opacity-60">
+        <h2 className="text-sm font-medium text-pplx-text mb-1 flex items-center gap-2">
+          <LayoutGrid size={14} className="text-pplx-accent" />
+          Sidebar Features
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pplx-accent/10 text-pplx-accent border border-pplx-accent/20">
+            Coming Soon
+          </span>
+        </h2>
+        <p className="text-[11px] text-pplx-muted mb-4">
+          Per-user feature toggles are coming soon. These tools will let you customize your sidebar.
+        </p>
+        <div className="space-y-3 pointer-events-none select-none">
+          {Object.entries(OPTIONAL_NAV_ITEMS).map(([href, meta]) => (
+            <div
+              key={href}
+              className="flex items-start gap-3 p-3 rounded-lg border border-pplx-border"
+            >
+              <div className="mt-0.5 w-4 h-4 rounded flex-shrink-0 border border-pplx-border bg-pplx-bg" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-pplx-muted">{meta.label}</p>
+                <p className="text-[10px] text-pplx-muted/70 mt-0.5 leading-relaxed">{meta.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Gift Code */}
+      <div className="rounded-xl border border-pplx-border bg-pplx-card p-5">
+        <h2 className="text-sm font-medium text-pplx-text mb-1 flex items-center gap-2">
+          <Gift size={14} className="text-pplx-accent" />
+          Gift Code
+        </h2>
+        <p className="text-[11px] text-pplx-muted mb-4">
+          Have a gift code? Enter it below to unlock premium features.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={giftCode}
+            onChange={e => setGiftCode(e.target.value.toUpperCase())}
+            placeholder="GIFT-XXXXXXXX"
+            className="flex-1 px-3 py-2 rounded-lg bg-pplx-bg border border-pplx-border text-sm text-pplx-text placeholder-pplx-muted focus:outline-none focus:border-pplx-accent font-mono uppercase"
+            onKeyDown={e => e.key === "Enter" && redeemGiftCode()}
+          />
+          <button
+            onClick={redeemGiftCode}
+            disabled={giftLoading || !giftCode.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-pplx-accent text-white text-xs font-medium disabled:opacity-50 hover:bg-pplx-accent-hover transition-colors"
+          >
+            <Tag size={12} />
+            {giftLoading ? "…" : "Redeem"}
+          </button>
+        </div>
+        {giftResult && (
+          <p className={cn("mt-2 text-xs", giftResult.ok ? "text-green-400" : "text-red-400")}>
+            {giftResult.msg}
+          </p>
+        )}
+        {isAdmin && (
+          <p className="mt-3 text-[11px] text-pplx-muted">
+            Admin:{" "}
+            <a href="/computer/admin/gift-codes" className="text-pplx-accent hover:underline">
+              Generate gift codes →
+            </a>
+          </p>
+        )}
+      </div>
+
+      {/* Redo Onboarding */}
+      <div className="rounded-xl border border-pplx-border bg-pplx-card p-5">
+        <h2 className="text-sm font-medium text-pplx-text mb-1 flex items-center gap-2">
+          <RotateCcw size={14} className="text-pplx-accent" />
+          Setup Wizard
+        </h2>
+        <p className="text-[11px] text-pplx-muted mb-4">
+          Re-run the setup wizard to add API keys or review onboarding steps.
+        </p>
+        <button
+          onClick={async () => {
+            await fetch("/api/settings", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ settings: { onboarding_completed: "false" } }),
+            });
+            sessionStorage.removeItem("ottomate_onboarding_checked");
+            router.push("/computer/onboarding");
+          }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-pplx-border text-xs text-pplx-muted hover:text-pplx-text hover:border-pplx-accent/50 transition-all"
+        >
+          <RotateCcw size={13} />
+          Redo setup wizard
+        </button>
+      </div>
 
     </div>
   );

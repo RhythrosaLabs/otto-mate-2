@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listSkills, createSkill } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
+import { getSessionFromRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/skills
-export async function GET() {
-  return NextResponse.json(listSkills());
+export async function GET(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  return NextResponse.json(listSkills(session?.userId));
 }
 
 // POST /api/skills
 export async function POST(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
   let body: {
     name: string;
     description?: string;
@@ -35,6 +38,7 @@ export async function POST(req: NextRequest) {
     category: body.category || "custom",
     triggers: [],
     is_active: true,
+    user_id: session?.userId,
   });
 
   return NextResponse.json(skill, { status: 201 });

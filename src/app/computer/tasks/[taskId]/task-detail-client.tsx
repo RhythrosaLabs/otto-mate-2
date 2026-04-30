@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { usePageVisible } from "@/components/persistent-layout";
 import { addBackgroundOp, updateBackgroundOp, removeBackgroundOp } from "@/lib/background-ops";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -82,6 +83,9 @@ export function TaskDetailClient({ task: initialTask }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+
+  // Pause SSE and heavy work when this page is hidden by PersistentLayout
+  const isVisible = usePageVisible();
 
   // ─── Background ops tracking ─────────────────────────────────────────────
   useEffect(() => {
@@ -244,8 +248,9 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     }
   }, [task.messages.length]);
 
-  // SSE-based live updates — disabled while streaming to prevent duplicate updates
+  // SSE-based live updates — disabled while streaming or while page is hidden
   useEffect(() => {
+    if (!isVisible) return;  // don't open SSE for hidden/cached pages
     if (task.status !== "running" && task.status !== "pending") return;
     // While the run-stream is active, we get updates directly from it — skip global SSE
     if (isStreamingRef.current) return;
@@ -280,7 +285,21 @@ export function TaskDetailClient({ task: initialTask }: Props) {
     return () => {
       es.close();
     };
-  }, [task.id, task.status]);
+  }, [task.id, task.status, isVisible]);
+
+  // Re-fetch task when page becomes visible again (catch up on missed SSE events)
+  const wasVisibleRef = useRef(false);
+  useEffect(() => {
+    if (isVisible && wasVisibleRef.current === false) {
+      if (task.status === "running" || task.status === "pending") {
+        fetch(`/api/tasks/${task.id}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(updated => { if (updated) setTask(updated as Task); })
+          .catch(() => { /* best-effort */ });
+      }
+    }
+    wasVisibleRef.current = isVisible;
+  }, [isVisible, task.id, task.status]);
 
   // Auto-run if task is pending (just created) — guarded to fire only once
   useEffect(() => {
