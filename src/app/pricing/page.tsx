@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TIERS } from "@/lib/db";
-import type { TierName } from "@/lib/db";
+import { TIERS } from "@/lib/tiers";
+import type { TierName } from "@/lib/tiers";
 
 const TIER_ORDER: TierName[] = ["free", "starter", "pro", "agency"];
 
