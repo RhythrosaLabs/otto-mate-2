@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/computer/channels", destination: "/computer/dispatch", permanent: true },
       { source: "/computer/whatsapp", destination: "/computer/dispatch", permanent: true },
+      { source: "/computer/settings/api-keys", destination: "/computer/connectors", permanent: true },
     ];
   },
   // Enable cross-origin isolation on the Computer UI so bolt.diy WebContainers

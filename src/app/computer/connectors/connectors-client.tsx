@@ -1,10 +1,21 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, CheckCircle2, Plus, X, ExternalLink, Plug } from "lucide-react";
+import { Search, CheckCircle2, Plus, X, ExternalLink, Plug, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageVisible } from "@/components/persistent-layout";
 import type { Connector } from "@/lib/types";
+
+const KEY_LABELS: Record<string, { label: string; url: string }> = {
+  ANTHROPIC_API_KEY: { label: "Anthropic (Claude)", url: "https://console.anthropic.com/keys" },
+  OPENAI_API_KEY: { label: "OpenAI (GPT)", url: "https://platform.openai.com/api-keys" },
+  GOOGLE_AI_API_KEY: { label: "Google AI (Gemini)", url: "https://aistudio.google.com/app/apikey" },
+  PERPLEXITY_API_KEY: { label: "Perplexity", url: "https://www.perplexity.ai/settings/api" },
+  OPENROUTER_API_KEY: { label: "OpenRouter", url: "https://openrouter.ai/keys" },
+  REPLICATE_API_KEY: { label: "Replicate", url: "https://replicate.com/account/api-tokens" },
+  LUMA_API_KEY: { label: "Luma AI", url: "https://lumalabs.ai/dream-machine/api" },
+  HUGGINGFACE_API_KEY: { label: "Hugging Face", url: "https://huggingface.co/settings/tokens" },
+};
 
 const CATEGORY_LABELS: Record<string, string> = {
   all: "All",
@@ -53,9 +64,63 @@ export function ConnectorsClient({
   const [isConnecting, setIsConnecting] = useState(false);
   const [banner, setBanner] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
+  // API key state
+  interface StoredKey { key_name: string; set: boolean; updated_at: string; }
+  const [storedKeys, setStoredKeys] = useState<Record<string, StoredKey>>({});
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [keyInput, setKeyInput] = useState("");
+  const [keySaving, setKeySaving] = useState(false);
+  const [keyMessage, setKeyMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  async function fetchStoredKeys() {
+    const res = await fetch("/api/user/keys");
+    if (res.ok) {
+      const data = await res.json() as StoredKey[];
+      const map: Record<string, StoredKey> = {};
+      for (const k of data) map[k.key_name] = k;
+      setStoredKeys(map);
+    }
+  }
+
+  async function saveApiKey(keyName: string) {
+    if (!keyInput.trim()) return;
+    setKeySaving(true);
+    try {
+      const res = await fetch("/api/user/keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key_name: keyName, key_value: keyInput.trim() }),
+      });
+      if (res.ok) {
+        setKeyMessage({ text: "Key saved and encrypted", type: "success" });
+        setEditingKey(null);
+        setKeyInput("");
+        fetchStoredKeys();
+      } else {
+        const d = await res.json() as { error: string };
+        setKeyMessage({ text: d.error, type: "error" });
+      }
+    } finally {
+      setKeySaving(false);
+      setTimeout(() => setKeyMessage(null), 3000);
+    }
+  }
+
+  async function removeApiKey(keyName: string) {
+    const res = await fetch(`/api/user/keys?key_name=${keyName}`, { method: "DELETE" });
+    if (res.ok) {
+      setKeyMessage({ text: "Key removed", type: "success" });
+      fetchStoredKeys();
+      setTimeout(() => setKeyMessage(null), 2000);
+    }
+  }
+
   // Refresh connected status when page becomes visible again
   const isVisible = usePageVisible();
   const wasVisibleRef = useRef(true);
+  useEffect(() => {
+    fetchStoredKeys();
+  }, []);
   useEffect(() => {
     if (isVisible && !wasVisibleRef.current) {
       fetch("/api/connectors")
@@ -464,6 +529,105 @@ export function ConnectorsClient({
           </div>
         </div>
       )}
+
+      {/* ─── AI Model API Keys ──────────────────────────────────────────────── */}
+      <div className="mt-10 pt-8 border-t border-pplx-border">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500 flex items-center justify-center">
+            <KeyRound size={20} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-pplx-text">AI Model API Keys</h2>
+            <p className="text-xs text-pplx-muted">
+              Encrypted at rest · used instead of server-side keys when you run tasks
+            </p>
+          </div>
+        </div>
+
+        {keyMessage && (
+          <div
+            className="mt-4 text-sm px-3 py-2 rounded-lg"
+            style={{ background: keyMessage.type === "success" ? "#1a3a1a" : "#3f1a1a", color: keyMessage.type === "success" ? "#4ade80" : "#f87171" }}
+          >
+            {keyMessage.text}
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {Object.entries(KEY_LABELS).map(([keyName, { label, url }]) => {
+            const stored = storedKeys[keyName];
+            const isEditingThis = editingKey === keyName;
+            return (
+              <div
+                key={keyName}
+                className={cn(
+                  "rounded-xl border p-4",
+                  stored ? "border-pplx-accent/30 bg-pplx-accent/5" : "border-pplx-border bg-pplx-card"
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-pplx-text">{label}</span>
+                    {stored && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Saved</span>
+                    )}
+                  </div>
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-pplx-muted hover:text-pplx-accent transition-colors flex items-center gap-1">
+                    Get key <ExternalLink size={10} />
+                  </a>
+                </div>
+                <p className="text-xs mb-3 font-mono text-pplx-muted">{keyName}</p>
+                {isEditingThis ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={keyInput}
+                      onChange={(e) => setKeyInput(e.target.value)}
+                      placeholder="sk-..."
+                      autoFocus
+                      className="flex-1 px-3 py-1.5 rounded-lg border text-sm font-mono outline-none bg-pplx-bg border-pplx-accent/50 text-pplx-text"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveApiKey(keyName);
+                        if (e.key === "Escape") { setEditingKey(null); setKeyInput(""); }
+                      }}
+                    />
+                    <button
+                      onClick={() => saveApiKey(keyName)}
+                      disabled={keySaving}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium bg-pplx-accent text-white disabled:opacity-60"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => { setEditingKey(null); setKeyInput(""); }}
+                      className="px-3 py-1.5 rounded-lg text-sm bg-pplx-border text-pplx-muted"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setEditingKey(keyName); setKeyInput(""); }}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium bg-pplx-card border border-pplx-border text-pplx-text hover:border-pplx-muted transition-colors"
+                    >
+                      {stored ? "Update" : "Add key"}
+                    </button>
+                    {stored && (
+                      <button
+                        onClick={() => removeApiKey(keyName)}
+                        className="px-3 py-1.5 rounded-lg text-sm bg-pplx-card border border-pplx-border text-red-400 hover:bg-red-400/10 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
