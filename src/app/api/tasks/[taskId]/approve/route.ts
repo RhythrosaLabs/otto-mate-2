@@ -26,7 +26,7 @@ export async function POST(
     );
   }
 
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
@@ -42,7 +42,7 @@ export async function POST(
   const approval = pendingApprovals[approvalIdx];
 
   // Update the approval step status and title in the DB so UI reflects the decision
-  updateAgentStep(approval_id, { 
+  await updateAgentStep(approval_id, { 
     status: approved ? "completed" : "failed",
     title: approved ? "✅ Approved" : "❌ Denied",
   });
@@ -59,10 +59,10 @@ export async function POST(
       ],
     };
 
-    updateTaskMetadata(taskId, updatedMeta);
+    await updateTaskMetadata(taskId, updatedMeta);
 
     // Resume the task
-    updateTaskStatus(taskId, "running");
+    await updateTaskStatus(taskId, "running");
 
     return NextResponse.json({
       message: "Action approved",
@@ -81,9 +81,9 @@ export async function POST(
       ],
     };
 
-    updateTaskMetadata(taskId, updatedMeta);
+    await updateTaskMetadata(taskId, updatedMeta);
     // Set to running so agent can resume and handle the denial
-    updateTaskStatus(taskId, "running");
+    await updateTaskStatus(taskId, "running");
 
     return NextResponse.json({
       message: "Action denied",

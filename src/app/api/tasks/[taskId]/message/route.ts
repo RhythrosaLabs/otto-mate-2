@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: { content: string };
@@ -23,7 +23,7 @@ export async function POST(
     return NextResponse.json({ error: "content is required" }, { status: 400 });
   }
 
-  addMessage({
+  await addMessage({
     id: uuidv4(),
     task_id: taskId,
     role: "user",
@@ -33,7 +33,7 @@ export async function POST(
 
   // If task was waiting for input, resume it
   if (task.status === "waiting_for_input") {
-    updateTaskStatus(taskId, "pending");
+    await updateTaskStatus(taskId, "pending");
   }
 
   return NextResponse.json({ success: true });

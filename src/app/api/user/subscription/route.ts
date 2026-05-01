@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const sub = getUserSubscription(session.userId);
+  const sub = await getUserSubscription(session.userId);
   const limits = TIERS[sub.tier];
 
   return NextResponse.json({

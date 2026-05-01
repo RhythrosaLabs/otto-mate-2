@@ -20,7 +20,7 @@ export async function TierGate({ feature, featureLabel, requiredTierLabel = "Sta
   const session = await getSession();
   if (!session) redirect("/auth/login");
 
-  const sub = getUserSubscription(session.userId);
+  const sub = await getUserSubscription(session.userId);
   const tier = TIERS[sub.tier];
 
   if (tier[feature]) {

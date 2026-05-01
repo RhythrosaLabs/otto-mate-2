@@ -3,7 +3,7 @@ import { getSessions, createSession, getSession, updateSession, deleteSession, a
 
 export async function GET() {
   try {
-    const sessions = getSessions();
+    const sessions = await getSessions();
     return NextResponse.json({ sessions });
   } catch (err) {
     console.error("[sessions] Error:", err);
@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as { name: string; description?: string; persona_id?: string; action?: string; session_id?: string; task_id?: string };
 
     if (body.action === "add_task" && body.session_id && body.task_id) {
-      addTaskToSession(body.session_id, body.task_id);
-      const session = getSession(body.session_id);
+      await addTaskToSession(body.session_id, body.task_id);
+      const session = await getSession(body.session_id);
       return NextResponse.json(session);
     }
 
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    const id = createSession(body.name, body.description, body.persona_id);
-    const session = getSession(id);
+    const id = await createSession(body.name, body.description, body.persona_id);
+    const session = await getSession(id);
     return NextResponse.json(session, { status: 201 });
   } catch (err) {
     console.error("[sessions] Error:", err);
@@ -38,8 +38,8 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json() as { id: string; name?: string; description?: string; persona_id?: string; context_summary?: string; pinned?: boolean };
     if (!body.id) return NextResponse.json({ error: "ID required" }, { status: 400 });
-    updateSession(body.id, body);
-    const session = getSession(body.id);
+    await updateSession(body.id, body);
+    const session = await getSession(body.id);
     return NextResponse.json(session);
   } catch (err) {
     console.error("[sessions] Error:", err);
@@ -52,7 +52,7 @@ export async function DELETE(req: NextRequest) {
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
-    deleteSession(id);
+    await deleteSession(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[sessions] Error:", err);

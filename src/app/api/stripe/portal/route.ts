@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const sub = getUserSubscription(session.userId);
+    const sub = await getUserSubscription(session.userId);
     const stripeCustomerId = sub.stripe_customer_id;
     if (!stripeCustomerId) {
       return NextResponse.json({ error: "No Stripe subscription found. Please subscribe first." }, { status: 404 });

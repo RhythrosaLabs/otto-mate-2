@@ -5,10 +5,10 @@ import { DocumentsListClient } from "./documents-client";
 export const metadata: Metadata = { title: "Documents — Ottomate" };
 export const dynamic = "force-dynamic";
 
-export default function DocumentsPage() {
-  let docs: ReturnType<typeof listDocuments> = [];
+export default async function DocumentsPage() {
+  let docs: Awaited<ReturnType<typeof listDocuments>> = [];
   try {
-    docs = listDocuments();
+    docs = await listDocuments();
   } catch (err) {
     console.error("[documents] Failed to load documents:", err);
   }

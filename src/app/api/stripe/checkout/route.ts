@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const stripe = getStripe();
-    const sub = getUserSubscription(session.userId);
+    const sub = await getUserSubscription(session.userId);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://ottomate.fly.dev";
 
     // Reuse existing Stripe customer if available

@@ -8,12 +8,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const user = getUserById(session.userId);
+  const user = await getUserById(session.userId);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const subscription = getUserSubscription(user.id);
+  const subscription = await getUserSubscription(user.id);
 
   return NextResponse.json({
     user: {

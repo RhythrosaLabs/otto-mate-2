@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const code = body.code?.trim().toUpperCase();
   if (!code) return apiError("code is required", 400);
 
-  const result = redeemGiftCode(code, session.userId);
+  const result = await redeemGiftCode(code, session.userId);
   if (!result.success) return apiError(result.error ?? "Redemption failed", 400);
 
   return apiSuccess({ tier: result.tier, message: `Successfully upgraded to ${result.tier} tier!` });

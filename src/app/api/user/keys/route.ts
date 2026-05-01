@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const keys = getUserApiKeys(session.userId);
+  const keys = await getUserApiKeys(session.userId);
   // Return key names + masked values only
   return NextResponse.json(keys.map((k) => ({
     key_name: k.key_name,
@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const encrypted = encryptApiKey(body.key_value.trim());
-  setUserApiKey(session.userId, body.key_name, encrypted);
+  await setUserApiKey(session.userId, body.key_name, encrypted);
   return NextResponse.json({ ok: true });
 }
 
@@ -50,6 +50,6 @@ export async function DELETE(req: NextRequest) {
   const keyName = new URL(req.url).searchParams.get("key_name");
   if (!keyName) return NextResponse.json({ error: "key_name is required" }, { status: 400 });
 
-  deleteUserApiKey(session.userId, keyName);
+  await deleteUserApiKey(session.userId, keyName);
   return NextResponse.json({ ok: true });
 }

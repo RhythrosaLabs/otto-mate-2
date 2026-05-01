@@ -6,13 +6,13 @@ export const metadata: Metadata = { title: "Files — Ottomate" };
 export const dynamic = "force-dynamic";
 
 export default async function FilesPage() {
-  let files: ReturnType<typeof listAllFiles> = [];
-  let folders: ReturnType<typeof listFolders> = [];
-  let stats: ReturnType<typeof getFilesStats> = { total: 0, bySource: {}, byType: {}, totalSize: 0 };
+  let files: Awaited<ReturnType<typeof listAllFiles>> = [];
+  let folders: Awaited<ReturnType<typeof listFolders>> = [];
+  let stats: Awaited<ReturnType<typeof getFilesStats>> = { total: 0, bySource: {}, byType: {}, totalSize: 0 };
   try {
-    files = listAllFiles(500);
-    folders = listFolders();
-    stats = getFilesStats();
+    files = await listAllFiles(500);
+    folders = await listFolders();
+    stats = await getFilesStats();
   } catch (err) {
     console.error("[files] Failed to load files:", err);
   }

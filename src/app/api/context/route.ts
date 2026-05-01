@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     // Token usage per task or overall
     if (taskId) {
-      const usage = getTaskTokenUsage(taskId);
+      const usage = await getTaskTokenUsage(taskId);
       const maxTokens = 200000; // Claude's context window
       const totalUsed = usage.total_tokens;
       const systemPromptEstimate = 4000;

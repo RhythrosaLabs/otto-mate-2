@@ -10,7 +10,7 @@ export default async function DocumentEditorPage({ params }: { params: Promise<{
   const { id } = await params;
   let doc;
   try {
-    doc = getDocument(id);
+    doc = await getDocument(id);
   } catch (err) {
     console.error("[document-editor] Failed to load:", err);
   }

@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -23,9 +23,9 @@ export async function POST(
 
   // Update status to paused regardless (in case the map was already cleared)
   if (task.status === "running") {
-    updateTaskStatus(taskId, "paused");
+    await updateTaskStatus(taskId, "paused");
   }
 
-  const updatedTask = getTask(taskId);
+  const updatedTask = await getTask(taskId);
   return Response.json({ success: true, task: updatedTask });
 }

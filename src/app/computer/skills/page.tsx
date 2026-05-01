@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 export default async function SkillsPage() {
   const session = await getSession();
-  let skills: ReturnType<typeof listSkills> = [];
+  let skills: Awaited<ReturnType<typeof listSkills>> = [];
   try {
-    skills = listSkills(session?.userId);
+    skills = await listSkills(session?.userId);
   } catch (err) {
     console.error("[skills] Failed to load skills:", err);
   }

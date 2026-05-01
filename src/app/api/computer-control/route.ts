@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       ];
 
       // Allow client to override; fall back to saved setting, then default of 75
-      const savedMaxIter = parseInt(getSetting("max_iterations") ?? "", 10);
+      const savedMaxIter = parseInt(await getSetting("max_iterations") ?? "", 10);
       const MAX_ITERATIONS = reqMaxIter && reqMaxIter > 0
         ? Math.min(reqMaxIter, 200)
         : (savedMaxIter > 0 ? savedMaxIter : 75);

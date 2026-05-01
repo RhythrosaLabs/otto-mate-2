@@ -10,7 +10,7 @@ interface Props {
 
 export default async function TaskDetailPage({ params }: Props) {
   const { taskId } = await params;
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   
   if (!task) notFound();
 

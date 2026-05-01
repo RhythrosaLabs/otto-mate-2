@@ -74,7 +74,7 @@ async function streamGoogle(
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const doc = getDocument(id);
+    const doc = await getDocument(id);
     if (!doc) return apiError("Document not found", 404);
 
     const body = await req.json();

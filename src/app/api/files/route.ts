@@ -13,12 +13,12 @@ export async function GET(req: NextRequest) {
   const action = req.nextUrl.searchParams.get("action");
 
   if (action === "folders") {
-    const folders = listFolders();
+    const folders = await listFolders();
     return NextResponse.json(folders);
   }
 
   const taskId = req.nextUrl.searchParams.get("taskId");
-  const files = listAllFiles(500);
+  const files = await listAllFiles(500);
   const filtered = taskId ? files.filter((f: { task_id: string }) => f.task_id === taskId) : files;
   return NextResponse.json(filtered);
 }
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    createFolder(folder);
+    await createFolder(folder);
     return NextResponse.json(folder, { status: 201 });
   }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     let body: { id: string; name: string };
     try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     if (!body.id || !body.name) return NextResponse.json({ error: "id and name required" }, { status: 400 });
-    renameFolder(body.id, body.name);
+    await renameFolder(body.id, body.name);
     return NextResponse.json({ ok: true });
   }
 
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     if (!body.fileIds) return NextResponse.json({ error: "fileIds required" }, { status: 400 });
     for (const fid of body.fileIds) {
-      updateFileFolder(fid, body.folderId);
+      await updateFileFolder(fid, body.folderId);
     }
     return NextResponse.json({ ok: true, moved: body.fileIds.length });
   }
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       source: source as import("@/lib/types").FileSource,
       created_at: new Date().toISOString(),
     };
-    addTaskFile(fileRecord);
+    await addTaskFile(fileRecord);
     uploadedFiles.push(fileRecord);
   }
 
@@ -128,7 +128,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
 
   if (action === "deleteFolder" && id) {
-    deleteFolder(id);
+    await deleteFolder(id);
     return NextResponse.json({ ok: true });
   }
 

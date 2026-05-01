@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       // Consistent timing to prevent user enumeration
       await verifyPassword(password, "$2b$12$invalidhashforenumeration00000000000000000000000000");

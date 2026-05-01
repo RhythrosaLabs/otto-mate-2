@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         const stripeSubscriptionId = session.subscription as string | undefined;
 
         if (userId && tier) {
-          updateUserTier(userId, tier, stripeCustomerId, stripeSubscriptionId);
+          await updateUserTier(userId, tier, stripeCustomerId, stripeSubscriptionId);
           console.log(`[stripe/webhook] Upgraded user ${userId} to ${tier}`);
         }
         break;
@@ -66,10 +66,10 @@ export async function POST(req: NextRequest) {
         const status = subscription.status;
 
         if (tier) {
-          const user = getUserByStripeCustomerId(customerId);
+          const user = await getUserByStripeCustomerId(customerId);
           if (user) {
             if (status === "active" || status === "trialing") {
-              updateUserTier(user.id, tier, customerId, subscription.id);
+              await updateUserTier(user.id, tier, customerId, subscription.id);
               console.log(`[stripe/webhook] Updated user ${user.id} subscription to ${tier}`);
             }
           }
@@ -80,9 +80,9 @@ export async function POST(req: NextRequest) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
-        const user = getUserByStripeCustomerId(customerId);
+        const user = await getUserByStripeCustomerId(customerId);
         if (user) {
-          updateUserTier(user.id, "free", customerId, undefined);
+          await updateUserTier(user.id, "free", customerId, undefined);
           console.log(`[stripe/webhook] Downgraded user ${user.id} to free (subscription cancelled)`);
         }
         break;

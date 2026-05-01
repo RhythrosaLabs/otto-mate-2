@@ -11,7 +11,7 @@ export default async function ConnectorsPage() {
   const session = await getSession();
   let connectedIds: string[] = [];
   try {
-    const configs = listConnectorConfigs(session?.userId);
+    const configs = await listConnectorConfigs(session?.userId);
     connectedIds = configs.map((c) => c.connector_id);
   } catch (err) {
     console.error("[connectors] Failed to load connector configs:", err);

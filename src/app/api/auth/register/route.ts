@@ -18,15 +18,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
 
-    const existing = getUserByEmail(email);
+    const existing = await getUserByEmail(email);
     if (existing) {
       return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
     }
 
     const password_hash = await hashPassword(password);
     // First registered user becomes admin
-    const isFirstUser = getUserCount() === 0;
-    const user = createUser({ email, password_hash, name, role: isFirstUser ? "admin" : "user" });
+    const isFirstUser = await getUserCount() === 0;
+    const user = await createUser({ email, password_hash, name, role: isFirstUser ? "admin" : "user" });
 
     // Fire-and-forget sync to Supabase (non-blocking, errors silenced in helper)
     void syncUserToSupabase({ id: user.id, email: user.email, name: user.name, created_at: user.created_at });

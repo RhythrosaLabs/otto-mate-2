@@ -11,7 +11,7 @@ export default async function TasksPage() {
   const session = await getSession();
   let tasks: Task[] = [];
   try {
-    tasks = listTasks(undefined, 50, 0, session?.userId) as Task[];
+    tasks = await listTasks(undefined, 50, 0, session?.userId) as Task[];
   } catch (err) {
     console.error("[tasks] Failed to load tasks:", err);
   }

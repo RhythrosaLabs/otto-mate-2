@@ -132,7 +132,7 @@ async function processMessageAsync(
     // Send "thinking" indicator
     await sendTextMessage(config, msg.from, "🧠 Processing your request...", msg.messageId);
 
-    const task = createTask({
+    const task = await createTask({
       id: taskId,
       title,
       prompt: userText,
@@ -153,7 +153,7 @@ async function processMessageAsync(
     });
 
     // Add the user's message to the task
-    addMessage({
+    await addMessage({
       id: uuidv4(),
       task_id: taskId,
       role: "user",
@@ -174,7 +174,7 @@ async function processMessageAsync(
       });
 
       // Get the completed task to extract the final response
-      const completedTask = getTask(taskId);
+      const completedTask = await getTask(taskId);
       const lastStep = completedTask?.steps?.[completedTask.steps.length - 1];
 
       // Use accumulated response, last step tool_result, or fallback
@@ -190,7 +190,7 @@ async function processMessageAsync(
 
     } catch (err) {
       console.error(`[whatsapp] Agent error for task ${taskId}:`, err);
-      updateTaskStatus(taskId, "failed");
+      await updateTaskStatus(taskId, "failed");
       await sendTextMessage(
         config,
         msg.from,

@@ -21,8 +21,8 @@ export async function PUT(
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  updateSkill(id, body);
-  const skills = listSkills();
+  await updateSkill(id, body);
+  const skills = await listSkills();
   const updated = skills.find((s) => s.id === id);
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(updated);
@@ -34,6 +34,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  deleteSkill(id);
+  await deleteSkill(id);
   return NextResponse.json({ success: true });
 }
