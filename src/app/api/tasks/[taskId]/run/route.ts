@@ -17,7 +17,7 @@ export async function POST(
   const session = await getSessionFromRequest(req);
   const userId = session?.userId;
 
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
   }
@@ -29,7 +29,7 @@ export async function POST(
 
   // Tier limit check
   if (userId) {
-    const usage = incrementTaskUsage(userId);
+    const usage = await incrementTaskUsage(userId);
     if (!usage.allowed) {
       return new Response(JSON.stringify({
         error: `Monthly task limit reached (${usage.limit} tasks). Upgrade your plan at /pricing.`,
@@ -42,7 +42,7 @@ export async function POST(
   const model = body.model;
 
   // Build skills context string from active skills
-  const activeSkills = listSkills(userId).filter(s => s.is_active);
+  const activeSkills = (await listSkills(userId)).filter(s => s.is_active);
   const skills = activeSkills.length > 0
     ? activeSkills.map(s => `${s.name}: ${s.description}`).join("\n")
     : undefined;
@@ -50,7 +50,7 @@ export async function POST(
   // Load user's own API keys (decrypt them)
   let apiKeys: Record<string, string> = {};
   if (userId) {
-    const raw = getUserApiKeysRaw(userId);
+    const raw = await getUserApiKeysRaw(userId);
     for (const [k, v] of Object.entries(raw)) {
       try { apiKeys[k] = decryptApiKey(v); } catch { /* skip malformed */ }
     }
@@ -61,7 +61,7 @@ export async function POST(
   registerRunningTask(taskId, abortController);
 
   // Mark task as running (agent will also do this, but signal early)
-  updateTaskStatus(taskId, "running");
+  await updateTaskStatus(taskId, "running");
 
   // Set up SSE stream
   const encoder = new TextEncoder();
@@ -102,18 +102,18 @@ export async function POST(
         },
       });
       // Agent completed (status already updated inside runAgent)
-      const finalTask = getTask(taskId);
+      const finalTask = await getTask(taskId);
       if (finalTask) send({ type: "update", task: finalTask });
     } catch (err) {
       if (abortController.signal.aborted) {
-        updateTaskStatus(taskId, "paused");
-        const updatedTask = getTask(taskId);
+        await updateTaskStatus(taskId, "paused");
+        const updatedTask = await getTask(taskId);
         if (updatedTask) send({ type: "update", task: updatedTask });
       } else {
         const msg = err instanceof Error ? err.message : String(err);
         send({ type: "error", error: msg });
-        updateTaskStatus(taskId, "failed");
-        const updatedTask = getTask(taskId);
+        await updateTaskStatus(taskId, "failed");
+        const updatedTask = await getTask(taskId);
         if (updatedTask) send({ type: "update", task: updatedTask });
       }
     } finally {

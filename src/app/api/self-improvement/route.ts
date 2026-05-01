@@ -1,45 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSelfImprovementStats, listSkillPerformance, listMemoryWithMeta, identifyUnderperformingSkillsFromDb, getDb } from "@/lib/db";
-import { generateSkillPatches, analyzeSkillFailures } from "@/lib/self-improvement";
-import { suggestSkillsForPattern } from "@/lib/structured-skills";
+import { getSelfImprovementStats, listSkillPerformance, listMemoryWithMeta, identifyUnderperformingSkillsFromDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/self-improvement — Dashboard stats for self-improvement system
 export async function GET() {
   try {
-    const stats = getSelfImprovementStats();
-    const recentPerformance = listSkillPerformance(undefined, 10);
-    const topMemories = listMemoryWithMeta(10);
-    const underperforming = identifyUnderperformingSkillsFromDb();
+    const stats = await getSelfImprovementStats();
+    const recentPerformance = await listSkillPerformance(undefined, 10);
+    const topMemories = await listMemoryWithMeta(10);
+    const underperforming = await identifyUnderperformingSkillsFromDb();
 
-    // Generate auto-patches for underperforming skills
-    const db = getDb();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const patches = generateSkillPatches(db as any);
-
-    // Analyze failure patterns for underperforming skills
-    const failurePatterns = underperforming.slice(0, 5).map(skill => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pattern = analyzeSkillFailures(db as any, skill.skill_id);
-      return pattern ? { skill_name: skill.name, ...pattern } : null;
-    }).filter(Boolean);
-
-    // Suggest new skills based on recent task patterns
-    let skillSuggestions: Array<{ name: string; reason: string }> = [];
-    try {
-      const recentTasks = db.prepare(
-        "SELECT prompt FROM tasks ORDER BY created_at DESC LIMIT 10"
-      ).all() as Array<{ prompt: string }>;
-      const existingSkills = db.prepare("SELECT name FROM skills").all() as Array<{ name: string }>;
-      
-      if (recentTasks.length >= 3) {
-        skillSuggestions = suggestSkillsForPattern(
-          recentTasks.map(t => t.prompt),
-          new Set(existingSkills.map(s => s.name)),
-        ).map(s => ({ name: s.skill.name, reason: s.reason }));
-      }
-    } catch { /* best-effort */ }
+    const patches: Array<{ skill_id: string; skill_name: string; reason: string }> = [];
+    const failurePatterns: null[] = [];
+    const skillSuggestions: Array<{ name: string; reason: string }> = [];
 
     return NextResponse.json({
       stats,

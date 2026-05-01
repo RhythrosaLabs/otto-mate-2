@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
         });
 
         // Build file URLs and register in DB so they appear in Files page
-        const files = result.files.map(
-          (f: {
+        const files = await Promise.all(result.files.map(
+          async (f: {
             filename: string;
             size: number;
             mimeType: string;
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
           }) => {
             // Register file in task_files DB
             try {
-              addTaskFile({
+              await addTaskFile({
                 id: uuidv4(),
                 task_id: taskId,
                 name: f.filename,
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
               url: `/api/files/${taskId}/${f.filename}`,
             };
           }
-        );
+        ));
 
         return NextResponse.json({
           id: taskId,
@@ -287,7 +287,7 @@ export async function GET(req: NextRequest) {
   if (action === "history") {
     try {
       const { listAllFiles } = await import("@/lib/db");
-      const files = listAllFiles(200);
+      const files = await listAllFiles(200);
       // Group files by task_id, filter to gen- tasks
       const generations = new Map<
         string,

@@ -8,13 +8,14 @@
  * This runs as a singleton interval in the Node.js process.
  */
 
-import { getDueScheduledTasks, updateScheduledTaskLastRun, deleteScheduledTask, createTask, getDb } from "./db";
+import { getDueScheduledTasks, updateScheduledTaskLastRun, deleteScheduledTask, createTask } from "./db";
 import { runAgent } from "./agent";
 import { v4 as uuidv4 } from "uuid";
 import type { ScheduledTask } from "./types";
 
 const POLL_INTERVAL_MS = 60_000; // Check every 60 seconds
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
+let schedulerRunning = false; // in-process lock to prevent overlapping runs
 
 function computeNextRun(st: ScheduledTask): string | null {
   const now = Date.now();
@@ -44,25 +45,11 @@ function computeNextRun(st: ScheduledTask): string | null {
 }
 
 async function runDueTasks(): Promise<void> {
-  // Use database-level locking to prevent overlapping runs across concurrent invocations
-  const db = getDb();
-  const acquired = db.transaction(() => {
-    // Create lock table if not exists
-    db.exec(`CREATE TABLE IF NOT EXISTS scheduler_lock (id INTEGER PRIMARY KEY CHECK(id = 1), locked_at TEXT)`);
-    const row = db.prepare("SELECT locked_at FROM scheduler_lock WHERE id = 1").get() as { locked_at: string } | undefined;
-    if (row) {
-      // If lock is older than 5 minutes, assume stale and reclaim
-      const lockedAt = new Date(row.locked_at).getTime();
-      if (Date.now() - lockedAt < 5 * 60 * 1000) return false;
-    }
-    db.prepare("INSERT OR REPLACE INTO scheduler_lock (id, locked_at) VALUES (1, ?)").run(new Date().toISOString());
-    return true;
-  })();
-
-  if (!acquired) return;
+  if (schedulerRunning) return;
+  schedulerRunning = true;
 
   try {
-    const dueTasks = getDueScheduledTasks();
+    const dueTasks = await getDueScheduledTasks();
 
     console.log(`[scheduler] Found ${dueTasks.length} due task(s). Executing...`);
 
@@ -71,7 +58,7 @@ async function runDueTasks(): Promise<void> {
         const taskId = uuidv4();
         const now = new Date().toISOString();
 
-        createTask({
+        await createTask({
           id: taskId,
           title: `[Scheduled] ${st.name}`,
           prompt: st.prompt,
@@ -84,10 +71,10 @@ async function runDueTasks(): Promise<void> {
         });
 
         const nextRun = computeNextRun(st);
-        updateScheduledTaskLastRun(st.id, nextRun);
+        await updateScheduledTaskLastRun(st.id, nextRun);
 
         if (st.delete_after_run && st.schedule_type === "once") {
-          deleteScheduledTask(st.id);
+          await deleteScheduledTask(st.id);
         }
 
         // Run agent in background
@@ -103,8 +90,7 @@ async function runDueTasks(): Promise<void> {
   } catch (err) {
     console.error("[scheduler] Error in runDueTasks:", err);
   } finally {
-    // Release the database lock
-    try { getDb().prepare("DELETE FROM scheduler_lock WHERE id = 1").run(); } catch { /* best-effort */ }
+    schedulerRunning = false;
   }
 }
 

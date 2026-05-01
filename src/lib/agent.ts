@@ -209,9 +209,9 @@ function estimateCost(model: string, inputTokens: number, outputTokens: number):
   return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
 }
 
-function trackTokenUsage(taskId: string, usage: TokenUsage): void {
+async function trackTokenUsage(taskId: string, usage: TokenUsage): Promise<void> {
   try {
-    trackTaskTokens(taskId, usage);
+    await trackTaskTokens(taskId, usage);
   } catch { /* db not yet ready */ }
 }
 
@@ -1293,7 +1293,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   let skillInstructions = skills || "";
   try {
     const { listSkills } = await import("./db");
-    const activeSkills = listSkills().filter(s => s.is_active);
+    const activeSkills = (await listSkills()).filter(s => s.is_active);
     
     // Provide performance hints to the skill selection engine
     try {
@@ -1363,15 +1363,15 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
 
   // Get existing messages for conversation context
   const { getTask: fetchTask } = await import("./db");
-  const currentTask = fetchTask(taskId);
+  const currentTask = await fetchTask(taskId);
   const previousMessages = currentTask?.messages || [];
 
   // Only add user message if not a duplicate of the last one
   const lastMsg = previousMessages[previousMessages.length - 1];
   if (!lastMsg || lastMsg.role !== "user" || lastMsg.content !== userMessage) {
-    addMessage({ id: uuidv4(), task_id: taskId, role: "user", content: userMessage, created_at: new Date().toISOString() });
+    await addMessage({ id: uuidv4(), task_id: taskId, role: "user", content: userMessage, created_at: new Date().toISOString() });
   }
-  updateTaskStatus(taskId, "running");
+  await updateTaskStatus(taskId, "running");
 
   // ─── Inject uploaded file context ──────────────────────────────────────────
   // Check the task working directory for user-uploaded files and tell the agent
@@ -1426,8 +1426,8 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   // v2: Uses primeMemoriesForTask for preference-aware priming + enhanced recall
   let memoryContext = "";
   try {
-    const keywordResults = memoryRecall(userMessage, 10);
-    const allMem = listMemory(500);
+    const keywordResults = await memoryRecall(userMessage, 10);
+    const allMem = await listMemory(500);
     
     // Use primeMemoriesForTask for preference-first context building
     const primedMemories = primeMemoriesForTask(userMessage, allMem, 8);
@@ -1445,7 +1445,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
     if (relevantMemories.length > 0) {
       // Track access for recalled memories
       for (const m of relevantMemories) {
-        try { updateMemoryAccess(m.id); } catch { /* best-effort */ }
+        try { await updateMemoryAccess(m.id); } catch { /* best-effort */ }
       }
       
       const memLines = relevantMemories.map((m, i) => {
@@ -1460,8 +1460,8 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   // Give the agent a rich view of the entire file system including folders
   let globalFilesContext = "";
   try {
-    const allFiles = listAllFiles(100);
-    const allFolders = listFolders();
+    const allFiles = await listAllFiles(100);
+    const allFolders = await listFolders();
 
     const parts: string[] = [];
 
@@ -1533,7 +1533,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   // Track model call in analytics with routing metadata
   const routingStartTime = Date.now();
   try {
-    recordAnalyticsEvent({
+    await recordAnalyticsEvent({
       id: uuidv4(),
       event_type: "model_call",
       model: primary.modelName,
@@ -1577,7 +1577,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
         content: `Previous model failed: ${shortErr}`,
         status: "completed", created_at: new Date().toISOString(),
       };
-      addAgentStep(failoverStep);
+      await addAgentStep(failoverStep);
       onStep?.(failoverStep);
       // Short backoff — don't waste time when billing errors are instant
       const backoffIdx = Math.min(triedCount - 2, FAILOVER_BACKOFF_MS.length - 1);
@@ -1676,12 +1676,12 @@ async function runWithAnthropic(
 
   try {
     while (continueLoop && iterations < maxSteps) {
-      if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
       iterations++;
 
       // ─── Live context refresh: re-inject memories, files, skills every 5 iterations ───
       if (iterations > 1 && iterations % 5 === 0) {
-        liveSystemPrompt = refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
+        liveSystemPrompt = await refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
       }
 
       const thinkingId = uuidv4();
@@ -1690,7 +1690,7 @@ async function runWithAnthropic(
         title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}"` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
       };
-      addAgentStep(thinkingStep);
+      await addAgentStep(thinkingStep);
       onStep?.(thinkingStep);
       const startTime = Date.now();
 
@@ -1728,11 +1728,11 @@ async function runWithAnthropic(
         }
         response = await stream.finalMessage();
       } catch (err) {
-        if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+        if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
         throw err;
       }
 
-      updateAgentStep(thinkingId, {
+      await updateAgentStep(thinkingId, {
         content: fullText || "Processing...", status: "completed",
         duration_ms: Date.now() - startTime,
       });
@@ -1757,9 +1757,9 @@ async function runWithAnthropic(
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
-        if (text) addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: text, created_at: new Date().toISOString() });
+        if (text) await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: text, created_at: new Date().toISOString() });
         continueLoop = false;
-        updateTaskStatus(taskId, "completed", new Date().toISOString());
+        await updateTaskStatus(taskId, "completed", new Date().toISOString());
         break;
       }
 
@@ -1782,7 +1782,7 @@ async function runWithAnthropic(
             tool_input: toolUse.input as Record<string, unknown>,
             status: "running", created_at: new Date().toISOString(),
           };
-          addAgentStep(toolStep);
+          await addAgentStep(toolStep);
           onStep?.(toolStep);
           const ts = Date.now();
           let result = ""; let toolError = false;
@@ -1793,7 +1793,7 @@ async function runWithAnthropic(
             toolError = true;
           }
           const duration = Date.now() - ts;
-          updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+          await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
           return { type: "tool_result" as const, tool_use_id: toolUse.id, content: result };
@@ -1812,7 +1812,7 @@ async function runWithAnthropic(
             tool_input: toolUse.input as Record<string, unknown>,
             status: "running", created_at: new Date().toISOString(),
           };
-          addAgentStep(toolStep);
+          await addAgentStep(toolStep);
           onStep?.(toolStep);
           const ts = Date.now();
           let result = ""; let toolError = false;
@@ -1823,7 +1823,7 @@ async function runWithAnthropic(
             toolError = true;
           }
           const duration = Date.now() - ts;
-          updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+          await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
           loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
           toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: result });
@@ -1842,7 +1842,7 @@ async function runWithAnthropic(
           tool_input: toolUse.input as Record<string, unknown>,
           status: "running", created_at: new Date().toISOString(),
         };
-        addAgentStep(toolStep);
+        await addAgentStep(toolStep);
         onStep?.(toolStep);
         const ts = Date.now();
         let result = ""; let toolError = false;
@@ -1882,11 +1882,11 @@ async function runWithAnthropic(
           toolError = true;
         }
         const duration = Date.now() - ts;
-        updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: toolResultContent });
         if (toolUse.name === "complete_task") continueLoop = false;
-        if (toolUse.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+        if (toolUse.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         loopDetector.record(toolUse.name, toolUse.input as Record<string, unknown>, toolError);
       }
@@ -1900,7 +1900,7 @@ async function runWithAnthropic(
           console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
           if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
             // Hard break: too many consecutive errors, force completion
-            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
             continueLoop = false;
           } else {
             // Soft nudge: inject a user message to break the pattern
@@ -1912,11 +1912,11 @@ async function runWithAnthropic(
     // ─── Graceful maxSteps exhaust: mark completed but log the truncation ───
     if (iterations >= maxSteps) {
       console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
-      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
+      await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
-    const t = getTask(taskId);
-    if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
+    const t = await getTask(taskId);
+    if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
     throw err; // Let the outer failover loop handle this and try the next provider
   }
@@ -1961,17 +1961,17 @@ async function runWithOpenAI(
 
   try {
     while (continueLoop && iterations < maxSteps) {
-      if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
       iterations++;
 
       // ─── Live context refresh ───
       if (iterations > 1 && iterations % 5 === 0) {
-        const refreshed = refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
+        const refreshed = await refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
         messages[0] = { role: "system", content: refreshed };
       }
 
       const thinkingId = uuidv4();
-      addAgentStep({
+      await addAgentStep({
         id: thinkingId, task_id: taskId, type: "reasoning",
         title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
@@ -2004,7 +2004,7 @@ async function runWithOpenAI(
         if (chunk.usage) streamUsage = chunk.usage;
       }
       const toolCalls = Object.values(tcMap);
-      updateAgentStep(thinkingId, { content: fullText || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
+      await updateAgentStep(thinkingId, { content: fullText || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
       // Track token usage
       if (streamUsage) {
         const inTok = streamUsage.prompt_tokens || 0;
@@ -2021,8 +2021,8 @@ async function runWithOpenAI(
       }
       messages.push(assistantMsg);
       if (toolCalls.length === 0) {
-        if (fullText) addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullText, created_at: new Date().toISOString() });
-        continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
+        if (fullText) await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullText, created_at: new Date().toISOString() });
+        continueLoop = false; await updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
       const parallelTCs = toolCalls.filter(tc => PARALLELIZABLE_TOOLS.has(tc.name));
@@ -2040,12 +2040,12 @@ async function runWithOpenAI(
           title: toolUseToTitle(tc.name, input), content: JSON.stringify(input, null, 2),
           tool_name: tc.name, tool_input: input, status: "running", created_at: new Date().toISOString(),
         };
-        addAgentStep(toolStep); onStep?.(toolStep);
+        await addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let result = ""; let toolError = false;
         try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { result = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         const duration = Date.now() - ts;
-        updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         loopDetector.record(tc.name, input, toolError);
         return { id: tc.id, name: tc.name, result };
@@ -2057,7 +2057,7 @@ async function runWithOpenAI(
         for (const r of results) {
           messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       } else {
@@ -2065,7 +2065,7 @@ async function runWithOpenAI(
           const r = await execOAITool(tc);
           messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       }
@@ -2075,7 +2075,7 @@ async function runWithOpenAI(
         const r = await execOAITool(tc);
         messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
         if (r.name === "complete_task") continueLoop = false;
-        if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+        if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
 
@@ -2085,7 +2085,7 @@ async function runWithOpenAI(
         if (loopCheck.stuck) {
           console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
           if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
-            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
             continueLoop = false;
           } else {
             messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
@@ -2095,11 +2095,11 @@ async function runWithOpenAI(
     }
     if (iterations >= maxSteps) {
       console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
-      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
+      await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
-    const t = getTask(taskId);
-    if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
+    const t = await getTask(taskId);
+    if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
     throw err; // Let the outer failover loop handle this and try the next provider
   }
@@ -2143,10 +2143,10 @@ async function runWithGoogle(
   let continueLoop = true; let iterations = 0; let currentMessage = userMessage;
   try {
     while (continueLoop && iterations < maxSteps) {
-      if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
       iterations++;
       const thinkingId = uuidv4();
-      addAgentStep({ id: thinkingId, task_id: taskId, type: "reasoning", title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "\u2026" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`, content: "", status: "running", created_at: new Date().toISOString() });
+      await addAgentStep({ id: thinkingId, task_id: taskId, type: "reasoning", title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "\u2026" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`, content: "", status: "running", created_at: new Date().toISOString() });
       const startTime = Date.now();
       // On the first iteration, hint to Google to prefer function calls
       const sendOpts = iterations === 1 ? { toolConfig: { functionCallingConfig: { mode: "ANY" as const } } } : {};
@@ -2154,11 +2154,11 @@ async function runWithGoogle(
       const response = result.response;
       const text = response.text();
       if (text) onToken?.(text);
-      updateAgentStep(thinkingId, { content: text || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
+      await updateAgentStep(thinkingId, { content: text || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
       const functionCalls = response.functionCalls();
       if (!functionCalls || functionCalls.length === 0) {
-        if (text) addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: text, created_at: new Date().toISOString() });
-        continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
+        if (text) await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: text, created_at: new Date().toISOString() });
+        continueLoop = false; await updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
       const parallelFCs = functionCalls.filter((fc: { name: string }) => PARALLELIZABLE_TOOLS.has(fc.name));
@@ -2173,11 +2173,11 @@ async function runWithGoogle(
           title: toolUseToTitle(fc.name, input), content: JSON.stringify(input, null, 2),
           tool_name: fc.name, tool_input: input, status: "running", created_at: new Date().toISOString(),
         };
-        addAgentStep(toolStep); onStep?.(toolStep);
+        await addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let toolResult = ""; let toolError = false;
         try { toolResult = await executeTool(fc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { toolResult = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
-        updateAgentStep(stepId, { tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
+        await updateAgentStep(stepId, { tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
         onStep?.({ ...toolStep, tool_result: toolResult, status: toolError ? "failed" : "completed", duration_ms: Date.now() - ts });
         loopDetector.record(fc.name, input, toolError);
         return { name: fc.name, result: toolResult };
@@ -2189,7 +2189,7 @@ async function runWithGoogle(
         for (const r of results) {
           funcResponses.push({ name: r.name, response: { result: r.result } });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       } else {
@@ -2197,7 +2197,7 @@ async function runWithGoogle(
           const r = await execGoogleTool(fc);
           funcResponses.push({ name: r.name, response: { result: r.result } });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       }
@@ -2207,7 +2207,7 @@ async function runWithGoogle(
         const r = await execGoogleTool(fc);
         funcResponses.push({ name: r.name, response: { result: r.result } });
         if (r.name === "complete_task") continueLoop = false;
-        if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+        if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
       currentMessage = funcResponses.map(fr => ({
@@ -2220,7 +2220,7 @@ async function runWithGoogle(
         if (loopCheck.stuck) {
           console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
           if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
-            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
             continueLoop = false;
           } else {
             // For Google, prepend nudge to the next message
@@ -2231,11 +2231,11 @@ async function runWithGoogle(
     }
     if (iterations >= maxSteps) {
       console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
-      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
+      await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
-    const t = getTask(taskId);
-    if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
+    const t = await getTask(taskId);
+    if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
     throw err; // Let the outer failover loop handle this and try the next provider
   }
@@ -2290,17 +2290,17 @@ async function runWithOpenRouter(
 
   try {
     while (continueLoop && iterations < maxSteps) {
-      if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
       iterations++;
 
       // ─── Live context refresh ───
       if (iterations > 1 && iterations % 5 === 0) {
-        const refreshed = refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
+        const refreshed = await refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
         messages[0] = { role: "system", content: refreshed };
       }
 
       const thinkingId = uuidv4();
-      addAgentStep({
+      await addAgentStep({
         id: thinkingId, task_id: taskId, type: "reasoning",
         title: iterations === 1 ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}" (${modelName})` : `Continuing work... (step ${iterations})`,
         content: "", status: "running", created_at: new Date().toISOString(),
@@ -2334,7 +2334,7 @@ async function runWithOpenRouter(
         if (chunk.usage) streamUsage = chunk.usage;
       }
       const toolCalls = Object.values(tcMap);
-      updateAgentStep(thinkingId, { content: fullText || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
+      await updateAgentStep(thinkingId, { content: fullText || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
       if (streamUsage) {
         const inTok = streamUsage.prompt_tokens || 0;
         const outTok = streamUsage.completion_tokens || 0;
@@ -2350,8 +2350,8 @@ async function runWithOpenRouter(
       }
       messages.push(assistantMsg);
       if (toolCalls.length === 0) {
-        if (fullText) addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullText, created_at: new Date().toISOString() });
-        continueLoop = false; updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
+        if (fullText) await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullText, created_at: new Date().toISOString() });
+        continueLoop = false; await updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
       }
       // Separate parallelizable tools from sequential ones
       const parallelTCs = toolCalls.filter(tc => PARALLELIZABLE_TOOLS.has(tc.name));
@@ -2368,12 +2368,12 @@ async function runWithOpenRouter(
           title: toolUseToTitle(tc.name, input), content: JSON.stringify(input, null, 2),
           tool_name: tc.name, tool_input: input, status: "running", created_at: new Date().toISOString(),
         };
-        addAgentStep(toolStep); onStep?.(toolStep);
+        await addAgentStep(toolStep); onStep?.(toolStep);
         const ts = Date.now(); let result = ""; let toolError = false;
         try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
         catch (err) { result = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
         const duration = Date.now() - ts;
-        updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
         loopDetector.record(tc.name, input, toolError);
         return { id: tc.id, name: tc.name, result };
@@ -2385,7 +2385,7 @@ async function runWithOpenRouter(
         for (const r of results) {
           messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       } else {
@@ -2393,7 +2393,7 @@ async function runWithOpenRouter(
           const r = await execORTool(tc);
           messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
           if (r.name === "complete_task") continueLoop = false;
-          if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
           if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
         }
       }
@@ -2403,7 +2403,7 @@ async function runWithOpenRouter(
         const r = await execORTool(tc);
         messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
         if (r.name === "complete_task") continueLoop = false;
-        if (r.name === "request_user_input") { updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+        if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
         if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
       }
 
@@ -2413,7 +2413,7 @@ async function runWithOpenRouter(
         if (loopCheck.stuck) {
           console.log(`[loop-detector] Task ${taskId.slice(0, 8)}: ${loopCheck.reason}`);
           if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
-            addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
             continueLoop = false;
           } else {
             messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
@@ -2423,11 +2423,11 @@ async function runWithOpenRouter(
     }
     if (iterations >= maxSteps) {
       console.log(`[agent] Task ${taskId.slice(0, 8)}: hit step limit (${maxSteps})`);
-      addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
+      await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
     }
     const { getTask } = await import("./db");
-    const t = getTask(taskId);
-    if (t?.status === "running") updateTaskStatus(taskId, "completed", new Date().toISOString());
+    const t = await getTask(taskId);
+    if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
     throw err; // Let the outer failover loop handle this and try the next provider
   }
@@ -2478,10 +2478,10 @@ async function runWithPerplexity(
 
   try {
     while (continueLoop && iterations < maxSteps) {
-      if (signal?.aborted) { updateTaskStatus(taskId, "paused"); return; }
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
       iterations++;
       const thinkingId = uuidv4();
-      addAgentStep({
+      await addAgentStep({
         id: thinkingId, task_id: taskId, type: "reasoning",
         title: iterations === 1 ? `Searching with ${modelName}...` : "Continuing research...",
         content: "", status: "running", created_at: new Date().toISOString(),
@@ -2496,7 +2496,7 @@ async function runWithPerplexity(
       const choice = response.choices?.[0];
       const text = choice?.message?.content || "";
       if (text) onToken?.(text);
-      updateAgentStep(thinkingId, { content: text || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
+      await updateAgentStep(thinkingId, { content: text || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
 
       // Track usage
       if (response.usage) {
@@ -2517,7 +2517,7 @@ async function runWithPerplexity(
       }
 
       if (fullResponse) {
-        addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullResponse, created_at: new Date().toISOString() });
+        await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullResponse, created_at: new Date().toISOString() });
       }
 
       // Sonar gives a research answer — now hand off to Anthropic to execute tools
@@ -2531,7 +2531,7 @@ async function runWithPerplexity(
         content: fullResponse.slice(0, 2000),
         status: "completed", created_at: new Date().toISOString(),
       };
-      addAgentStep(searchStep);
+      await addAgentStep(searchStep);
       onStep?.(searchStep);
 
       // Hand off to Anthropic for tool-use orchestration with the Sonar research as context
@@ -2546,21 +2546,21 @@ async function runWithPerplexity(
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 
-function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentStep) => void) {
+async function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentStep) => void): Promise<void> {
   const msg = err instanceof Error ? err.message : String(err);
   const step: AgentStep = {
     id: uuidv4(), task_id: taskId, type: "error", title: "Error encountered",
     content: msg, status: "failed", created_at: new Date().toISOString(),
   };
-  addAgentStep(step); onStep?.(step); updateTaskStatus(taskId, "failed");
-  addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `I encountered an error: ${msg}`, created_at: new Date().toISOString() });
+  await addAgentStep(step); onStep?.(step); await updateTaskStatus(taskId, "failed");
+  await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `I encountered an error: ${msg}`, created_at: new Date().toISOString() });
 
   // Self-improvement: record failure (Otto-inspired)
   try {
-    import("./db").then(({ getTask }) => {
-      const task = getTask(taskId);
+    import("./db").then(async ({ getTask }) => {
+      const task = await getTask(taskId);
       if (task) {
-        recordLearning({
+        await recordLearning({
           id: uuidv4(),
           task_id: taskId,
           outcome: "failure",
@@ -2568,7 +2568,7 @@ function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentSte
           pattern_data: { error: msg.slice(0, 200), model: task.model },
           confidence: 0.3,
         });
-        recordAnalyticsEvent({
+        await recordAnalyticsEvent({
           id: uuidv4(),
           event_type: "task_error",
           model: task.model,
@@ -2585,7 +2585,7 @@ function handleAgentError(err: unknown, taskId: string, onStep?: (step: AgentSte
         // Track skill failure if a skill was used (Hermes-inspired)
         const matchedSkillId = (task as unknown as Record<string, string>).matchedSkillId;
         if (matchedSkillId) {
-          incrementSkillUsage(matchedSkillId, "failure");
+          await incrementSkillUsage(matchedSkillId, "failure");
         }
       }
     }).catch(() => { /* ignore */ });
@@ -2655,7 +2655,7 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
       // Check if this action was already approved or denied (user clicked Approve/Deny in UI)
       try {
         const { getTask: fetchTask, updateTaskMetadata } = await import("./db");
-        const task = fetchTask(ctx.taskId);
+        const task = await fetchTask(ctx.taskId);
         const existingMeta = task?.metadata || {};
 
         // Check if this tool was recently denied — block re-execution immediately
@@ -2674,7 +2674,7 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
         if (alreadyApproved !== -1) {
           // Already approved — remove from approved list and proceed with execution
           approvedActions.splice(alreadyApproved, 1);
-          updateTaskMetadata(ctx.taskId, { ...existingMeta, approved_actions: approvedActions });
+          await updateTaskMetadata(ctx.taskId, { ...existingMeta, approved_actions: approvedActions });
           // Fall through to execute the tool below
         } else {
           // Not yet approved — record the pending approval and pause
@@ -2686,7 +2686,7 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
             tool_name: name, tool_input: input,
             status: "running", created_at: new Date().toISOString(),
           };
-          addAgentStep(approvalStep);
+          await addAgentStep(approvalStep);
           ctx.onStep?.(approvalStep);
 
           // Store approval request in task metadata
@@ -2698,10 +2698,10 @@ async function executeTool(name: ToolName, input: Record<string, unknown>, ctx: 
             reason: approvalReason,
             created_at: new Date().toISOString(),
           });
-          updateTaskMetadata(ctx.taskId, { ...existingMeta, pending_approvals: pendingApprovals });
+          await updateTaskMetadata(ctx.taskId, { ...existingMeta, pending_approvals: pendingApprovals });
 
           // Pause the task — it will be resumed when the user approves
-          updateTaskStatus(ctx.taskId, "waiting_for_input");
+          await updateTaskStatus(ctx.taskId, "waiting_for_input");
           return `[APPROVAL_REQUIRED] Action "${name}" requires human approval: ${approvalReason}. The task has been paused. Resume after approval.`;
         }
       } catch {
@@ -3855,7 +3855,7 @@ async function executeBrowseWeb(
           await page.screenshot({ path: ssPath, fullPage: false });
           results.push(`Screenshot saved: ${ssPath}`);
           try {
-            addTaskFile({
+            await addTaskFile({
               id: uuidv4(),
               task_id: ctx.taskId,
               name: path.basename(ssPath),
@@ -3980,10 +3980,10 @@ async function executeBrowseWeb(
 
 async function executeMemoryStore(key: string, value: string, tags: string[], ctx: ToolContext): Promise<string> {
   const memoryType = classifyMemoryType(key, value);
-  memoryStore({ id: uuidv4(), key, value, source_task_id: ctx.taskId, tags: [...tags, memoryType], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+  await memoryStore({ id: uuidv4(), key, value, source_task_id: ctx.taskId, tags: [...tags, memoryType], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 
   // Check for memory compression opportunity
-  const allMemories = listMemory(500);
+  const allMemories = await listMemory(500);
   if (allMemories.length > 200) {
     const compressible = identifyCompressible(allMemories as any);
     if (compressible.length > 10) {
@@ -3996,7 +3996,7 @@ async function executeMemoryStore(key: string, value: string, tags: string[], ct
 
 async function executeMemoryRecall(query: string, limit: number): Promise<string> {
   // Feature 3: Try semantic recall first (embedding-based), fall back to DB text search
-  const allMemories = listMemory(500);
+  const allMemories = await listMemory(500);
   const semanticResults = semanticRecall(query, allMemories as any, limit);
 
   if (semanticResults.length > 0) {
@@ -4004,13 +4004,13 @@ async function executeMemoryRecall(query: string, limit: number): Promise<string
   }
 
   // Fallback to basic DB search
-  const results = memoryRecall(query, limit);
+  const results = await memoryRecall(query, limit);
   if (results.length === 0) return `No memories found for "${query}".`;
   return `Found ${results.length} memories:\n\n${results.map((m, i) => `${i + 1}. **${m.key}**: ${m.value}\n   Tags: [${(m.tags || []).join(", ")}]\n   ID: ${m.id}\n   Updated: ${m.updated_at}`).join("\n\n")}`;
 }
 
 async function executeMemoryList(limit: number): Promise<string> {
-  const entries = listMemory(limit);
+  const entries = await listMemory(limit);
   if (entries.length === 0) return "Memory bank is empty. No memories stored yet.";
   return `Memory Bank (${entries.length} entries):\n\n${entries.map((m, i) => `${i + 1}. **${m.key}**: ${m.value.slice(0, 200)}${m.value.length > 200 ? "..." : ""}\n   Tags: [${(m.tags || []).join(", ")}] | ID: ${m.id}\n   Source: ${m.source_task_id || "manual"} | Updated: ${m.updated_at}`).join("\n\n")}`;
 }
@@ -4018,10 +4018,10 @@ async function executeMemoryList(limit: number): Promise<string> {
 async function executeMemoryDelete(id: string, reason: string): Promise<string> {
   try {
     // Verify it exists first
-    const all = listMemory(500);
+    const all = await listMemory(500);
     const entry = all.find(m => m.id === id);
     if (!entry) return `Memory with ID "${id}" not found. Use memory_list to see available entries.`;
-    deleteMemory(id);
+    await deleteMemory(id);
     console.log(`[memory] Deleted memory "${entry.key}" (${id}). Reason: ${reason || "not specified"}`);
     return `Deleted memory: "${entry.key}" (ID: ${id}).${reason ? ` Reason: ${reason}` : ""}\nThe memory bank is now cleaner and more accurate.`;
   } catch (err) {
@@ -4032,11 +4032,11 @@ async function executeMemoryDelete(id: string, reason: string): Promise<string> 
 async function executeMemoryUpdate(key: string, value: string, tags?: string[]): Promise<string> {
   try {
     // Find existing entry by key
-    const all = listMemory(500);
+    const all = await listMemory(500);
     const existing = all.find(m => m.key === key);
     if (!existing) {
       // If key doesn't exist, create it as a new entry
-      memoryStore({
+      await memoryStore({
         id: uuidv4(), key, value,
         tags: tags || [],
         created_at: new Date().toISOString(),
@@ -4045,7 +4045,7 @@ async function executeMemoryUpdate(key: string, value: string, tags?: string[]):
       return `No existing memory with key "${key}" — created new entry.\nStored: "${key}" = "${value.slice(0, 100)}${value.length > 100 ? "..." : ""}"`;
     }
     // Update existing
-    memoryStore({
+    await memoryStore({
       ...existing,
       value,
       tags: tags || existing.tags,
@@ -4060,7 +4060,7 @@ async function executeMemoryUpdate(key: string, value: string, tags?: string[]):
 async function executeListSkills(activeOnly: boolean): Promise<string> {
   try {
     const { listSkills } = await import("./db");
-    const skills = listSkills();
+    const skills = await listSkills();
     const filtered = activeOnly ? skills.filter(s => s.is_active) : skills;
     if (filtered.length === 0) return activeOnly ? "No active skills configured." : "No skills configured.";
     // Progressive disclosure: show name + truncated description only (Hermes-style)
@@ -4095,11 +4095,11 @@ async function executeSkillManage(
       case "create": {
         if (!instructions) return "Error: instructions are required to create a skill.";
         // Check for duplicates
-        const exists = findSimilarSkill(name);
+        const exists = await findSimilarSkill(name);
         if (exists) return `A skill with a similar name already exists. Use skill_manage(action='patch', name='${name}') to update it instead.`;
 
         const skillId = uuidv4();
-        dbCreateSkill({
+        await dbCreateSkill({
           id: skillId,
           name,
           description: description || "",
@@ -4115,13 +4115,13 @@ async function executeSkillManage(
       }
 
       case "view": {
-        const skill = dbGetSkillByName(name);
+        const skill = await dbGetSkillByName(name);
         if (!skill) return `No skill found with name "${name}". Use list_skills to see available skills.`;
         return `## Skill: ${skill.name}\n**Category:** ${skill.category}\n**Status:** ${skill.is_active ? "Active" : "Inactive"}\n**Triggers:** ${skill.triggers?.join(", ") || "None"}\n**Created:** ${skill.created_at}\n\n### Instructions\n${skill.instructions}`;
       }
 
       case "patch": {
-        const skill = dbGetSkillByName(name);
+        const skill = await dbGetSkillByName(name);
         if (!skill) return `No skill found with name "${name}". Use list_skills to see available skills, or create a new one with action='create'.`;
 
         const updates: Record<string, unknown> = {};
@@ -4132,14 +4132,14 @@ async function executeSkillManage(
 
         if (Object.keys(updates).length === 0) return "Error: provide at least one field to update (description, instructions, category, or triggers).";
 
-        dbUpdateSkill(skill.id, updates);
+        await dbUpdateSkill(skill.id, updates);
         return `✅ Skill "${name}" patched successfully. Updated: ${Object.keys(updates).join(", ")}.`;
       }
 
       case "delete": {
-        const skill = dbGetSkillByName(name);
+        const skill = await dbGetSkillByName(name);
         if (!skill) return `No skill found with name "${name}".`;
-        dbDeleteSkill(skill.id);
+        await dbDeleteSkill(skill.id);
         return `✅ Skill "${name}" deleted.`;
       }
 
@@ -4167,12 +4167,12 @@ async function executeOrganizeFiles(
         if (!folderName) return "Error: folder_name is required for create_folder action.";
         const folderId = uuidv4();
         const now = new Date().toISOString();
-        createFolder({ id: folderId, name: folderName, parent_id: parentFolderId, color: "#5e9cf0", created_at: now, updated_at: now });
+        await createFolder({ id: folderId, name: folderName, parent_id: parentFolderId, color: "#5e9cf0", created_at: now, updated_at: now });
         return `Created folder "${folderName}" (id: ${folderId}).${parentFolderId ? ` Inside parent folder ${parentFolderId}.` : ""} Files can be moved into this folder using organize_files with action="move_to_folder" and target_folder_id="${folderId}".`;
       }
       case "move_to_folder": {
         if (!fileNames || fileNames.length === 0) return "Error: file_names is required for move_to_folder action.";
-        const allFiles = listAllFiles(500);
+        const allFiles = await listAllFiles(500);
         const moved: string[] = [];
         const notFound: string[] = [];
         for (const fname of fileNames) {
@@ -4180,7 +4180,7 @@ async function executeOrganizeFiles(
           const match = allFiles.find(f => f.name === fname && f.task_id === ctx.taskId)
             || allFiles.find(f => f.name === fname);
           if (match) {
-            updateFileFolder(match.id, targetFolderId || null);
+            await updateFileFolder(match.id, targetFolderId || null);
             moved.push(fname);
           } else {
             notFound.push(fname);
@@ -4192,8 +4192,8 @@ async function executeOrganizeFiles(
         return result || "No files matched.";
       }
       case "list_all_files": {
-        const files = listAllFiles(50);
-        const folders = listFolders();
+        const files = await listAllFiles(50);
+        const folders = await listFolders();
         if (files.length === 0 && folders.length === 0) return "No files or folders in the global file system.";
         let result = "";
         if (folders.length > 0) {
@@ -4350,7 +4350,7 @@ async function executeDreamMachine(
   const boardFilename = `${safeName}_board.json`;
   const boardJson = JSON.stringify(board, null, 2);
   fs.writeFileSync(path.join(ctx.filesDir, boardFilename), boardJson, "utf-8");
-  addTaskFile({
+  await addTaskFile({
     id: uuidv4(), task_id: ctx.taskId, name: boardFilename,
     path: path.join(ctx.filesDir, boardFilename),
     size: Buffer.byteLength(boardJson), mime_type: "application/json",
@@ -4363,7 +4363,7 @@ async function executeDreamMachine(
     const mediaUrl = r.videoUrl || r.imageUrl;
     if (r.status === "completed" && mediaUrl) {
       try {
-        addGalleryItem({
+        await addGalleryItem({
           id: uuidv4(), title: `${boardName} — ${r.prompt.slice(0, 50)}`,
           description: r.prompt, preview_url: mediaUrl,
           category: r.videoUrl ? "video" : "image",
@@ -4429,7 +4429,7 @@ async function executeGenerateImage(
     const filePath = path.join(ctx.filesDir, safeName);
     fs.writeFileSync(filePath, buf);
     const stat = fs.statSync(filePath);
-    addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: "image/png", source: "agent", created_at: new Date().toISOString() });
+    await addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: "image/png", source: "agent", created_at: new Date().toISOString() });
     const revised = resp.data?.[0]?.revised_prompt;
     return `Image generated: ${safeName} (${formatBytes(stat.size)})${revised ? `\nRevised prompt: ${revised}` : ""}`;
   } catch (err) {
@@ -4468,7 +4468,7 @@ async function executeReplicateRun(
 
     // Register output files with the task
     for (const file of result.files) {
-      addTaskFile({
+      await addTaskFile({
         id: uuidv4(),
         task_id: ctx.taskId,
         name: file.filename,
@@ -4483,7 +4483,7 @@ async function executeReplicateRun(
     // Add to gallery if it's an image
     if (result.files.length > 0 && result.files[0].mimeType.startsWith("image/")) {
       try {
-        addGalleryItem({
+        await addGalleryItem({
           id: uuidv4(),
           title: prompt.slice(0, 100),
           description: `Generated by ${result.model} via Replicate`,
@@ -4520,7 +4520,7 @@ async function executeReplicateRun(
 
     // Record analytics
     try {
-      recordAnalyticsEvent({
+      await recordAnalyticsEvent({
         id: uuidv4(),
         event_type: "tool_call",
         tool_name: "replicate_run",
@@ -4536,7 +4536,7 @@ async function executeReplicateRun(
     const msg = err instanceof Error ? err.message : String(err);
     // Record failure
     try {
-      recordAnalyticsEvent({
+      await recordAnalyticsEvent({
         id: uuidv4(),
         event_type: "tool_call",
         tool_name: "replicate_run",
@@ -4646,7 +4646,7 @@ async function executeCode(language: string, code: string, timeout: number, ctx:
       .filter((f) => { const s = fs.statSync(path.join(ctx.filesDir, f)); return s.mtimeMs > Date.now() - (timeout + 10) * 1000; });
     for (const nf of newFiles) {
       const fp = path.join(ctx.filesDir, nf); const s = fs.statSync(fp);
-      addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: nf, path: fp, size: s.size, mime_type: getMimeType(nf), source: "agent", created_at: new Date().toISOString() });
+      await addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: nf, path: fp, size: s.size, mime_type: getMimeType(nf), source: "agent", created_at: new Date().toISOString() });
     }
     return output + (newFiles.length > 0 ? `\n\nFiles created: ${newFiles.join(", ")}` : "");
   } catch (err) { return `Execution error: ${(err instanceof Error ? err.message : String(err)).slice(0, 2000)}`; }
@@ -4662,7 +4662,7 @@ async function writeFile(filename: string, content: string, mimeType: string | u
   const safeContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
   fs.writeFileSync(filePath, safeContent, "utf-8");
   const stat = fs.statSync(filePath);
-  addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: mimeType || getMimeType(safeName), source: "agent", created_at: new Date().toISOString() });
+  await addTaskFile({ id: uuidv4(), task_id: ctx.taskId, name: safeName, path: filePath, size: stat.size, mime_type: mimeType || getMimeType(safeName), source: "agent", created_at: new Date().toISOString() });
   return `File written: ${safeName} (${formatBytes(stat.size)})`;
 }
 
@@ -5115,7 +5115,7 @@ async function createSubAgent(
   context: string, model: string, ctx: ToolContext
 ): Promise<string> {
   const subTaskId = uuidv4();
-  addSubTask({ id: subTaskId, parent_task_id: ctx.taskId, title, status: "running", agent_type: agentType, created_at: new Date().toISOString() });
+  await addSubTask({ id: subTaskId, parent_task_id: ctx.taskId, title, status: "running", agent_type: agentType, created_at: new Date().toISOString() });
 
   // Use typed subagent roles with tool scoping (Feature 4)
   const roleConfig = SUBAGENT_ROLES[agentType as keyof typeof SUBAGENT_ROLES];
@@ -5184,7 +5184,7 @@ async function createSubAgent(
 
         // Success — break out of failover loop
         const trimmedResult = result.trim() || "Sub-agent completed.";
-        updateSubTask(subTaskId, "completed", trimmedResult);
+        await updateSubTask(subTaskId, "completed", trimmedResult);
         return trimmedResult;
       } catch (err) {
         lastError = err;
@@ -5203,11 +5203,11 @@ async function createSubAgent(
 
     // All providers failed
     const msg = lastError instanceof Error ? lastError.message : String(lastError);
-    updateSubTask(subTaskId, "failed", msg);
+    await updateSubTask(subTaskId, "failed", msg);
     return `Sub-agent failed after trying ${failoverChain.length} providers: ${msg}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    updateSubTask(subTaskId, "failed", msg);
+    await updateSubTask(subTaskId, "failed", msg);
     return `Sub-agent failed: ${msg}`;
   }
 }
@@ -5245,7 +5245,7 @@ async function executeSocialMedia(input: Record<string, unknown>, ctx: ToolConte
     // Register screenshot as task file if one was taken
     if (result.screenshot_path) {
       try {
-        addTaskFile({
+        await addTaskFile({
           id: uuidv4(),
           task_id: ctx.taskId,
           name: path.basename(result.screenshot_path),
@@ -5294,7 +5294,7 @@ async function executeSocialMedia(input: Record<string, unknown>, ctx: ToolConte
 async function connectorCall(connectorId: string, action: string, params: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   void ctx;
   const { getConnectorConfig } = await import("./db");
-  const config = getConnectorConfig(connectorId);
+  const config = await getConnectorConfig(connectorId);
   if (!config || !config.connected) return `Connector "${connectorId}" is not connected. Configure it in the Connectors page.`;
   try { return await dispatchConnectorAction(connectorId, action, params, config as Record<string, unknown>); }
   catch (err) { return `Connector error: ${err instanceof Error ? err.message : String(err)}`; }
@@ -8054,7 +8054,7 @@ async function dispatchConnectorAction(
 async function handleCompleteTask(
   summary: string, filesCreated: string[], addToGallery: boolean, ctx: ToolContext
 ): Promise<string> {
-  addMessage({ id: uuidv4(), task_id: ctx.taskId, role: "assistant", content: summary, created_at: new Date().toISOString() });
+  await addMessage({ id: uuidv4(), task_id: ctx.taskId, role: "assistant", content: summary, created_at: new Date().toISOString() });
 
   // Build a rich memory value that includes file info
   let memoryValue = summary.slice(0, 500);
@@ -8075,7 +8075,7 @@ async function handleCompleteTask(
     }
   } catch { /* dir may not exist */ }
 
-  memoryStore({ id: uuidv4(), key: `task_result_${ctx.taskId.slice(0, 8)}`, value: memoryValue.slice(0, 800), source_task_id: ctx.taskId, tags: ["task_result", "auto", ...(filesCreated.length > 0 ? ["has_files"] : [])], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+  await memoryStore({ id: uuidv4(), key: `task_result_${ctx.taskId.slice(0, 8)}`, value: memoryValue.slice(0, 800), source_task_id: ctx.taskId, tags: ["task_result", "auto", ...(filesCreated.length > 0 ? ["has_files"] : [])], created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 
   // ─── Self-Evolving Memory: auto-update stale related memories ────────────
   try {
@@ -8083,16 +8083,16 @@ async function handleCompleteTask(
   } catch (e) { console.error("[memory-evolve] Error:", e); }
 
   if (addToGallery) {
-    addGalleryItem({ id: uuidv4(), title: `Task ${ctx.taskId.slice(0, 8)}`, description: summary.slice(0, 200), preview_url: "", category: "General", prompt: summary.slice(0, 100), task_id: ctx.taskId, is_featured: false, created_at: new Date().toISOString() });
+    await addGalleryItem({ id: uuidv4(), title: `Task ${ctx.taskId.slice(0, 8)}`, description: summary.slice(0, 200), preview_url: "", category: "General", prompt: summary.slice(0, 100), task_id: ctx.taskId, is_featured: false, created_at: new Date().toISOString() });
   }
 
   // Self-Improvement: record successful outcome (Otto-inspired)
   try {
     const { getTask } = await import("./db");
-    const task = getTask(ctx.taskId);
+    const task = await getTask(ctx.taskId);
     if (task) {
       const patternKey = task.prompt.slice(0, 200);
-      recordLearning({
+      await recordLearning({
         id: uuidv4(),
         task_id: ctx.taskId,
         outcome: "success",
@@ -8107,9 +8107,9 @@ async function handleCompleteTask(
       });
 
       // Reinforce similar patterns
-      const similar = findSimilarLearnings(patternKey, 3);
+      const similar = await findSimilarLearnings(patternKey, 3);
       for (const s of similar) {
-        if (s.outcome === "success") updateLearningConfidence(s.id, 0.05);
+        if (s.outcome === "success") await updateLearningConfidence(s.id, 0.05);
       }
     }
   } catch (e) { console.error("[self-improve] Error recording learning:", e); }
@@ -8117,8 +8117,8 @@ async function handleCompleteTask(
   // Analytics: record completion event
   try {
     const { getTask } = await import("./db");
-    const task = getTask(ctx.taskId);
-    recordAnalyticsEvent({
+    const task = await getTask(ctx.taskId);
+    await recordAnalyticsEvent({
       id: uuidv4(),
       event_type: "task_complete",
       model: task?.model,
@@ -8148,7 +8148,7 @@ async function handleCompleteTask(
   // 4. Compress memory bank if growing too large
   try {
     const { getTask } = await import("./db");
-    const task = getTask(ctx.taskId);
+    const task = await getTask(ctx.taskId);
     if (task) {
       const bgResult = await runBackgroundReview({
         taskId: ctx.taskId,
@@ -8178,16 +8178,12 @@ async function handleCompleteTask(
         },
         findSimilarSkillFn: findSimilarSkill,
         recordSkillPerfFn: (perf) => {
-          try {
-            recordSkillPerf(perf);
-          } catch { /* best effort */ }
+          recordSkillPerf(perf).catch(() => { /* best effort */ });
         },
         patchSkillFn: (id, updates) => {
-          try {
-            dbUpdateSkill(id, updates);
-          } catch { /* best effort */ }
+          dbUpdateSkill(id, updates).catch(() => { /* best effort */ });
         },
-        dbForPatching: (() => { try { const { getDb } = require("./db"); return getDb(); } catch { return undefined; } })(),
+        dbForPatching: undefined,
       });
 
       if (bgResult.skills_created > 0 || bgResult.memories_created > 0 || bgResult.skills_patched > 0) {
@@ -8196,7 +8192,7 @@ async function handleCompleteTask(
 
       // Track skill performance for matched skill
       if ((ctx as unknown as Record<string, string>).matchedSkillId) {
-        incrementSkillUsage((ctx as unknown as Record<string, string>).matchedSkillId, "success");
+        await incrementSkillUsage((ctx as unknown as Record<string, string>).matchedSkillId, "success");
       }
     }
   } catch (e) { console.error("[bg-review] Error running background review:", e); }
@@ -8210,22 +8206,22 @@ async function handleCompleteTask(
   // Task Dependency Execution: auto-trigger dependent tasks (Perplexity Computer workflow chains)
   try {
     const { listTasks, getTask } = await import("./db");
-    const allTasks = listTasks(undefined, 200, 0);
+    const allTasks = await listTasks(undefined, 200, 0);
     const dependentTasks = allTasks.filter((t: { depends_on?: string; status: string }) =>
       t.depends_on === ctx.taskId && t.status === "pending"
     );
     if (dependentTasks.length > 0) {
       for (const depTask of dependentTasks) {
         console.log(`[dependency] Auto-triggering dependent task: ${depTask.id} (${depTask.prompt?.slice(0, 50)}...)`);
-        updateTaskStatus(depTask.id, "running");
-        const depTaskData = getTask(depTask.id);
+        await updateTaskStatus(depTask.id, "running");
+        const depTaskData = await getTask(depTask.id);
         if (depTaskData) {
           const depFilesDir = path.join(process.cwd(), "task-files", depTask.id);
           if (!fs.existsSync(depFilesDir)) fs.mkdirSync(depFilesDir, { recursive: true });
           const enrichedPrompt = `[Previous task result for context: ${summary.slice(0, 1000)}]\n\n${depTaskData.prompt}`;
-          runAgent({ taskId: depTask.id, userMessage: enrichedPrompt, model: (depTaskData.model || "auto") as ModelId }).catch(err => {
+          runAgent({ taskId: depTask.id, userMessage: enrichedPrompt, model: (depTaskData.model || "auto") as ModelId }).catch(async err => {
             console.error(`[dependency] Failed to run dependent task ${depTask.id}:`, err);
-            updateTaskStatus(depTask.id, "failed");
+            await updateTaskStatus(depTask.id, "failed");
           });
         }
       }
@@ -8241,8 +8237,8 @@ async function handleCompleteTask(
 // - Detects and removes contradicted memories
 // - Prunes excess auto-generated memories to prevent memory bank bloat
 
-function autoEvolveMemories(summary: string, taskId: string): void {
-  const all = listMemory(500);
+async function autoEvolveMemories(summary: string, taskId: string): Promise<void> {
+  const all = await listMemory(500);
 
   // 1. Supersede: if there's an older task_result for the same task prefix, remove the old one
   const taskPrefix = taskId.slice(0, 8);
@@ -8252,7 +8248,7 @@ function autoEvolveMemories(summary: string, taskId: string): void {
     m.source_task_id === taskId
   );
   for (const old of existingTaskResults) {
-    deleteMemory(old.id);
+    await deleteMemory(old.id);
     console.log(`[memory-evolve] Superseded old task result: ${old.key}`);
   }
 
@@ -8272,7 +8268,7 @@ function autoEvolveMemories(summary: string, taskId: string): void {
       getKeywordOverlap(summaryLower, valueLower) > 0.3;
   });
   for (const stale of staleMemories) {
-    deleteMemory(stale.id);
+    await deleteMemory(stale.id);
     console.log(`[memory-evolve] Removed contradicted memory: ${stale.key} (was: ${stale.value.slice(0, 80)})`);
   }
 
@@ -8283,7 +8279,7 @@ function autoEvolveMemories(summary: string, taskId: string): void {
   if (autoMemories.length > 100) {
     const excess = autoMemories.slice(100);
     for (const old of excess) {
-      deleteMemory(old.id);
+      await deleteMemory(old.id);
     }
     if (excess.length > 0) {
       console.log(`[memory-evolve] Pruned ${excess.length} oldest auto-memories (kept latest 100)`);
@@ -8306,9 +8302,9 @@ function getKeywordOverlap(a: string, b: string): number {
 // ─── Self-Improvement: Apply Learnings (Otto-inspired) ────────────────────────
 // Injects relevant past learnings into the system prompt
 
-function getLearnedInsights(taskPrompt: string): string {
+async function getLearnedInsights(taskPrompt: string): Promise<string> {
   try {
-    const similar = findSimilarLearnings(taskPrompt, 5);
+    const similar = await findSimilarLearnings(taskPrompt, 5);
     if (similar.length === 0) return "";
 
     const insights = similar
@@ -8386,7 +8382,7 @@ function generateFollowUpSuggestions(summary: string, _taskId: string): FollowUp
 
 registerAfterToolHook(async (ctx) => {
   try {
-    recordAnalyticsEvent({
+    await recordAnalyticsEvent({
       id: uuidv4(),
       event_type: "tool_call",
       tool_name: ctx.toolName,
@@ -8401,7 +8397,7 @@ registerAfterToolHook(async (ctx) => {
 // Re-generates the dynamic parts of the system prompt (memories, files, skills)
 // for use during multi-turn tool loops so the agent always has the freshest state.
 
-function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir: string, userMessage: string): string {
+async function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir: string, userMessage: string): Promise<string> {
   let refreshedPrompt = baseSystemPrompt;
 
   // Strip old dynamic sections (they'll be re-added with fresh data)
@@ -8413,8 +8409,8 @@ function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir
 
   // Re-inject fresh memories (hybrid keyword + semantic + primed recall)
   try {
-    const keywordResults = memoryRecall(userMessage, 10);
-    const allMem = listMemory(500);
+    const keywordResults = await memoryRecall(userMessage, 10);
+    const allMem = await listMemory(500);
     const primedMems = primeMemoriesForTask(userMessage, allMem, 8);
     const enhancedResults = enhancedMemoryRecall(userMessage, allMem, keywordResults, 5);
     
@@ -8428,7 +8424,7 @@ function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir
     
     if (relevantMemories.length > 0) {
       for (const m of relevantMemories) {
-        try { updateMemoryAccess(m.id); } catch { /* best-effort */ }
+        try { await updateMemoryAccess(m.id); } catch { /* best-effort */ }
       }
       const memLines = relevantMemories.map((m, i) => {
         const typeLabel = m.memory_type ? ` (${m.memory_type})` : "";
@@ -8440,8 +8436,8 @@ function refreshSystemContext(baseSystemPrompt: string, taskId: string, filesDir
 
   // Re-inject fresh global file system view
   try {
-    const allFiles = listAllFiles(100);
-    const allFolders = listFolders();
+    const allFiles = await listAllFiles(100);
+    const allFolders = await listFolders();
     const parts: string[] = [];
 
     if (allFolders.length > 0) {

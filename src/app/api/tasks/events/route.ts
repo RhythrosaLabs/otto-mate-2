@@ -31,49 +31,50 @@ export async function GET(req: NextRequest) {
     start(ctrl) {
       controller = ctrl;
 
-      // Send initial snapshot (lightweight — no N+1 hydration)
-      const active = listTasksSummary(100);
-      send("snapshot", { tasks: active });
+      // Send initial snapshot then start polling
+      listTasksSummary(100).then((active) => {
+        send("snapshot", { tasks: active });
 
-      // Poll DB for changes every 1.5s and push diffs
-      let lastStates = new Map<string, string>(
-        active.map((t) => [t.id, `${t.status}:${t.steps_count}:${t.files_count}`])
-      );
+        // Poll DB for changes every 1.5s and push diffs
+        let lastStates = new Map<string, string>(
+          active.map((t) => [t.id, `${t.status}:${t.steps_count}:${t.files_count}`])
+        );
 
-      intervalId = setInterval(() => {
-        if (closed) {
-          clearInterval(intervalId);
-          return;
-        }
-        try {
-          const current = listTasksSummary(100);
-          const currentIds = new Set<string>();
-
-          for (const t of current) {
-            currentIds.add(t.id);
-            const key = `${t.status}:${t.steps_count}:${t.files_count}`;
-            const prev = lastStates.get(t.id);
-            if (prev === undefined) {
-              // New task
-              send("new", { task: t });
-            } else if (prev !== key) {
-              // Updated task
-              send("update", { task: t });
-            }
+        intervalId = setInterval(async () => {
+          if (closed) {
+            clearInterval(intervalId);
+            return;
           }
+          try {
+            const current = await listTasksSummary(100);
+            const currentIds = new Set<string>();
 
-          // Detect deleted tasks
-          for (const [id] of lastStates) {
-            if (!currentIds.has(id)) {
-              send("deleted", { id });
+            for (const t of current) {
+              currentIds.add(t.id);
+              const key = `${t.status}:${t.steps_count}:${t.files_count}`;
+              const prev = lastStates.get(t.id);
+              if (prev === undefined) {
+                // New task
+                send("new", { task: t });
+              } else if (prev !== key) {
+                // Updated task
+                send("update", { task: t });
+              }
             }
-          }
 
-          lastStates = new Map(current.map((t) => [t.id, `${t.status}:${t.steps_count}:${t.files_count}`]));
-        } catch {
-          // DB error — skip this tick
-        }
-      }, 1500);
+            // Detect deleted tasks
+            for (const [id] of lastStates) {
+              if (!currentIds.has(id)) {
+                send("deleted", { id });
+              }
+            }
+
+            lastStates = new Map(current.map((t) => [t.id, `${t.status}:${t.steps_count}:${t.files_count}`]));
+          } catch {
+            // DB error — skip this tick
+          }
+        }, 1500);
+      }).catch(() => { /* ignore initial snapshot error */ });
 
       // Heartbeat every 15s to keep connection alive
       heartbeatId = setInterval(() => {

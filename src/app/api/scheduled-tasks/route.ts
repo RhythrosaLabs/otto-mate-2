@@ -20,7 +20,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   try {
-    const tasks = listScheduledTasks(session?.userId);
+    const tasks = await listScheduledTasks(session?.userId);
     return NextResponse.json(tasks);
   } catch (err) {
     return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   if (validationError) return validationError;
 
   try {
-    const scheduledTask = createScheduledTask({
+    const scheduledTask = await createScheduledTask({
       id: uuidv4(),
       name: data.name,
       prompt: data.prompt,
@@ -60,19 +60,19 @@ export async function PATCH(request: NextRequest) {
     const { action, id, enabled } = body;
 
     if (action === "toggle" && id !== undefined) {
-      toggleScheduledTask(id, enabled ?? true);
+      await toggleScheduledTask(id, enabled ?? true);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "run-due") {
-      const dueTasks = getDueScheduledTasks();
+      const dueTasks = await getDueScheduledTasks();
       const results: Array<{ id: string; name: string; task_id: string }> = [];
 
       for (const st of dueTasks) {
         // Create a real task from the scheduled task
         const taskId = uuidv4();
         const now = new Date().toISOString();
-        createTask({
+        await createTask({
           id: taskId,
           title: `[Scheduled] ${st.name}`,
           prompt: st.prompt,
@@ -86,17 +86,17 @@ export async function PATCH(request: NextRequest) {
 
         // Compute next run time
         const nextRun = computeNextRun(st);
-        updateScheduledTaskLastRun(st.id, nextRun);
+        await updateScheduledTaskLastRun(st.id, nextRun);
 
         // Delete if one-shot and configured to delete
         if (st.delete_after_run && st.schedule_type === "once") {
-          deleteScheduledTask(st.id);
+          await deleteScheduledTask(st.id);
         }
 
         // Fire and forget the agent run
-        runAgent({ taskId, userMessage: st.prompt, model: st.model as "auto" }).catch((err) => {
+        runAgent({ taskId, userMessage: st.prompt, model: st.model as "auto" }).catch(async (err) => {
           console.error(`[scheduled] Agent run failed for task ${taskId}:`, err);
-          updateTaskStatus(taskId, "failed");
+          await updateTaskStatus(taskId, "failed");
         });
 
         results.push({ id: st.id, name: st.name, task_id: taskId });
@@ -117,7 +117,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    deleteScheduledTask(id);
+    await deleteScheduledTask(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });

@@ -515,12 +515,12 @@ export async function runBackgroundReview(params: {
   matchedSkillId?: string;
   storeMemoryFn: (entry: MemoryEntry) => void;
   deleteMemoryFn: (id: string) => void;
-  listMemoryFn: (limit: number) => MemoryEntry[];
+  listMemoryFn: (limit: number) => MemoryEntry[] | Promise<MemoryEntry[]>;
   createSkillFn: (skill: {
     id: string; name: string; description: string; instructions: string;
     category: string; triggers: string[]; is_active: boolean;
   }) => void;
-  findSimilarSkillFn?: (name: string) => boolean;
+  findSimilarSkillFn?: (name: string) => boolean | Promise<boolean>;
   recordSkillPerfFn?: (perf: SkillPerformance) => void;
   patchSkillFn?: (id: string, updates: { instructions?: string }) => void;
   dbForPatching?: { prepare: (sql: string) => { all: (...args: unknown[]) => Array<Record<string, unknown>>; run: (...args: unknown[]) => void } };
@@ -563,7 +563,7 @@ export async function runBackgroundReview(params: {
 
     if (candidate) {
       // Check if a similar skill already exists
-      const alreadyExists = params.findSimilarSkillFn?.(candidate.name) ?? false;
+      const alreadyExists = (await params.findSimilarSkillFn?.(candidate.name)) ?? false;
 
       if (!alreadyExists) {
         params.createSkillFn({
@@ -618,7 +618,7 @@ export async function runBackgroundReview(params: {
 
   // 4. Run memory compression if bank is getting large
   try {
-    const allMemories = params.listMemoryFn(500);
+    const allMemories = await params.listMemoryFn(500);
     if (allMemories.length > 150) {
       const compressionResult = runMemoryCompression(
         allMemories, 200, params.deleteMemoryFn, params.storeMemoryFn,
