@@ -74,16 +74,24 @@ git clone https://github.com/RhythrosaLabs/otto-mate-2.git
 cd otto-mate-2
 npm install
 
-# Add your API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
+# Add your API key (minimum required)
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env.local
 
-# Start
+# Skip login in local dev (no credentials required)
+echo "DISABLE_AUTH=true" >> .env.local
+
+# Start Next.js only
 npm run dev
+
+# — or — start all services (bolt-diy App Builder + code-server Coding Companion)
+npm run dev:all
 ```
 
-Open **http://localhost:3000** — the onboarding wizard will walk you through first-time setup.
+Open **http://localhost:3000** — the app loads directly when `DISABLE_AUTH=true` is set.
 
 > **Optional keys** unlock more models and features. See [Environment Variables](#environment-variables) below.
+
+> **Production auth:** remove `DISABLE_AUTH` and set `NEXTAUTH_SECRET` (any random string, e.g. `openssl rand -hex 32`) to enable JWT-based login.
 
 ---
 
@@ -196,26 +204,31 @@ AI-powered creative hub with SmartBar (auto-detect output type, dual-provider mo
 
 ### Sidebar Navigation
 
-These 16 pages are accessible from the sidebar:
+The sidebar contains **21 items**. Five are **optional** — hidden by default and toggled on in **Settings › Features**.
 
-| Page | Icon | Description |
-|---|---|---|
-| **Home** | Monitor | Centered prompt input with 12 slash commands, voice input (Whisper + browser speech), file attachments, gallery suggestions, and category chips |
-| **Tasks** | CheckSquare | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
-| **Files** | FolderOpen | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
-| **Connectors** | Plug | Integration marketplace — connect 190+ services via OAuth or API key |
-| **Skills** | Zap | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
-| **Documents** | FileEdit | Create and manage text documents and spreadsheets with AI writing assistance, search, and relative timestamps |
-| **Video Studio** | Clapperboard | 17-mode AI creative studio — Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, AI Director with command chains, continuity library, annotations, and Film Player |
-| **Creative Suite** | Flame | AI creative hub with SmartBar (auto-detects output type, dual-provider model search), generate images (FLUX, DALL-E 3 + 25 styles), video (Minimax, Kling, Wan, Seedance), soundtracks (13 genres, 12 instruments), speech (12 voices, 2 providers), edit images (7 operations), and unified gallery |
-| **Channels** | Globe | Configure inbound messaging (Telegram, Discord, Slack, WhatsApp) with webhook URLs |
-| **Memory** | Brain | View, search, add, and delete agent memory entries |
-| **Scheduled** | Clock | Cron-based task scheduler with interval, daily, weekly, and cron modes |
-| **Analytics** | BarChart3 | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
-| **Audit Trail** | Shield | Paginated log of every agent action with filters and metadata |
-| **Sessions** | MessageSquare | Group related tasks into conversation sessions with shared context |
-| **Computer Control** | MousePointer2 | Full desktop automation — give Claude a task and watch it control your screen with live screenshots, mouse, keyboard, bash, and file editing. Configurable max steps, app permissions, and Continue button |
-| **Settings** | Settings | Default model, token/cost budgets, themes, verbose mode, health check |
+| Page | Icon | Optional | Description |
+|---|---|---|---|
+| **Ottomate** | Monitor | | Centered prompt input with 12 slash commands, voice input (Whisper + browser speech), file attachments, gallery suggestions, and category chips |
+| **Tasks** | CheckSquare | | List all tasks with status filters (running/completed/failed), search, sort, calendar view |
+| **Files** | FolderOpen | | Finder-style file browser with icon/list/gallery views, 50+ format support, folders, preview pane, and source filters |
+| **Connectors** | Plug | | Integration marketplace — connect 190+ services via OAuth or API key |
+| **Skills** | Zap | | Create, edit, and install reusable agent behaviors; 270+ in the marketplace |
+| **Documents** | FileEdit | | Create and manage text documents and spreadsheets with AI writing assistance, search, and relative timestamps |
+| **App Builder** | Package | ✓ | Embedded bolt-diy full-stack AI app builder (WebContainers, port 5173) |
+| **Coding Companion** | Terminal | ✓ | Embedded code-server (VS Code in browser, port 3100) |
+| **Video Studio** | Clapperboard | | 17-mode AI creative studio — Luma Dream Machine (Ray 2, Ray Flash 2, Photon 1, Photon Flash 1) video/image/audio generation organized into storyboards with 20 camera presets, character identity persistence, 9 modify intensities, draft/hi-fi phases, AI Director with command chains, continuity library, annotations, and Film Player |
+| **Multimedia Playground** | Layers | ✓ | Power-user workbench — dual-provider model search (Replicate + HuggingFace), multi-column comparison, quick actions per result type |
+| **Audio Studio** | Music | ✓ | Embedded openDAW browser-based DAW (port 8080) |
+| **Creative Suite** | Flame | | AI creative hub with SmartBar (auto-detects output type, dual-provider model search), generate images (FLUX, DALL-E 3 + 25 styles), video (Minimax, Kling, Wan, Seedance), soundtracks (13 genres, 12 instruments), speech (12 voices, 2 providers), edit images (7 operations), and unified gallery. Route: `/computer/firefly` |
+| **3D Studio** | Box | ✓ | Embedded Blockbench 3D model editor (port 3001) |
+| **Dispatch** | Send | | Messaging channel setup — configure Telegram, Discord, Slack, and WhatsApp webhooks; view connection status and send test messages |
+| **Memory** | Brain | | View, search, add, and delete agent memory entries |
+| **Scheduled** | Clock | | Cron-based task scheduler with interval, daily, weekly, and cron modes |
+| **Analytics** | BarChart3 | | Performance dashboard — KPIs, tool popularity, model costs, error patterns |
+| **Audit Trail** | Shield | | Paginated log of every agent action with filters and metadata |
+| **Sessions** | MessageSquare | | Group related tasks into conversation sessions with shared context |
+| **Computer Control** | MousePointer2 | | Full desktop automation — give Claude a task and watch it control your screen with live screenshots, mouse, keyboard, bash, and file editing. Configurable max steps, app permissions, and Continue button |
+| **Settings** | Settings | | Default model, token/cost budgets, themes, verbose mode, optional feature toggles, health check |
 
 ### Sub-Pages
 
@@ -237,14 +250,13 @@ These pages exist but are not shown in the sidebar:
 
 | Page | Description |
 |---|---|
-| **Playground** | Power-user multimedia workbench — dual-provider model search (Replicate + HuggingFace), multi-column comparison, quick actions per result type, aspect ratio selector |
 | **Replicate** | Replicate-only model explorer with Smart Run (auto-selects best model), quick category buttons, inline or task-based execution |
-| **3D Studio** | Embedded Blockbench 3D model editor (persistent iframe, state preserved across navigation) |
-| **Coding Companion** | Embedded code-server (VS Code in browser) via persistent iframe |
-| **App Builder** | Embedded bolt-diy full-stack AI app builder (WebContainers) via persistent iframe |
 | **Dream Machine** | Direct Luma Dream Machine interface for quick video/image generation |
+| **Channels** | Legacy channel configuration page (webhook URLs for Telegram, Discord, Slack, WhatsApp) — superseded by Dispatch in the sidebar |
+| **Image Studio** | Redirects to Creative Suite (`/computer/firefly`) — kept alive to avoid broken links from agent system prompts |
 | **WhatsApp** | WhatsApp Business API integration dashboard — connection status, send messages, webhook URL display |
 | **Onboarding** | First-run setup wizard — health check, model selection, guided intro |
+| **Admin** | Internal admin tools (not exposed in sidebar) |
 
 ---
 
@@ -282,6 +294,8 @@ Create a `.env.local` file in the project root:
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | **Yes** | Claude models — [console.anthropic.com](https://console.anthropic.com) |
+| `DISABLE_AUTH` | No | Set to `true` to skip login in local dev (no JWT required) |
+| `NEXTAUTH_SECRET` | No (prod) | JWT signing secret for session cookies — required when `DISABLE_AUTH` is unset. Generate with `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | No | GPT-4o, GPT-4.1, DALL-E 3 |
 | `GOOGLE_GEMINI_API_KEY` | No | Gemini 1.5/2.0 |
 | `GROQ_API_KEY` | No | Llama / Mixtral via Groq |
@@ -625,13 +639,17 @@ src/
 │   │   ├── whatsapp/               # WhatsApp Cloud API
 │   │   └── voice/                  # Whisper transcription
 │   └── computer/                   # All UI pages (25+ routes)
-│       ├── firefly/                # Nova creative suite (generate image/video/soundtrack/speech, edit, gallery)
+│       ├── firefly/                # Creative Suite (generate image/video/soundtrack/speech, edit, gallery); route `/computer/firefly`
 │       ├── dreamscape/             # Dreamscape Video Studio (storyboards, AI Director, 17 modes)
-│       ├── playground/             # Multimedia Playground (Replicate + HuggingFace model workbench)
+│       ├── dispatch/               # Dispatch — messaging channel setup (Telegram, Discord, Slack, WhatsApp)
+│       ├── playground/             # Multimedia Playground (Replicate + HuggingFace model workbench; optional)
 │       ├── replicate/              # Replicate model explorer (Smart Run)
-│       ├── 3d-studio/              # Embedded Blockbench 3D editor
-│       ├── coding-companion/       # Embedded code-server (VS Code)
-│       ├── app-builder/            # Embedded bolt-diy app builder
+│       ├── 3d-studio/              # Embedded Blockbench 3D editor (optional)
+│       ├── coding-companion/       # Embedded code-server / VS Code (optional)
+│       ├── app-builder/            # Embedded bolt-diy app builder (optional)
+│       ├── audio-studio/           # Embedded openDAW browser DAW (optional)
+│       ├── image-studio/           # Redirects → /computer/firefly (legacy route)
+│       ├── channels/               # Legacy channel config (superseded by Dispatch)
 │       ├── whatsapp/               # WhatsApp Business API dashboard
 │       └── ...                     # Tasks, Files, Documents, Connectors, Skills, etc.
 ├── lib/
@@ -831,6 +849,13 @@ Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity*
 ---
 
 ## Changelog
+
+### v2.2.0 — Dispatch, Optional Features, Dev Auth Bypass (May 2026)
+- **Dispatch** — new sidebar page replacing Channels; configure Telegram, Discord, Slack, and WhatsApp webhooks with inline setup guides, connection status, and test-message support
+- **Optional features system** — App Builder, Coding Companion, Audio Studio, 3D Studio, and Multimedia Playground are now hidden by default and toggled on in Settings › Features
+- **Dev auth bypass** — set `DISABLE_AUTH=true` in `.env.local` to skip JWT login in local development; `NEXTAUTH_SECRET` required only in production
+- **Image Studio** route kept alive (`/computer/image-studio`) as a redirect to Creative Suite to avoid broken agent links
+- **Settings › Features** — new feature-flags panel for optional embedded apps
 
 ### v2.1.0 — Computer Control & Cross-Provider Fallback (Apr 2, 2026)
 - **Computer Control** — full desktop automation page with live screenshot viewer, activity log, app permissions, and configurable max steps (75 default, up to 200)

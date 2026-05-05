@@ -33,6 +33,17 @@ function getJwtSecret(): Uint8Array {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── Dev bypass: skip auth when DISABLE_AUTH=true ──────────────────────
+  if (process.env.DISABLE_AUTH === "true") {
+    if (pathname === "/computer/app-builder") {
+      const response = NextResponse.next();
+      response.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+      response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+      return response;
+    }
+    return NextResponse.next();
+  }
+
   // ── COEP/COOP for App Builder ─────────────────────────────────────────
   if (pathname === "/computer/app-builder") {
     const response = NextResponse.next();
