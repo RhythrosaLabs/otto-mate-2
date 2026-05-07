@@ -62,10 +62,10 @@ export function OnboardingClient() {
     setLoading(true);
     setSaveError("");
     try {
-      const res = await fetch("/api/keys", {
+      const res = await fetch("/api/connectors/env", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyName: selectedProvider, keyValue: keyValue.trim() }),
+        body: JSON.stringify({ keys: { [selectedProvider]: keyValue.trim() } }),
       });
       if (!res.ok) {
         const data = await res.json();

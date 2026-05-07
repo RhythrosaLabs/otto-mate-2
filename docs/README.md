@@ -262,28 +262,29 @@ These pages exist but are not shown in the sidebar:
 
 ## Models
 
-Ottomate supports **17 model options** across 5 providers, plus a free tier:
+Ottomate supports **18 model options** across 5 providers, plus a free tier:
 
-| Model | Provider | Best for |
-|---|---|---|
-| Claude Opus 4.6 | Anthropic | Complex reasoning, multi-step orchestration |
-| Claude Sonnet 4.6 | Anthropic | Balanced speed/quality, follow-ups |
-| Claude 3.5 Haiku | Anthropic | Ultra-fast, cheapest Claude |
-| GPT-4o | OpenAI | Long-context recall, broad knowledge |
-| GPT-4o Mini | OpenAI | Lightweight speed tasks |
-| GPT-4.1 | OpenAI | Strong reasoning, coding |
-| GPT-4.1 Mini | OpenAI | Fast, good balance of cost and capability |
-| GPT-4.1 Nano | OpenAI | Ultra-cheap for simple tasks |
-| Gemini 1.5 Pro | Google | Deep research, long documents |
-| Gemini 1.5 Flash | Google | Ultra-fast responses |
-| Gemini 2.0 Flash | Google | Latest fast Gemini, very affordable |
-| Sonar | Perplexity | Real-time web-augmented search |
-| Sonar Pro | Perplexity | Deeper web-augmented analysis |
-| Sonar Reasoning Pro | Perplexity | Multi-step reasoning + web search |
-| OpenRouter (Any Model) | OpenRouter | Route to 200+ models (DeepSeek, Llama, Mistral, Qwen, etc.) |
-| Free (OpenRouter) | OpenRouter | Zero-cost inference via Nemotron, Qwen, Llama, Gemma & more |
+| Model | ID | Provider | Best for |
+|---|---|---|---|
+| Auto (Recommended) | `auto` | — | Agent picks best model per sub-task automatically |
+| Claude Opus 4.6 | `claude-opus-4-6` | Anthropic | Complex reasoning, multi-step orchestration |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | Anthropic | Balanced speed/quality, general tasks |
+| Claude Haiku 4.5 | `claude-haiku-4-5` | Anthropic | Ultra-fast, cheapest Claude |
+| GPT-5.4 | `gpt-5.4` | OpenAI | Strong reasoning, coding, vision, 1M context |
+| GPT-5.4 Mini | `gpt-5.4-mini` | OpenAI | Fast and balanced, great for general tasks |
+| GPT-5.4 Nano | `gpt-5.4-nano` | OpenAI | Ultra-cheap for simple tasks |
+| Gemini 2.5 Pro | `gemini-2.5-pro` | Google | Deep research, long documents, advanced reasoning |
+| Gemini 2.5 Flash | `gemini-2.5-flash` | Google | Best price-performance, fast and capable |
+| Gemini 2.5 Flash-Lite | `gemini-2.5-flash-lite` | Google | Ultra-cheap for simple queries |
+| Gemini 2.5 Nano | `gemini-2.5-nano` | Google | Smallest model, edge tasks |
+| Sonar | `sonar` | Perplexity | Real-time web-augmented search |
+| Sonar Pro | `sonar-pro` | Perplexity | Deeper web-augmented analysis |
+| Sonar Reasoning Pro | `sonar-reasoning-pro` | Perplexity | Multi-step reasoning + web search |
+| Sonar Deep Research | `sonar-deep-research` | Perplexity | Long-form web research |
+| OpenRouter (Any Model) | `openrouter` | OpenRouter | Route to 200+ models (DeepSeek, Llama, Mistral, Qwen, etc.) |
+| Free (OpenRouter) | `free` | OpenRouter | Zero-cost inference via Nemotron, Qwen, Llama, Gemma & more |
 
-Set `auto` to let the agent pick the best model per task.
+Set `auto` to let the agent pick the best model per task. Legacy model IDs (e.g. `gpt-4o`, `gemini-1.5-pro`) are automatically remapped to their current equivalents.
 
 ---
 
@@ -297,7 +298,7 @@ Create a `.env.local` file in the project root:
 | `DISABLE_AUTH` | No | Set to `true` to skip login in local dev (no JWT required) |
 | `NEXTAUTH_SECRET` | No (prod) | JWT signing secret for session cookies — required when `DISABLE_AUTH` is unset. Generate with `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | No | GPT-4o, GPT-4.1, DALL-E 3 |
-| `GOOGLE_GEMINI_API_KEY` | No | Gemini 1.5/2.0 |
+| `GOOGLE_AI_API_KEY` | No | Gemini 2.5 Pro/Flash/Flash-Lite/Nano |
 | `GROQ_API_KEY` | No | Llama / Mixtral via Groq |
 | `OPENROUTER_API_KEY` | No | Access 200+ models including free tier via OpenRouter |
 | `PERPLEXITY_API_KEY` | No | Real-time web search via Perplexity Sonar |
@@ -736,10 +737,10 @@ src/
 #### AI Providers & Models
 | Provider | Models | SDK |
 |---|---|---|
-| **Anthropic** | Claude Opus 4.6, Claude Sonnet 4.6, Claude 3.5 Haiku | `@anthropic-ai/sdk` |
-| **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano | `openai` |
-| **Google** | Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash | `@google/generative-ai` |
-| **Perplexity** | Sonar, Sonar Pro, Sonar Reasoning Pro | `openai` (baseURL override) |
+| **Anthropic** | Claude Opus 4.6, Claude Sonnet 4.6, Claude Haiku 4.5 | `@anthropic-ai/sdk` |
+| **OpenAI** | GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano | `openai` |
+| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.5 Flash-Lite, Gemini 2.5 Nano | `@google/generative-ai` |
+| **Perplexity** | Sonar, Sonar Pro, Sonar Reasoning Pro, Sonar Deep Research | `openai` (baseURL override) |
 | **OpenRouter** | 200+ models incl. DeepSeek, Llama 3.3, Qwen, Gemma, Mistral, free-tier models | `openai` (baseURL override) |
 
 Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity** (exponential backoff: 2s, 5s, 15s)
