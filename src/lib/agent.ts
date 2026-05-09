@@ -1359,7 +1359,20 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
     ? BUILTIN_PRESETS[matchedSkill.preset_type]
     : undefined;
   const effectiveModel = (matchedSkill?.model as ModelId) || model;
-  const effectiveMaxSteps = matchedSkill?.max_steps || presetConfig?.max_steps || 50;
+  // Start with skill/preset max_steps, fall back to user setting, then default 50
+  let effectiveMaxSteps = matchedSkill?.max_steps || presetConfig?.max_steps || 0;
+  try {
+    const { getSetting } = await import("./db");
+    const savedMaxIter = await getSetting("max_iterations");
+    if (savedMaxIter) {
+      const parsed = parseInt(savedMaxIter, 10);
+      if (!isNaN(parsed) && parsed > 0 && effectiveMaxSteps === 0) {
+        // Only use the user setting if no skill/preset specified a limit
+        effectiveMaxSteps = parsed;
+      }
+    }
+  } catch { /* best-effort */ }
+  if (effectiveMaxSteps === 0) effectiveMaxSteps = 50; // hard default
 
   // Get existing messages for conversation context
   const { getTask: fetchTask } = await import("./db");
@@ -8617,7 +8630,7 @@ You run inside the Ottomate app at **http://localhost:3000**. Every section of t
 | Coding Companion | /computer/coding-companion | VS Code Server (localhost:3100) |
 | Connectors | /computer/connectors | Configure external service integrations |
 | Skills | /computer/skills | Add/edit specialized behavior skills |
-| Channels | /computer/channels | Telegram, Discord, Slack, and WhatsApp webhook integrations |
+| Dispatch | /computer/dispatch | Telegram, Discord, Slack, and WhatsApp message dispatch & webhook management |
 | WhatsApp | /computer/whatsapp | Send and receive WhatsApp messages directly |
 | Scheduled | /computer/scheduled | Create and manage scheduled/recurring tasks |
 | Analytics | /computer/analytics | Task metrics + usage tracking |
