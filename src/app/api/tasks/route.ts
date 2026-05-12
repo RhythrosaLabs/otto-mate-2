@@ -35,14 +35,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") ?? undefined;
   const source = searchParams.get("source") ?? undefined;
-  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : undefined;
+  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!, 10) : undefined;
   
   if (source) {
-    const tasks = listTasksBySource(source, limit, 0, userId);
+    const tasks = await listTasksBySource(source, limit, 0, userId);
     return NextResponse.json(tasks);
   }
   
-  const tasks = listTasks(status ?? undefined, limit, 0, userId);
+  const tasks = await listTasks(status ?? undefined, limit, 0, userId);
   return NextResponse.json(tasks);
 }
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   // Validate depends_on if provided
   if (depends_on) {
-    const depTask = getTask(depends_on);
+    const depTask = await getTask(depends_on);
     if (!depTask) {
       return NextResponse.json({ error: "depends_on task not found" }, { status: 400 });
     }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const id = uuidv4();
-    const task = createTask({
+    const task = await createTask({
       id,
       title: taskTitle,
       prompt,

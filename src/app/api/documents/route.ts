@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") as "document" | "spreadsheet" | null;
-    const docs = listDocuments(type || undefined);
+    const docs = await listDocuments(type || undefined);
     return apiSuccess(docs);
   } catch (err) {
     return apiError(safeErrorMessage(err), 500);
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const title = typeof body.title === "string" ? body.title.trim() : "Untitled";
     const type = body.type === "spreadsheet" ? "spreadsheet" : "document";
     const content = typeof body.content === "string" ? body.content : undefined;
-    const doc = createDocument({ title, type, content });
+    const doc = await createDocument({ title, type, content });
     return apiSuccess(doc, 201);
   } catch (err) {
     return apiError(safeErrorMessage(err), 500);

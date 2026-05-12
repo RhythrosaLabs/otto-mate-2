@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(task);
 }
@@ -27,9 +27,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   if (body.title) {
-    updateTaskTitle(taskId, body.title);
+    await updateTaskTitle(taskId, body.title);
   }
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(task);
 }
@@ -40,8 +40,8 @@ export async function DELETE(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   const { taskId } = await params;
-  const task = getTask(taskId);
+  const task = await getTask(taskId);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  deleteTask(taskId);
+  await deleteTask(taskId);
   return NextResponse.json({ success: true });
 }

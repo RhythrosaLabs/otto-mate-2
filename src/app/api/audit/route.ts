@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     const section = url.searchParams.get("section");
 
     if (section === "tool_names") {
-      const tools = getAuditToolNames();
+      const tools = await getAuditToolNames();
       return NextResponse.json({ tools });
     }
 
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       search: url.searchParams.get("search") || undefined,
     };
 
-    const result = getAuditLogs(opts);
+    const result = await getAuditLogs(opts);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[audit] Error:", err);

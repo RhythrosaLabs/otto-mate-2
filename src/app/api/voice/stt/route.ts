@@ -46,13 +46,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Try Google (if configured)
-    const googleKey = process.env.GOOGLE_AI_API_KEY;
-    if (googleKey) {
-      // For Google, we'd use their Speech-to-Text API
-      // Simplified fallback: return error to use client-side
-    }
-
     return NextResponse.json(
       { error: "No STT provider configured. Set OPENAI_API_KEY for Whisper.", fallback: "browser" },
       { status: 503 }

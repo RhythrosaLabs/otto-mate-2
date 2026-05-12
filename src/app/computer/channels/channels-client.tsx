@@ -59,7 +59,7 @@ const CHANNELS = [
     color: "text-green-400",
     bgColor: "bg-green-500/15",
     description: "Existing WhatsApp Cloud API integration",
-    endpoint: "/api/whatsapp",
+    endpoint: "/api/whatsapp/send",
     docsUrl: "https://developers.facebook.com/docs/whatsapp",
     envKeys: ["WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN"],
   },

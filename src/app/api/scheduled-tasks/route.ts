@@ -88,9 +88,13 @@ export async function PATCH(request: NextRequest) {
         const nextRun = computeNextRun(st);
         await updateScheduledTaskLastRun(st.id, nextRun);
 
-        // Delete if one-shot and configured to delete
-        if (st.delete_after_run && st.schedule_type === "once") {
-          await deleteScheduledTask(st.id);
+        // Delete if one-shot and configured to delete; otherwise disable to prevent re-trigger
+        if (st.schedule_type === "once") {
+          if (st.delete_after_run) {
+            await deleteScheduledTask(st.id);
+          } else {
+            await toggleScheduledTask(st.id, false);
+          }
         }
 
         // Fire and forget the agent run

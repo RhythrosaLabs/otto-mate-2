@@ -279,6 +279,7 @@ function ComputerPageInner() {
       setIsSubmitting(false);
     } catch (err) {
       console.error(err);
+      toastError("Failed to create task. Please try again.");
       setIsSubmitting(false);
     }
   }

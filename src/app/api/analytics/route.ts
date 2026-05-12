@@ -3,7 +3,7 @@ import { getAnalyticsSummary } from "@/lib/db";
 
 export async function GET() {
   try {
-    const summary = getAnalyticsSummary();
+    const summary = await getAnalyticsSummary();
     return NextResponse.json(summary);
   } catch (err) {
     console.error("[analytics] Error:", err);

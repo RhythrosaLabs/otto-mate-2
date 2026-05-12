@@ -127,10 +127,10 @@ export async function POST(req: NextRequest) {
     fs.writeFileSync(filePath, buffer);
 
     // Ensure the task exists (FK constraint requires it)
-    const existingTask = getTask(generationTaskId);
+    const existingTask = await getTask(generationTaskId);
     if (!existingTask) {
       const now = new Date().toISOString();
-      createTask({
+      await createTask({
         id: generationTaskId,
         title: prompt ? `${source}: ${prompt.slice(0, 80)}` : `${source} generation`,
         prompt: prompt || "",
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       created_at: new Date().toISOString(),
     };
 
-    addTaskFile(fileRecord);
+    await addTaskFile(fileRecord);
 
     return NextResponse.json({
       ok: true,

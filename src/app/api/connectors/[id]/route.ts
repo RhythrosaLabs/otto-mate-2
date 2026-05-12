@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const session = await getSessionFromRequest(req);
-  const config = getConnectorConfig(id, session?.userId);
+  const config = await getConnectorConfig(id, session?.userId);
   if (!config) return NextResponse.json({ error: "Not connected" }, { status: 404 });
   return NextResponse.json(config);
 }

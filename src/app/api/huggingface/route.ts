@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     // Register files in DB so they appear in Files page
     for (const f of result.files) {
       try {
-        addTaskFile({
+        await addTaskFile({
           id: uuidv4(),
           task_id: taskId,
           name: f.filename,

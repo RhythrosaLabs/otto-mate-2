@@ -25,6 +25,7 @@ import {
   Box,
   Layers,
   Send,
+  Radio,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -66,6 +67,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/computer/firefly", label: "Creative Suite", icon: Flame },
   { href: "/computer/3d-studio", label: "3D Studio", icon: Box, optional: true },
   { href: "/computer/dispatch", label: "Dispatch", icon: Send },
+  { href: "/computer/channels", label: "Channels", icon: Radio },
   { href: "/computer/memory", label: "Memory", icon: Brain },
   { href: "/computer/scheduled", label: "Scheduled", icon: Clock },
   { href: "/computer/analytics", label: "Analytics", icon: BarChart3 },

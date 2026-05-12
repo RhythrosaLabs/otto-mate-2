@@ -11,11 +11,11 @@ export async function GET(req: NextRequest) {
 
   if (section === "health") {
     const session = await getSessionFromRequest(req);
-    return NextResponse.json(getSystemHealth(session?.userId));
+    return NextResponse.json(await getSystemHealth(session?.userId));
   }
 
   const session = await getSessionFromRequest(req);
-  const settings = getAllSettings(session?.userId);
+  const settings = await getAllSettings(session?.userId);
   return NextResponse.json(settings);
 }
 

@@ -8,11 +8,11 @@ export async function GET(request: NextRequest) {
     const taskId = searchParams.get("taskId");
 
     if (taskId) {
-      const usage = getTaskTokenUsage(taskId);
+      const usage = await getTaskTokenUsage(taskId);
       return NextResponse.json(usage);
     }
 
-    const global = getGlobalTokenUsage();
+    const global = await getGlobalTokenUsage();
     return NextResponse.json(global);
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

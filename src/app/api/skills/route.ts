@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // GET /api/skills
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  return NextResponse.json(listSkills(session?.userId));
+  return NextResponse.json(await listSkills(session?.userId));
 }
 
 // POST /api/skills
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
-  const skill = createSkill({
+  const skill = await createSkill({
     id: uuidv4(),
     name: body.name.trim(),
     description: body.description?.trim() || "",

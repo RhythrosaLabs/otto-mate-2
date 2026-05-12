@@ -8,9 +8,9 @@ import { apiError, apiSuccess } from "@/lib/constants";
 export async function GET() {
   const session = await getSession();
   if (!session) return apiError("Unauthorized", 401);
-  if (!isUserAdmin(session.userId)) return apiError("Forbidden", 403);
+  if (!await isUserAdmin(session.userId)) return apiError("Forbidden", 403);
 
-  const codes = listGiftCodes();
+  const codes = await listGiftCodes();
   return apiSuccess({ codes });
 }
 
@@ -18,7 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return apiError("Unauthorized", 401);
-  if (!isUserAdmin(session.userId)) return apiError("Forbidden", 403);
+  if (!await isUserAdmin(session.userId)) return apiError("Forbidden", 403);
 
   const body = await req.json() as { tier?: TierName; duration_days?: number; expires_at?: string };
   const { tier = "pro", duration_days = 30, expires_at } = body;
@@ -27,6 +27,6 @@ export async function POST(req: NextRequest) {
   if (!validTiers.includes(tier)) return apiError("Invalid tier", 400);
   if (!Number.isInteger(duration_days) || duration_days < 1) return apiError("duration_days must be a positive integer", 400);
 
-  const code = createGiftCode({ tier, duration_days, created_by: session.userId, expires_at: expires_at ?? null });
+  const code = await createGiftCode({ tier, duration_days, created_by: session.userId, expires_at: expires_at ?? null });
   return apiSuccess({ code }, 201);
 }
