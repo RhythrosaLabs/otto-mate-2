@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") || "";
   const limit = Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "50", 10) || 50);
   try {
-    const entries = q ? memoryRecall(q, limit, userId) : listMemory(limit, userId);
+    const entries = q ? await memoryRecall(q, limit, userId) : await listMemory(limit, userId);
     return Response.json({ entries });
   } catch (err) {
     return Response.json({ error: safeErrorMessage(err) }, { status: 500 });
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const now = new Date().toISOString();
-    memoryStore({
+    await memoryStore({
       id: uuidv4(),
       key: body.key,
       value: body.value,
@@ -50,7 +50,7 @@ export async function DELETE(req: NextRequest) {
     return Response.json({ error: "id is required" }, { status: 400 });
   }
   try {
-    deleteMemory(id);
+    await deleteMemory(id);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: safeErrorMessage(err) }, { status: 500 });
@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest) {
     if (!body.id) {
       return Response.json({ error: "id is required" }, { status: 400 });
     }
-    updateMemory(body.id, { key: body.key, value: body.value, tags: body.tags });
+    await updateMemory(body.id, { key: body.key, value: body.value, tags: body.tags });
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: safeErrorMessage(err) }, { status: 500 });

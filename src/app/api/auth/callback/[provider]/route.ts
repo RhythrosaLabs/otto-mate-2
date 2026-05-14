@@ -181,7 +181,7 @@ export async function GET(
     // Store tokens for every connector that shares this provider
     const connectorIds = PROVIDER_CONNECTOR_IDS[provider] ?? [connector];
     for (const connectorId of connectorIds) {
-      storeOAuthTokens(connectorId, tokens);
+      await storeOAuthTokens(connectorId, tokens);
     }
 
     const successRes = NextResponse.redirect(

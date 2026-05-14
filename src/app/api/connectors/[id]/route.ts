@@ -29,7 +29,7 @@ export async function PUT(
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  setConnectorConfig(id, { ...body, connected: true }, session?.userId);
+  await setConnectorConfig(id, { ...body, connected: true }, session?.userId);
   return NextResponse.json({ success: true });
 }
 
@@ -40,6 +40,6 @@ export async function DELETE(
 ) {
   const { id } = await params;
   const session = await getSessionFromRequest(req);
-  disconnectConnector(id, session?.userId);
+  await disconnectConnector(id, session?.userId);
   return NextResponse.json({ success: true });
 }

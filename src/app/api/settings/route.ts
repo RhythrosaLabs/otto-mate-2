@@ -33,13 +33,13 @@ export async function PUT(req: NextRequest) {
 
   if (body.settings) {
     for (const [k, v] of Object.entries(body.settings)) {
-      setSetting(k, v, userId);
+      await setSetting(k, v, userId);
     }
     return NextResponse.json({ ok: true, updated: Object.keys(body.settings).length });
   }
 
   if (body.key && body.value !== undefined) {
-    setSetting(body.key, body.value, userId);
+    await setSetting(body.key, body.value, userId);
     return NextResponse.json({ ok: true });
   }
 
