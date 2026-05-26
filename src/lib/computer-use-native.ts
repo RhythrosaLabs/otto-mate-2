@@ -148,14 +148,17 @@ async function appleScriptKey(keyStr: string): Promise<void> {
   const usingStr = modifiers ? ` using {${modifiers}}` : "";
 
   let keystrokeCmd: string;
+  const isSafeSingleChar = key.length === 1 && /^[a-zA-Z0-9,\.\/;'`=\-_?!@#$%^&*()_+:[\]{}<>]$/.test(key);
+
   if (keyCodeMap[key]) {
     keystrokeCmd = modifiers
       ? `${keyCodeMap[key]} using {${modifiers}}`
       : keyCodeMap[key];
-  } else if (key.length === 1) {
-    keystrokeCmd = `keystroke "${key}"${usingStr}`;
+  } else if (isSafeSingleChar) {
+    const escapedKey = key.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    keystrokeCmd = `keystroke "${escapedKey}"${usingStr}`;
   } else {
-    keystrokeCmd = `keystroke "${key}"${usingStr}`;
+    throw new Error(`Invalid key identifier: ${key}`);
   }
 
   const script = `tell application "System Events" to ${keystrokeCmd}`;
@@ -421,6 +424,20 @@ export async function executeAction(
 
 /** Execute a bash command (mirrors BashTool20250124 from the reference impl). */
 export async function executeBash(command: string): Promise<ActionResult> {
+  const dangerousPatterns = [
+    /rm\s+-rf\s+\//i,               // rm -rf /
+    /mkfs/i,                         // format disk
+    /dd\s+if=.*of=\/dev/i,           // dd to device
+    /:\(\)\{\s*:\s*\|:\s*&\s*\}\s*;\s*:/, // fork bomb
+    />\s*\/dev\/sd[a-z]/i,           // write to disk device
+    /chmod\s+-R\s+777\s+\//i,        // chmod 777 /
+  ];
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(command)) {
+      return { error: `Blocked: dangerous command pattern detected (${pattern.source})` };
+    }
+  }
+
   try {
     const { stdout, stderr } = await execAsync(command, {
       timeout: 120_000,
