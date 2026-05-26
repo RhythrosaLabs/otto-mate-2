@@ -17,12 +17,13 @@ export type ModelId =
   | "sonar-deep-research"      // Perplexity Deep Research (expert-level research)
   | "openrouter"               // OpenRouter: access any model
   | "free"                     // Free mode: zero-cost via OpenRouter free models
+  | "lmstudio"                 // LM Studio: local model server (no API cost)
   | "auto";                    // Auto-select best model per task
 
 export interface ModelConfig {
   id: ModelId;
   name: string;
-  provider: "anthropic" | "openai" | "google" | "perplexity" | "openrouter";
+  provider: "anthropic" | "openai" | "google" | "perplexity" | "openrouter" | "lmstudio";
   description: string;
   best_for: string[];
   icon: string;

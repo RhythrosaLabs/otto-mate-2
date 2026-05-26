@@ -129,7 +129,20 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     cost_efficiency: 0.10, tool_calling: 0.2, creativity: 0.65,
     context_window: 0.6, search: 1.0, instruction_following: 0.88,
   },
+
+  // ── LM Studio (local — quality depends on loaded model; treated as mid-tier) ──
+  // No vision, no search. Excellent cost_efficiency (free). Speed varies by hardware.
+  "lmstudio": {
+    reasoning: 0.78, coding: 0.78, vision: 0, speed: 0.70,
+    cost_efficiency: 1.0, tool_calling: 0.75, creativity: 0.75,
+    context_window: 0.6, search: 0, instruction_following: 0.80,
+  },
 };
+
+// ─── LM Studio availability flag (set at runtime when LM Studio is reachable) ─
+let _lmStudioAvailable = false;
+export function setLMStudioAvailable(available: boolean): void { _lmStudioAvailable = available; }
+export function isLMStudioAvailable(): boolean { return _lmStudioAvailable; }
 
 // ─── Model-to-Provider Mapping ────────────────────────────────────────────────
 
@@ -148,6 +161,8 @@ const MODEL_PROVIDER_MAP: Record<string, { provider: string; envKey: string }> =
   "sonar-pro":             { provider: "perplexity", envKey: "PERPLEXITY_API_KEY" },
   "sonar-reasoning-pro":   { provider: "perplexity", envKey: "PERPLEXITY_API_KEY" },
   "sonar-deep-research":   { provider: "perplexity", envKey: "PERPLEXITY_API_KEY" },
+  // LM Studio is local — uses a sentinel envKey so getAvailableModels() can include it via the flag
+  "lmstudio":              { provider: "lmstudio",   envKey: "__LMSTUDIO_AVAILABLE__" },
 };
 
 /** Pricing per 1M tokens (input/output USD) — updated April 2026 */
@@ -354,6 +369,8 @@ export interface RoutingContext {
   needsVision?: boolean;
   /** Whether the task needs web search */
   needsSearch?: boolean;
+  /** Prefer the local LM Studio model when capable (user opt-in) */
+  preferLocal?: boolean;
 }
 
 /**
@@ -414,7 +431,12 @@ const COMPLEXITY_MIN_REASONING: Record<TaskComplexity, number> = {
 function getAvailableModels(): string[] {
   const available: string[] = [];
   for (const [model, { envKey }] of Object.entries(MODEL_PROVIDER_MAP)) {
-    if (process.env[envKey]) available.push(model);
+    if (envKey === "__LMSTUDIO_AVAILABLE__") {
+      // LM Studio: include when explicitly marked as reachable at runtime
+      if (_lmStudioAvailable) available.push(model);
+    } else if (process.env[envKey]) {
+      available.push(model);
+    }
   }
   // OpenRouter free is always available if OPENROUTER_API_KEY is set
   // but we don't include it in capability routing — it's a fallback
@@ -429,6 +451,16 @@ function getAvailableModels(): string[] {
  */
 export function routeModelForTask(ctx: RoutingContext): ModelSelection {
   // 1. Honor explicit model requests (except "auto")
+  // LM Studio is always treated as available (no env key required — it's local)
+  if (ctx.requestedModel === "lmstudio") {
+    return {
+      provider: "lmstudio",
+      modelName: "lmstudio",
+      reasoning: "User explicitly requested LM Studio (local)",
+      confidence: 1.0,
+      alternatives: [],
+    };
+  }
   if (ctx.requestedModel && ctx.requestedModel !== "auto" && ctx.requestedModel !== "free") {
     const mapping = MODEL_PROVIDER_MAP[ctx.requestedModel];
     if (mapping && process.env[mapping.envKey]) {
@@ -487,10 +519,12 @@ export function routeModelForTask(ctx: RoutingContext): ModelSelection {
     const reasons: string[] = [];
 
     // Hard filters
-    if (ctx.needsVision && caps.vision < 0.3) continue;
+    if (ctx.needsVision && caps.vision < 0.3) continue; // lmstudio has vision=0 → excluded automatically
     if (ctx.needsSearch && caps.search < 0.3 && phase === "research") {
       // Prefer search models for research, but don't hard-exclude
     }
+    // LM Studio: exclude from vision+search phases (no built-in capability)
+    if (model === "lmstudio" && (phase === "vision" || phase === "research")) continue;
     if (caps.reasoning < minReasoning) {
       reasons.push(`reasoning ${caps.reasoning.toFixed(2)} below min ${minReasoning} for ${complexity}`);
       continue;
@@ -521,6 +555,12 @@ export function routeModelForTask(ctx: RoutingContext): ModelSelection {
     if (ctx.needsSearch || phase === "research") {
       score += caps.search * 0.15;
       if (caps.search > 0.5) reasons.push("search_augmented");
+    }
+
+    // prefer_local boost: significant bump so LM Studio wins over cloud for capable tasks
+    if (ctx.preferLocal && model === "lmstudio") {
+      score += 0.35;
+      reasons.push("prefer_local_boost");
     }
 
     reasons.push(`phase=${phase}, complexity=${complexity}, raw_score=${score.toFixed(3)}`);
@@ -662,6 +702,7 @@ export function routeSubAgentModel(
   taskText: string,
   requestedModel?: string,
   preferredModel?: string,
+  preferLocal?: boolean,
 ): ModelSelection {
   // Explicit request always wins
   if (requestedModel === "free") {
@@ -671,13 +712,13 @@ export function routeSubAgentModel(
     };
   }
   if (requestedModel && requestedModel !== "auto") {
-    return routeModelForTask({ requestedModel: requestedModel as ModelId, taskText });
+    return routeModelForTask({ requestedModel: requestedModel as ModelId, taskText, preferLocal });
   }
 
   // Use role's preferred_model if it's not "auto"
   if (preferredModel && preferredModel !== "auto") {
     const mapping = MODEL_PROVIDER_MAP[preferredModel];
-    if (mapping && process.env[mapping.envKey]) {
+    if (mapping && (process.env[mapping.envKey] || mapping.envKey === "__LMSTUDIO_AVAILABLE__")) {
       return {
         provider: mapping.provider,
         modelName: preferredModel,
@@ -695,6 +736,7 @@ export function routeSubAgentModel(
     isSubAgent: true,
     phase: inferTaskPhase(taskText, { isSubAgent: true, agentType }),
     budget: "balanced",
+    preferLocal,
   });
 }
 

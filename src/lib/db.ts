@@ -1550,11 +1550,26 @@ export async function getSystemHealth(userId?: string): Promise<{
   }
 
   const replicateConfig = userId ? null : await getConnectorConfig("replicate");
+  const lmsBaseURL = (await getSetting("lmstudio_base_url")) || process.env.LMSTUDIO_BASE_URL || "http://localhost:1234/v1";
+  const lmsModel = await getSetting("lmstudio_model");
+
+  // Live-ping LM Studio — fast localhost call, 2s timeout
+  let lmsReachable = false;
+  try {
+    const lmsBase = lmsBaseURL.replace(/\/v1\/?$/, "");
+    const res = await fetch(`${lmsBase}/v1/models`, {
+      headers: { Authorization: "Bearer lm-studio" },
+      signal: AbortSignal.timeout(2000),
+    });
+    lmsReachable = res.ok;
+  } catch { /* not running */ }
+
   const providers = [
     { name: "Anthropic (Claude)", configured: hasKey("ANTHROPIC_API_KEY") },
     { name: "OpenAI (GPT-5.4)", configured: hasKey("OPENAI_API_KEY") },
     { name: "Google (Gemini)", configured: hasKey("GOOGLE_AI_API_KEY") },
     { name: "Replicate", configured: hasKey("REPLICATE_API_TOKEN") || (userId ? userKeyNames.has("REPLICATE_API_TOKEN") : !!(replicateConfig?.api_key)) },
+    { name: "LM Studio (Local)", configured: lmsReachable || !!(lmsModel && lmsModel.trim()) },
   ];
   const search = [
     { name: "Perplexity", configured: hasKey("PERPLEXITY_API_KEY") },

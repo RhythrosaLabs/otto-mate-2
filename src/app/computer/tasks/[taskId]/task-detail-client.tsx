@@ -393,9 +393,23 @@ export function TaskDetailClient({ task: initialTask }: Props) {
               step?: AgentStep;
               token?: string;
               task?: Task;
+              error?: string;
             };
             
-            if (event.type === "step") {
+            if (event.type === "error" && event.error) {
+              // Surface the real error message as a failed step so the user can see it
+              const errStep: AgentStep = {
+                id: `err-${Date.now()}`,
+                task_id: task.id,
+                type: "error",
+                title: "Error",
+                content: event.error,
+                status: "failed",
+                created_at: new Date().toISOString(),
+              };
+              setTask((prev) => ({ ...prev, steps: [...prev.steps, errStep] }));
+              setStreamingText("");
+            } else if (event.type === "step") {
               setTask((prev) => ({
                 ...prev,
                 steps: [

@@ -173,6 +173,14 @@ export const MODEL_CONFIGS: ModelConfig[] = [
     best_for: ["deep_research", "expert_research", "comprehensive_analysis"],
     icon: "🔬",
   },
+  {
+    id: "lmstudio",
+    name: "LM Studio (Local)",
+    provider: "lmstudio",
+    description: "Run any model locally via LM Studio — zero API cost. Requires LM Studio running on localhost:1234.",
+    best_for: ["free", "private", "offline", "cheap"],
+    icon: "🏠",
+  },
 ];
 
 /**

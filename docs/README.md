@@ -64,10 +64,12 @@ It ships as a single `npm install` with zero external infrastructure. A SQLite d
 
 | Requirement | Notes |
 |---|---|
-| **Node.js 18+** | `node -v` to check |
+| **Node.js 18+** | `node -v` to check (Active LTS recommended) |
+| **pnpm** | Required to build and run the `bolt-diy` App Builder sub-application |
+| **code-server** | Optional: required if using the Coding Companion. Install with `brew install code-server` (macOS) or refer to official code-server installers |
 | **Anthropic API key** | [console.anthropic.com](https://console.anthropic.com) — this is the only required key |
 
-### Install & run
+### Installation
 
 ```bash
 git clone https://github.com/RhythrosaLabs/otto-mate-2.git
@@ -79,15 +81,109 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env.local
 
 # Skip login in local dev (no credentials required)
 echo "DISABLE_AUTH=true" >> .env.local
-
-# Start Next.js only
-npm run dev
-
-# — or — start all services (bolt-diy App Builder + code-server Coding Companion)
-npm run dev:all
 ```
 
-Open **http://localhost:3000** — the app loads directly when `DISABLE_AUTH=true` is set.
+---
+
+## Detailed Setup Options
+
+Ottomate is highly modular, orchestrating multiple sub-applications. You can choose from five different environment setups depending on your development or deployment needs:
+
+### Type 1: Minimum Dev (Next.js Only)
+Ideal for light testing, editing prompt templates, or when you don't need persistent local tools (Coding Companion, App Builder, etc.).
+- **What works:** Core task engine, multi-model chat, scheduling, connectors marketplace, memory, analytics, and standard web/scraping tools.
+- **What is inactive:** Embedded iframes for bolt-diy, code-server, openDAW, and Blockbench (will show connection errors in iframe placeholders).
+- **Command:**
+  ```bash
+  npm run dev
+  ```
+- **Access URL:** Open **http://localhost:3000** in your browser.
+
+### Type 2: Full Dev with Concurrently (`dev:all`)
+Runs the main Next.js app and the key code automation services concurrently inside a single terminal pane.
+- **What works:** Next.js main web client, `bolt-diy` App Builder interactive workspace, and the `code-server` proxy workspace.
+- **Prerequisites:** Make sure you have `pnpm` installed (`npm install -g pnpm`) and `code-server` installed on your path.
+- **Command:**
+  ```bash
+  npm run dev:all
+  ```
+- **Access URLs:**
+  - Main panel: **http://localhost:3000**
+  - App Builder (remixed bolt): **http://localhost:5173**
+  - Coding Companion Proxy: **http://localhost:3100** (Proxy routing to `localhost:3101`)
+
+### Type 3: Production System Mode (PM2 Ecosystem)
+Best for hosting Ottomate as a continuous background daemon on local servers, workstation hubs, or VPS instances. Includes automatic process monitoring, logging, and restart crash recovery.
+- **What works:** All 5 service processes running in parallel:
+  - `next` (Next.js server)
+  - `bolt-diy` (App Builder WebContainer workspace)
+  - `blockbench` (3D Studio voxel editor)
+  - `opendaw` (Audio Studio workspace)
+  - `code-server-proxy` (Web socket and frame header proxy)
+- **Start all services:**
+  ```bash
+  npm run services:start
+  ```
+- **PM2 Dashboard & Management Commands:**
+  ```bash
+  # Check active processes & ports
+  npm run services:status    # (or: pm2 status)
+
+  # View real-time aggregated streaming logs
+  npm run services:logs      # (or: pm2 logs)
+
+  # Restart or stop the entire platform stack
+  npm run services:restart   # (or: pm2 restart all)
+  npm run services:stop      # (or: pm2 stop all)
+
+  # Monitor processes interactively (CPU, RAM, logs)
+  pm2 monit
+  ```
+
+### Type 4: Individual Manual Setup (Granular Mode)
+For developers tracking down bugs or customizing isolated modules of the workspace. Start each service individually in its own shell context:
+- **Main Next.js Application:**
+  ```bash
+  npm run dev
+  ```
+- **App Builder (`bolt-diy`):**
+  ```bash
+  cd bolt-diy && pnpm install && pnpm run dev
+  ```
+- **3D Studio (`blockbench`):**
+  ```bash
+  npm run dev:blockbench
+  ```
+- **Audio Studio (`opendaw`):**
+  ```bash
+  npm run dev:opendaw
+  ```
+- **Coding Companion Proxy (`code-server-proxy`):**
+  ```bash
+  npm run dev:code-server
+  ```
+  *(Note: Requires a background `code-server --port 3101 --auth none` instance running locally.)*
+
+### Type 5: Docker Containerization
+For sandboxed, container-isolated hosting without local Node.js environment headaches.
+- **Build the container:**
+  ```bash
+  docker build -t ottomate .
+  ```
+- **Run the container (with SQLite DB volume binding):**
+  ```bash
+  docker run -d \
+    -p 3000:3000 \
+    -v $(pwd)/data:/data \
+    -e ANTHROPIC_API_KEY="sk-ant-..." \
+    -e DISABLE_AUTH="true" \
+    -e DATABASE_PATH="/data/ottomate.db" \
+    --name ottomate-app \
+    ottomate
+  ```
+- **Docker Compose Setup:** A standard multi-service container compose file can also run App Builder side-by-side.
+
+---
 
 > **Optional keys** unlock more models and features. See [Environment Variables](#environment-variables) below.
 

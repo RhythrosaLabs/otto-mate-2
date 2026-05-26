@@ -20,7 +20,7 @@ import { formatBytes } from "./utils";
 import { autoSelectSkills, buildSkillContext, getSkillsForTask, setSkillPerformanceHints } from "./structured-skills";
 import { semanticRecall, computeImportance, classifyMemoryType, compressMemories, identifyCompressible, primeMemoriesForTask } from "./memory-engine";
 import { scopeToolsForRole, buildScopedSystemPrompt, SUBAGENT_ROLES } from "./subagent-roles";
-import { routeModelForTask, routeSubAgentModel, recordModelOutcome, assessComplexity as assessTaskComplexity, inferTaskPhase, planMultiPhaseExecution, serializeRoutingDecision, detectModalityFromText, type ModelSelection, type TaskPhase } from "./model-router";
+import { routeModelForTask, routeSubAgentModel, recordModelOutcome, assessComplexity as assessTaskComplexity, inferTaskPhase, planMultiPhaseExecution, serializeRoutingDecision, detectModalityFromText, setLMStudioAvailable, isLMStudioAvailable, type ModelSelection, type TaskPhase } from "./model-router";
 import { executeConnectorAction, listConnectorActions, EXECUTABLE_CONNECTORS } from "./executable-connectors";
 import { observePageElements, buildExtractionPrompt, processBrowseResult, formatBrowserResultForAgent, type ActAction, type ExtractAction, type ObserveAction } from "./stagehand-browser";
 import { executeSandboxed, validateCodeSecurity, formatSandboxResult } from "./sandbox-executor";
@@ -99,6 +99,11 @@ function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: resolveKey("OPENAI_API_KEY") });
 }
 
+function getLMStudio(baseURL?: string): OpenAI {
+  const url = baseURL || process.env.LMSTUDIO_BASE_URL || "http://localhost:1234/v1";
+  return new OpenAI({ baseURL: url, apiKey: "lm-studio" });
+}
+
 function getGoogleAI(): GoogleGenerativeAI | null {
   const key = resolveKey("GOOGLE_AI_API_KEY");
   return key ? new GoogleGenerativeAI(key) : null;
@@ -140,6 +145,10 @@ interface FailoverChain {
 
 function getFailoverChain(primary: { provider: string; modelName: string }): FailoverChain[] {
   const chain: FailoverChain[] = [primary];
+
+  // LM Studio is an explicit local-only choice — never fall back to cloud providers
+  if (primary.provider === "lmstudio") return chain;
+
   const seen = new Set<string>([`${primary.provider}/${primary.modelName}`]);
   const add = (provider: string, modelName: string) => {
     const key = `${provider}/${modelName}`;
@@ -1228,6 +1237,10 @@ function selectModelForTask(
     const orModel = process.env.OPENROUTER_DEFAULT_MODEL || "anthropic/claude-haiku-4-5";
     return { provider: "openrouter", modelName: orModel };
   }
+  // LM Studio special handling — model name is configurable in settings
+  if (requestedModel === "lmstudio") {
+    return { provider: "lmstudio", modelName: "__lmstudio__" };
+  }
   const modelMap: Record<string, { provider: string; modelName: string }> = {
     "claude-opus-4-6": { provider: "anthropic", modelName: "claude-opus-4-6" },
     "claude-sonnet-4-6": { provider: "anthropic", modelName: "claude-sonnet-4-6" },
@@ -1516,6 +1529,29 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   const learnedInsights = getLearnedInsights(userMessage);
   const systemPrompt = buildSystemPrompt(skillInstructions) + learnedInsights + uploadedFilesContext + memoryContext + globalFilesContext;
 
+  // ─── LM Studio: prefer-local detection ────────────────────────────────
+  // If the user has "prefer_local" enabled in settings, ping LM Studio (fast
+  // localhost call) and mark it available so the model router can include it.
+  let preferLocal = false;
+  try {
+    const { getSetting } = await import("./db");
+    const preferLocalSetting = await getSetting("prefer_local");
+    if (preferLocalSetting === "true") {
+      const lmsBase = (await getSetting("lmstudio_base_url")) || process.env.LMSTUDIO_BASE_URL || "http://localhost:1234";
+      const pingBase = lmsBase.replace(/\/v1\/?$/, "");
+      try {
+        const pingRes = await fetch(`${pingBase}/v1/models`, {
+          headers: { Authorization: "Bearer lm-studio" },
+          signal: AbortSignal.timeout(2000),
+        });
+        if (pingRes.ok) {
+          setLMStudioAvailable(true);
+          preferLocal = true;
+        }
+      } catch { /* LM Studio not reachable — continue with cloud models */ }
+    }
+  } catch { /* best-effort */ }
+
   // ─── Perplexity Computer-style Model Delegation ────────────────────────
   // Uses capability scoring, complexity assessment, phase detection, and
   // performance learning to auto-select the optimal model for this task.
@@ -1528,6 +1564,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
     complexity: taskComplexity,
     needsVision: /\b(image|screenshot|picture|photo|visual|look at)\b/i.test(userMessage),
     needsSearch: /\b(search|find|latest|current|news|research)\b/i.test(userMessage),
+    preferLocal,
   });
   const primary = { provider: routingDecision.provider, modelName: routingDecision.modelName };
 
@@ -1598,6 +1635,9 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
     }
 
     try {
+      if (provider === "lmstudio") {
+        return await runWithLMStudio(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
+      }
       if (provider === "perplexity" && process.env.PERPLEXITY_API_KEY) {
         return await runWithPerplexity(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
       }
@@ -1610,7 +1650,11 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
       if (provider === "google" && getGoogleAI()) {
         return await runWithGoogle(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
       }
-      return await runWithAnthropic(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
+      if (provider === "anthropic" && resolveKey("ANTHROPIC_API_KEY")) {
+        return await runWithAnthropic(taskId, userMessage, systemPrompt, mName, filesDir, onStep, onToken, signal, history, effectiveMaxSteps);
+      }
+      // Provider in chain but no API key available — skip silently
+      throw new Error(`Provider "${provider}" is not configured (missing API key)`);
     } catch (err) {
       lastError = err;
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1633,7 +1677,7 @@ async function _runAgentInner(options: AgentRunOptions): Promise<void> {
   handleAgentError(
     new Error(
       triedCount === 0
-        ? "No AI providers configured. Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, PERPLEXITY_API_KEY"
+        ? "No AI providers configured. Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, PERPLEXITY_API_KEY — or select LM Studio (local)"
         : `All ${triedCount} AI providers failed. Last error: ${errMsg.slice(0, 300)}${disabledProviders.size > 0 ? ` | Disabled (billing/auth): ${[...disabledProviders].join(", ")}` : ""}`
     ),
     taskId,
@@ -2115,6 +2159,258 @@ async function runWithOpenAI(
     if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
   } catch (err) {
     throw err; // Let the outer failover loop handle this and try the next provider
+  }
+}
+
+// ─── LM Studio Provider ───────────────────────────────────────────────────────
+// Routes to a locally running LM Studio server (OpenAI-compatible API).
+// No API key required. Model name is read from the lmstudio_model setting.
+
+async function runWithLMStudio(
+  taskId: string,
+  userMessage: string,
+  systemPrompt: string,
+  _modelName: string,
+  filesDir: string,
+  onStep?: (step: AgentStep) => void,
+  onToken?: (token: string) => void,
+  signal?: AbortSignal,
+  history?: Array<{ role: string; content: string }>,
+  maxSteps = 50
+): Promise<void> {
+  // Read LM Studio settings from DB at call time
+  let lmsBaseURL = process.env.LMSTUDIO_BASE_URL || "http://localhost:1234/v1";
+  let lmsModel = process.env.LMSTUDIO_MODEL || "";
+  try {
+    const { getSetting } = await import("./db");
+    const [savedURL, savedModel] = await Promise.all([
+      getSetting("lmstudio_base_url"),
+      getSetting("lmstudio_model"),
+    ]);
+    if (savedURL) lmsBaseURL = savedURL;
+    if (savedModel) lmsModel = savedModel;
+  } catch { /* best-effort */ }
+
+  if (!lmsModel) {
+    // Auto-detect: try to grab the first loaded model from LM Studio
+    try {
+      const baseForPing = lmsBaseURL.replace(/\/v1\/?$/, "");
+      const modelsRes = await fetch(`${baseForPing}/v1/models`, {
+        headers: { Authorization: "Bearer lm-studio" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json() as { data?: Array<{ id: string }> };
+        const first = modelsData.data?.[0]?.id;
+        if (first) lmsModel = first;
+      }
+    } catch { /* LM Studio unreachable */ }
+  }
+
+  if (!lmsModel) {
+    // Treat as a hard config error — message must not look transient so failover skips retrying
+    const err = new Error("LM Studio is not running or no model is loaded. Start LM Studio, load a model, then try again. (Or set a model name in Settings → LM Studio.)");
+    (err as Error & { isConfigError: boolean }).isConfigError = true;
+    throw err;
+  }
+
+  const lmsClient = getLMStudio(lmsBaseURL);
+
+  // LM Studio's reported context_length is the model's maximum capability, NOT the actual
+  // loaded context window (n_ctx). A model may report 131072 but be loaded with only 4096.
+  // We cannot reliably detect n_ctx from the API, so use a conservative hard cap.
+  // Budget: 800 tokens for system prompt, leaving the rest for conversation + response.
+  // 1 token ≈ 4 chars (conservative estimate for chat models).
+  const systemCharBudget = 800 * 4; // 3200 chars ≈ 800 tokens
+
+  // Build a compact system prompt for small-context models
+  const compactSystemPrompt = buildCompactSystemPrompt(systemPrompt, systemCharBudget);
+
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: compactSystemPrompt },
+  ];
+  const toolCache = new ToolCallCache();
+  const loopDetector = new LoopDetector();
+  if (history && history.length > 0) {
+    for (const msg of history) {
+      if (msg.role === "user" || msg.role === "assistant") {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg || lastMsg.role !== "user" || lastMsg.content !== userMessage) {
+      messages.push({ role: "user", content: userMessage });
+    }
+  } else {
+    messages.push({ role: "user", content: userMessage });
+  }
+
+  // Check if the loaded model supports tool calling; if not, disable tools
+  let supportsTools = true;
+  const tools = convertToolsToOpenAIFormat();
+  let continueLoop = true;
+  let iterations = 0;
+
+  try {
+    while (continueLoop && iterations < maxSteps) {
+      if (signal?.aborted) { await updateTaskStatus(taskId, "paused"); return; }
+      iterations++;
+
+      if (iterations > 1 && iterations % 5 === 0) {
+        const refreshed = await refreshSystemContext(systemPrompt, taskId, filesDir, userMessage);
+        messages[0] = { role: "system", content: buildCompactSystemPrompt(refreshed, systemCharBudget) };
+      }
+
+      const thinkingId = uuidv4();
+      await addAgentStep({
+        id: thinkingId, task_id: taskId, type: "reasoning",
+        title: iterations === 1
+          ? `Working on: "${userMessage.slice(0, 60)}${userMessage.length > 60 ? "…" : ""}" (LM Studio: ${lmsModel})`
+          : `Continuing work... (step ${iterations})`,
+        content: "", status: "running", created_at: new Date().toISOString(),
+      });
+      const startTime = Date.now();
+      let fullText = "";
+      const prunedMessages = pruneOpenAIMessages(messages);
+
+      const requestParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+        model: lmsModel,
+        max_completion_tokens: 8192,
+        messages: prunedMessages,
+        stream: true,
+      };
+      if (supportsTools) {
+        requestParams.tools = tools;
+        requestParams.tool_choice = iterations === 1 ? "required" : "auto";
+      }
+
+      let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+      try {
+        stream = await lmsClient.chat.completions.create(requestParams);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Some local models don't support tool calling — retry without tools
+        if (supportsTools && /tool|function|not support/i.test(msg)) {
+          supportsTools = false;
+          delete requestParams.tools;
+          delete requestParams.tool_choice;
+          stream = await lmsClient.chat.completions.create(requestParams);
+        } else {
+          throw err;
+        }
+      }
+
+      type PartialTC = { id: string; name: string; arguments: string };
+      const tcMap: Record<number, PartialTC> = {};
+      let streamUsage: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+      for await (const chunk of stream) {
+        if (signal?.aborted) break;
+        const delta = chunk.choices[0]?.delta;
+        if (delta?.content) { fullText += delta.content; onToken?.(delta.content); }
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            if (tc.index !== undefined) {
+              if (!tcMap[tc.index]) tcMap[tc.index] = { id: "", name: "", arguments: "" };
+              if (tc.id) tcMap[tc.index].id = tc.id;
+              if (tc.function?.name) tcMap[tc.index].name = tc.function.name;
+              if (tc.function?.arguments) tcMap[tc.index].arguments += tc.function.arguments;
+            }
+          }
+        }
+        if (chunk.usage) streamUsage = chunk.usage;
+      }
+      const toolCalls = Object.values(tcMap);
+      await updateAgentStep(thinkingId, { content: fullText || "Processing...", status: "completed", duration_ms: Date.now() - startTime });
+      if (streamUsage) {
+        const inTok = streamUsage.prompt_tokens || 0;
+        const outTok = streamUsage.completion_tokens || 0;
+        // LM Studio is free — cost is $0
+        trackTokenUsage(taskId, { input_tokens: inTok, output_tokens: outTok, total_tokens: inTok + outTok, estimated_cost_usd: 0, model: lmsModel });
+      }
+      const assistantMsg: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = {
+        role: "assistant", content: fullText || null,
+      };
+      if (toolCalls.length > 0) {
+        assistantMsg.tool_calls = toolCalls.map((tc) => ({
+          id: tc.id, type: "function" as const, function: { name: tc.name, arguments: tc.arguments },
+        }));
+      }
+      messages.push(assistantMsg);
+      if (toolCalls.length === 0) {
+        if (fullText) await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: fullText, created_at: new Date().toISOString() });
+        continueLoop = false; await updateTaskStatus(taskId, "completed", new Date().toISOString()); break;
+      }
+
+      const parallelTCs = toolCalls.filter(tc => PARALLELIZABLE_TOOLS.has(tc.name));
+      const sequentialTCs = toolCalls.filter(tc => !PARALLELIZABLE_TOOLS.has(tc.name));
+
+      const execLMSTool = async (tc: { id: string; name: string; arguments: string }) => {
+        let input: Record<string, unknown> = {};
+        try { input = JSON.parse(tc.arguments); } catch {
+          return { id: tc.id, name: tc.name, result: `Error: Failed to parse tool arguments as JSON: ${tc.arguments?.slice(0, 200)}` };
+        }
+        const stepId = uuidv4();
+        const toolStep: AgentStep = {
+          id: stepId, task_id: taskId, type: toolUseTypeToStepType(tc.name as ToolName),
+          title: toolUseToTitle(tc.name, input), content: JSON.stringify(input, null, 2),
+          tool_name: tc.name, tool_input: input, status: "running", created_at: new Date().toISOString(),
+        };
+        await addAgentStep(toolStep); onStep?.(toolStep);
+        const ts = Date.now(); let result = ""; let toolError = false;
+        try { result = await executeTool(tc.name as ToolName, input, { taskId, filesDir, onStep, toolCache }); }
+        catch (err) { result = `Error: ${err instanceof Error ? err.message : String(err)}`; toolError = true; }
+        const duration = Date.now() - ts;
+        await updateAgentStep(stepId, { tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        onStep?.({ ...toolStep, tool_result: result, status: toolError ? "failed" : "completed", duration_ms: duration });
+        loopDetector.record(tc.name, input, toolError);
+        return { id: tc.id, name: tc.name, result };
+      };
+
+      if (parallelTCs.length > 1) {
+        const results = await Promise.all(parallelTCs.map(execLMSTool));
+        for (const r of results) {
+          messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
+          if (r.name === "complete_task") continueLoop = false;
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
+        }
+      } else {
+        for (const tc of parallelTCs) {
+          const r = await execLMSTool(tc);
+          messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
+          if (r.name === "complete_task") continueLoop = false;
+          if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+          if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
+        }
+      }
+      for (const tc of sequentialTCs) {
+        const r = await execLMSTool(tc);
+        messages.push({ role: "tool", tool_call_id: r.id, content: r.result });
+        if (r.name === "complete_task") continueLoop = false;
+        if (r.name === "request_user_input") { await updateTaskStatus(taskId, "waiting_for_input"); continueLoop = false; }
+        if (r.result.startsWith("[APPROVAL_REQUIRED]")) continueLoop = false;
+      }
+
+      if (continueLoop) {
+        const loopCheck = loopDetector.isStuck();
+        if (loopCheck.stuck) {
+          if (loopDetector.errorStreak >= CONSEC_ERROR_LIMIT) {
+            await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `Task stopped: ${loopCheck.reason}. Completing with partial results.`, created_at: new Date().toISOString() });
+            continueLoop = false;
+          } else {
+            messages.push({ role: "user", content: loopDetector.getNudgeMessage(loopCheck.reason) });
+          }
+        }
+      }
+    }
+    if (iterations >= maxSteps) {
+      await addMessage({ id: uuidv4(), task_id: taskId, role: "assistant", content: `[Step limit reached after ${maxSteps} iterations. Task auto-completed with partial results.]`, created_at: new Date().toISOString() });
+    }
+    const { getTask } = await import("./db");
+    const t = await getTask(taskId);
+    if (t?.status === "running") await updateTaskStatus(taskId, "completed", new Date().toISOString());
+  } catch (err) {
+    throw err;
   }
 }
 
@@ -5004,7 +5300,7 @@ async function executeFinanceData(queryType: string, symbol: string, query: stri
 
 // ─── Sub-Agent ────────────────────────────────────────────────────────────────
 
-function selectSubAgentModel(agentType: string, requested: string): { provider: string; modelName: string } {
+function selectSubAgentModel(agentType: string, requested: string, preferLocal?: boolean): { provider: string; modelName: string } {
   // Perplexity Computer-style delegation: use model-router for sub-agents too.
   // This replaces the old hardcoded switch-case with capability-scored routing
   // that respects each role's preferred_model from SUBAGENT_ROLES.
@@ -5014,6 +5310,7 @@ function selectSubAgentModel(agentType: string, requested: string): { provider: 
     "", // task text is added by the caller
     requested,
     roleConfig?.preferred_model,
+    preferLocal,
   );
   console.log(`[model-router] Sub-agent "${agentType}": ${selection.modelName} — ${selection.reasoning.slice(0, 100)}`);
   return { provider: selection.provider, modelName: selection.modelName };
@@ -5135,7 +5432,7 @@ async function createSubAgent(
   const subSystemPrompt = roleConfig
     ? buildScopedSystemPrompt(agentType, title, instructions, context)
     : getSubAgentSystemPrompt(agentType);
-  const subModel = selectSubAgentModel(agentType, model);
+  const subModel = selectSubAgentModel(agentType, model, isLMStudioAvailable());
 
   // Scope tools based on role (Feature 4) — only give sub-agents tools they need
   const baseSubTools = TOOLS.filter((t) => !["complete_task", "request_user_input", "dream_machine"].includes(t.name));
@@ -8503,6 +8800,30 @@ async function refreshSystemContext(baseSystemPrompt: string, taskId: string, fi
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
+
+/**
+ * Trims a full system prompt to fit within a character budget for small-context models (e.g. LM Studio).
+ * Keeps the first sentence of identity + the date, then appends as much of the tail as fits.
+ * The user's task message is preserved in the conversation — not the system prompt — so this is safe.
+ */
+function buildCompactSystemPrompt(fullPrompt: string, charBudget: number): string {
+  if (fullPrompt.length <= charBudget) return fullPrompt;
+
+  // Always include a minimal header so the model knows its role
+  const header = `You are Ottomate, a helpful AI assistant. Current date: ${new Date().toISOString().slice(0, 10)}. Be concise and helpful. Use the available tools to complete the user's task.`;
+
+  if (header.length >= charBudget) return header.slice(0, charBudget);
+
+  // Try to include as much of the original prompt as fits after the header
+  const remainder = charBudget - header.length - 4; // 4 for "\n\n"
+  if (remainder <= 0) return header;
+
+  // Take the tail of the full prompt (tool descriptions + workflows are most useful)
+  const tail = fullPrompt.slice(-remainder);
+  // Find first newline so we don't start mid-sentence
+  const firstNL = tail.indexOf("\n");
+  return header + "\n\n" + (firstNL >= 0 ? tail.slice(firstNL + 1) : tail);
+}
 
 function buildSystemPrompt(skills?: string): string {
   // Build a list of platforms that have credentials configured in .env.local

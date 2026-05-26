@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   Gift,
   Tag,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODEL_CONFIGS } from "@/lib/types";
@@ -108,6 +109,14 @@ export function SettingsClient() {
   const [verboseMode, setVerboseMode] = useState(false);
   const [activeTheme, setActiveTheme] = useState("default");
 
+  // LM Studio settings
+  const [lmsBaseURL, setLmsBaseURL] = useState("http://localhost:1234/v1");
+  const [lmsModel, setLmsModel] = useState("");
+  const [lmsPinging, setLmsPinging] = useState(false);
+  const [lmsPingResult, setLmsPingResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [lmsAvailableModels, setLmsAvailableModels] = useState<string[]>([]);
+  const [preferLocal, setPreferLocal] = useState(false);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then(r => { if (!r.ok) throw new Error(`Settings ${r.status}`); return r.json(); }),
@@ -121,7 +130,36 @@ export function SettingsClient() {
       if (ss.max_cost_budget) setMaxCostBudget(ss.max_cost_budget);
       if (ss.max_iterations) setMaxIterations(ss.max_iterations);
       if (ss.verbose_mode === "true") setVerboseMode(true);
+      if (ss.lmstudio_base_url) setLmsBaseURL(ss.lmstudio_base_url);
+      if (ss.lmstudio_model) setLmsModel(ss.lmstudio_model);
+      if (ss.prefer_local === "true") setPreferLocal(true);
       setActiveTheme(getStoredThemeId());
+
+      // Auto-ping LM Studio on settings load so status is visible immediately
+      const baseURL = ss.lmstudio_base_url || "http://localhost:1234/v1";
+      const pingBase = baseURL.replace(/\/v1\/?$/, "");
+      fetch(`/api/settings/lmstudio-ping?base=${encodeURIComponent(pingBase)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { ok: boolean; models?: string[]; error?: string } | null) => {
+          if (d?.ok) {
+            const count = d.models?.length ?? 0;
+            setLmsPingResult({ ok: true, msg: count ? `Connected — ${count} model(s) loaded` : "Connected" });
+            if (d.models && d.models.length > 0) {
+              setLmsAvailableModels(d.models);
+              if (!ss.lmstudio_model) setLmsModel(d.models[0]);
+            }
+            // Sync the health panel so LM Studio shows a green check immediately
+            setHealth(prev => prev ? {
+              ...prev,
+              providers: prev.providers.map(p =>
+                p.name === "LM Studio (Local)" ? { ...p, configured: true } : p
+              ),
+            } : prev);
+          } else if (d && !d.ok) {
+            setLmsPingResult({ ok: false, msg: d.error || "LM Studio not reachable" });
+          }
+        })
+        .catch(() => { /* not running — silently ignore */ });
     }).catch(console.error);
   }, []);
 
@@ -138,6 +176,9 @@ export function SettingsClient() {
             max_cost_budget: maxCostBudget,
             max_iterations: maxIterations,
             verbose_mode: verboseMode ? "true" : "false",
+            lmstudio_base_url: lmsBaseURL,
+            lmstudio_model: lmsModel,
+            prefer_local: preferLocal ? "true" : "false",
           },
         }),
       });
@@ -152,6 +193,44 @@ export function SettingsClient() {
       setTimeout(() => setSaveError(false), 3000);
     }
     setSaving(false);
+  }
+
+  async function pingLMStudio() {
+    setLmsPinging(true);
+    setLmsPingResult(null);
+    try {
+      const base = lmsBaseURL.replace(/\/v1\/?$/, "");
+      const res = await fetch(`/api/settings/lmstudio-ping?base=${encodeURIComponent(base)}`);
+      const d = await res.json() as { ok: boolean; models?: string[]; error?: string };
+      if (res.ok && d.ok) {
+        const count = d.models?.length ?? 0;
+        setLmsPingResult({ ok: true, msg: count ? `Connected — ${count} model(s) loaded` : "Connected" });
+        if (d.models && d.models.length > 0) {
+          setLmsAvailableModels(d.models);
+          // Auto-fill model name with the first loaded model if the field is empty
+          if (!lmsModel) setLmsModel(d.models[0]);
+        }
+        // Update health panel green check immediately
+        setHealth(prev => prev ? {
+          ...prev,
+          providers: prev.providers.map(p =>
+            p.name === "LM Studio (Local)" ? { ...p, configured: true } : p
+          ),
+        } : prev);
+      } else {
+        setLmsPingResult({ ok: false, msg: d.error || "Could not connect to LM Studio" });
+        // Clear health panel green check if test explicitly fails
+        setHealth(prev => prev ? {
+          ...prev,
+          providers: prev.providers.map(p =>
+            p.name === "LM Studio (Local)" ? { ...p, configured: false } : p
+          ),
+        } : prev);
+      }
+    } catch {
+      setLmsPingResult({ ok: false, msg: "Could not reach LM Studio server" });
+    }
+    setLmsPinging(false);
   }
 
   return (
@@ -291,6 +370,100 @@ export function SettingsClient() {
               )} />
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* LM Studio (Local) */}
+      <div className="rounded-xl border border-pplx-border bg-pplx-card p-5">
+        <h2 className="text-sm font-medium text-pplx-text mb-1 flex items-center gap-2">
+          <Home size={14} className="text-pplx-accent" />
+          LM Studio (Local)
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+            Free
+          </span>
+        </h2>
+        <p className="text-[11px] text-pplx-muted mb-4">
+          Run any model locally via LM Studio — zero API cost. Select <strong className="text-pplx-text">LM Studio (Local)</strong> as your model when making requests.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-pplx-muted mb-1 block">Server URL</label>
+            <input
+              type="text"
+              value={lmsBaseURL}
+              onChange={e => setLmsBaseURL(e.target.value)}
+              placeholder="http://localhost:1234/v1"
+              className="w-full bg-pplx-bg border border-pplx-border rounded-lg px-3 py-2 text-sm text-pplx-text placeholder-pplx-muted outline-none focus:border-pplx-accent/50 font-mono"
+            />
+            <p className="text-[10px] text-pplx-muted mt-1">Default: http://localhost:1234/v1. Change if you run LM Studio on a different port.</p>
+          </div>
+          <div>
+            <label className="text-xs text-pplx-muted mb-1 block">Model Name</label>
+            {lmsAvailableModels.length > 0 ? (
+              <select
+                value={lmsModel}
+                onChange={e => setLmsModel(e.target.value)}
+                className="w-full bg-pplx-bg border border-pplx-border rounded-lg px-3 py-2 text-sm text-pplx-text outline-none focus:border-pplx-accent/50 font-mono"
+              >
+                <option value="">— select a model —</option>
+                {lmsAvailableModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={lmsModel}
+                onChange={e => setLmsModel(e.target.value)}
+                placeholder="e.g. qwen3-8b, llama-3.2-3b-instruct"
+                className="w-full bg-pplx-bg border border-pplx-border rounded-lg px-3 py-2 text-sm text-pplx-text placeholder-pplx-muted outline-none focus:border-pplx-accent/50 font-mono"
+              />
+            )}
+            <p className="text-[10px] text-pplx-muted mt-1">
+              {lmsAvailableModels.length > 0
+                ? "Models currently loaded in LM Studio. Load more in the LM Studio app."
+                : "Click \"Test connection\" to auto-detect loaded models, or enter manually."}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={pingLMStudio}
+              disabled={lmsPinging}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-pplx-border text-xs text-pplx-muted hover:text-pplx-text hover:border-pplx-accent/50 transition-all disabled:opacity-50"
+            >
+              {lmsPinging ? <RefreshCw size={12} className="animate-spin" /> : <Home size={12} />}
+              Test connection
+            </button>
+            {lmsPingResult && (
+              <span className={cn("text-xs", lmsPingResult.ok ? "text-green-400" : "text-red-400")}>
+                {lmsPingResult.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}
+                {lmsPingResult.msg}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Prefer Local toggle */}
+        <div className="mt-4 pt-3 border-t border-pplx-border/50 flex items-center justify-between">
+          <div>
+            <label className="text-xs text-pplx-text block">Prefer local model when running</label>
+            <p className="text-[10px] text-pplx-muted mt-0.5">
+              Auto-routing will default to LM Studio for tasks it can handle (coding, writing, analysis).<br />
+              Vision, deep-research, and search tasks still use cloud models automatically.
+            </p>
+          </div>
+          <button
+            onClick={() => setPreferLocal(!preferLocal)}
+            className={cn(
+              "w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ml-4",
+              preferLocal ? "bg-green-500" : "bg-pplx-border"
+            )}
+          >
+            <div className={cn(
+              "w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform",
+              preferLocal ? "translate-x-5" : "translate-x-0.5"
+            )} />
+          </button>
         </div>
       </div>
 

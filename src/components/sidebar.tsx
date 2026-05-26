@@ -44,6 +44,9 @@ export function Sidebar() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(new Set());
   const [userInfo, setUserInfo] = useState<{ name: string; email: string; tier: string } | null>(null);
+  const [lmsOnline, setLmsOnline] = useState(false);
+  const [lmsModel, setLmsModel] = useState<string | null>(null);
+  const [preferLocal, setPreferLocal] = useState(false);
 
   // Load enabled optional features from localStorage
   useEffect(() => {
@@ -117,6 +120,29 @@ export function Sidebar() {
         if (data) setUserInfo({ name: data.user.name, email: data.user.email, tier: data.subscription?.tier ?? "free" });
       })
       .catch(() => {/* ignore */});
+  }, []);
+
+  // LM Studio live-status poll (every 30s, fast localhost check)
+  useEffect(() => {
+    async function checkLMStudio() {
+      try {
+        const settingsRes = await fetch("/api/settings");
+        if (!settingsRes.ok) return;
+        const settings = await settingsRes.json() as Record<string, string>;
+        if (settings.prefer_local === "true") setPreferLocal(true);
+        const base = (settings.lmstudio_base_url || "http://localhost:1234/v1").replace(/\/v1\/?$/, "");
+        const pingRes = await fetch(`/api/settings/lmstudio-ping?base=${encodeURIComponent(base)}`);
+        if (pingRes.ok) {
+          const d = await pingRes.json() as { ok: boolean; models?: string[] };
+          setLmsOnline(d.ok);
+          if (d.ok && d.models && d.models.length > 0) setLmsModel(d.models[0]);
+          else if (!d.ok) setLmsModel(null);
+        }
+      } catch { setLmsOnline(false); setLmsModel(null); }
+    }
+    checkLMStudio();
+    const interval = setInterval(checkLMStudio, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Close mobile sidebar and dropdowns on route change
@@ -312,14 +338,43 @@ export function Sidebar() {
             className="w-full px-3 py-2 rounded-lg bg-pplx-card border border-pplx-border hover:border-pplx-muted/50 transition-colors"
           >
             <div className="flex items-center gap-1.5 text-xs text-pplx-muted">
-              <div className="w-2 h-2 rounded-full bg-pplx-accent animate-pulse" />
-              <span className="flex-1 text-left truncate">{currentModel.icon} {currentModel.name}</span>
-              <ChevronDown size={11} className={cn("transition-transform", showModelDropdown && "rotate-180")} />
+              <div className={cn("w-2 h-2 rounded-full flex-shrink-0", lmsOnline && preferLocal ? "bg-green-400" : "bg-pplx-accent animate-pulse")} />
+              <span className="flex-1 text-left truncate">
+                {preferLocal && lmsOnline && selectedModel === "auto"
+                  ? `🏠 Local${lmsModel ? ` · ${lmsModel.split("/").pop()?.slice(0, 18)}` : ""}`
+                  : `${currentModel.icon} ${currentModel.name}`}
+              </span>
+              {lmsOnline && (
+                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 flex-shrink-0">LOCAL</span>
+              )}
+              <ChevronDown size={11} className={cn("transition-transform flex-shrink-0", showModelDropdown && "rotate-180")} />
             </div>
           </button>
           
           {showModelDropdown && (
             <div className="absolute bottom-full left-0 right-0 mb-1 bg-pplx-card border border-pplx-border rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto">
+              {lmsOnline && (
+                <button
+                  key="lmstudio"
+                  onClick={() => selectModel("lmstudio" as ModelId)}
+                  className={cn(
+                    "w-full text-left px-3 py-2 text-xs hover:bg-white/5 transition-colors rounded-t-lg border-b border-pplx-border/50",
+                    selectedModel === "lmstudio" ? "bg-green-500/10 text-green-400" : "text-pplx-muted hover:text-pplx-text"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>🏠</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate flex items-center gap-1.5">
+                        LM Studio (Local)
+                        <span className="text-[9px] font-semibold px-1 py-px rounded bg-green-500/20 text-green-400">LIVE</span>
+                      </p>
+                      <p className="text-[10px] opacity-70 truncate">{lmsModel ?? "Local model — zero API cost"}</p>
+                    </div>
+                    {selectedModel === "lmstudio" && <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                  </div>
+                </button>
+              )}
               {MODEL_CONFIGS.map((model) => (
                 <button
                   key={model.id}

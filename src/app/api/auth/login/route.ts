@@ -11,6 +11,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
+    // ── Guest bypass for demos ─────────────────────────────────────────
+    if (email.toLowerCase().trim() === "guest@guest.guest" && password === "guest") {
+      await setSessionCookie({ userId: "guest", email: "guest@guest.guest", name: "Guest", role: "user" });
+      return NextResponse.json({ user: { id: "guest", email: "guest@guest.guest", name: "Guest", role: "user" } });
+    }
+
     const user = await getUserByEmail(email);
     if (!user) {
       // Consistent timing to prevent user enumeration
