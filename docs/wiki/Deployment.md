@@ -27,6 +27,30 @@ npm run start
 
 ---
 
+## Railway (Quick Hosted Setup)
+
+This repo includes `railway.json` for build/deploy defaults.
+
+### Required service settings
+
+- **Build command:** `npm run build`
+- **Start command:** `npm run start`
+- **Port:** `3000`
+- **Persistent volume:** mount at `/data`
+
+### Required environment variables
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+NEXTAUTH_SECRET=your-strong-random-secret
+APP_URL=https://<your-railway-domain>
+DATABASE_PATH=/data/ottomate.db
+```
+
+After your first deploy, set `APP_URL` to the exact Railway HTTPS domain and redeploy.
+
+---
+
 ## PM2 (Recommended for Production)
 
 PM2 manages all 5 processes as a single ecosystem, with auto-restart and log management.

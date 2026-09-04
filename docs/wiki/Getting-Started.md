@@ -28,6 +28,14 @@ npm run dev
 
 Open **http://localhost:3000** — the onboarding wizard guides you through first-time setup.
 
+For same-Wi-Fi phone testing:
+
+```bash
+npm run dev:phone
+```
+
+This binds to `0.0.0.0`, auto-sets `APP_URL`, and prints the LAN URL to open on your phone.
+
 ---
 
 ## npm Scripts
@@ -35,6 +43,7 @@ Open **http://localhost:3000** — the onboarding wizard guides you through firs
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start Next.js dev server on port 3000 |
+| `npm run dev:phone` | Start dev server for same-network phone testing and print LAN URL |
 | `npm run dev:all` | Start Next.js + all sub-apps with pm2 |
 | `npm run dev:opendaw` | Start openDAW on port 8080 |
 | `npm run build` | Production build |

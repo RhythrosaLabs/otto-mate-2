@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:phone": "node scripts/dev-phone.mjs",
     "dev:all": "npx concurrently --names next,bolt,code --prefix-colors cyan,magenta,green \"next dev\" \"cd bolt-diy && pnpm run dev\" \"node scripts/code-server-proxy.mjs\"",
     "dev:bolt": "cd bolt-diy && pnpm run dev",
     "dev:code-server": "node scripts/code-server-proxy.mjs",

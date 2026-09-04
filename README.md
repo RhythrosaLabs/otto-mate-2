@@ -37,6 +37,9 @@ npm install
 cp .env.example .env.local  # add your API keys
 npm run dev
 # Open http://localhost:3000
+
+# Same-Wi-Fi phone testing (prints LAN URL)
+npm run dev:phone
 ```
 
 ## 🛠️ Tech Stack
