@@ -20,6 +20,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/demo/ottomate-overview.gif" width="100%" alt="Ottomate overview: autonomous execution, computer control, multi-model orchestration, 190+ connectors, video studio and visual pipelines">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
   <a href="#screenshots">Screenshots</a> •
