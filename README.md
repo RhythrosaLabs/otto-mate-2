@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo/ottomate-overview.gif" width="100%" alt="Ottomate overview: autonomous execution, computer control, multi-model orchestration, 190+ connectors, video studio and visual pipelines">
+  <img src="https://github.com/RhythrosaLabs/otto-mate-2/raw/main/assets/demo/ottomate-overview.gif" width="100%" alt="Ottomate overview: autonomous execution, computer control, multi-model orchestration, 190+ connectors, video studio and visual pipelines">
 </p>
 
 <p align="center">
