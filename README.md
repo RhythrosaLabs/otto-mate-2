@@ -8,7 +8,7 @@
     Built with Next.js 15 · Claude · GPT · Gemini · Replicate · Luma · FLUX · HuggingFace
   </p>
   <p align="center">
-    Created by <a href="https://github.com/RhythrosaLabs"><strong>Dan Sheils</strong></a>
+    Built by <a href="https://rhythrosalabs.github.io/"><strong>Dan Sheils</strong></a>
   </p>
   <p align="center">
     <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-black?logo=next.js"/>
@@ -939,7 +939,7 @@ Failover chain: **Anthropic → OpenAI → Google → OpenRouter → Perplexity*
 ## Author
 
 - GitHub: [@RhythrosaLabs](https://github.com/RhythrosaLabs)
-- Portfolio: [danielsheils.myportfolio.com](https://danielsheils.myportfolio.com)
+- Portfolio: [Dan Sheils](https://rhythrosalabs.github.io/)
 
 ---
 
